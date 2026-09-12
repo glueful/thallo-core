@@ -6,6 +6,7 @@ namespace Thallo\Core\Providers;
 
 use Thallo\Core\Capabilities\CapabilityStateStore;
 use Thallo\Contracts\Settings\SystemChannel;
+use Thallo\Core\Updates\Console\UpdateCheckCommand;
 use Thallo\Core\Updates\PackagistReleaseFeed;
 use Thallo\Core\Updates\ReleaseFeed;
 use Thallo\Core\Updates\UpdateChecker;
@@ -1970,6 +1971,11 @@ final class CoreServiceProvider extends ServiceProvider
                 'shared' => true,
                 'autowire' => true,
             ],
+            UpdateCheckCommand::class => [
+                'class' => UpdateCheckCommand::class,
+                'shared' => true,
+                'autowire' => true,
+            ],
             DoctorCommand::class => [
                 'class' => DoctorCommand::class,
                 'shared' => true,
@@ -2233,6 +2239,7 @@ final class CoreServiceProvider extends ServiceProvider
             RunBlockBackfillCommand::class,
             RunBackfillCommand::class,
             RunDueSchedulesCommand::class,
+            UpdateCheckCommand::class,
             SuperuserGrantCommand::class,
             SuperuserTransferCommand::class,
             MigratePlatformPaymentCredentialsCommand::class,
