@@ -2168,7 +2168,7 @@ final class ThalloServiceProvider extends ServiceProvider
         if ((bool) config($context, 'thallo.admin.enabled', true)) {
             $this->serveFrontend(
                 '/admin',
-                (string) config($context, 'thallo.admin.bundle_path', dirname(__DIR__, 3) . '/public/admin'),
+                (string) config($context, 'thallo.admin.bundle_path', self::corePath('resources/admin')),
                 ['name' => 'Thallo Admin'],
             );
         }

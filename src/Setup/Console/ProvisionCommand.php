@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Thallo\Core\Setup\Console;
 
 use Thallo\Core\Content\Blocks\StarterBlockTypeSeeder;
+use Thallo\Core\Providers\ThalloServiceProvider;
+use Thallo\Core\Setup\AdminBundlePublisher;
 use Thallo\Core\Setup\InstallRoleGrants;
 use Thallo\Core\Setup\SetupService;
 use Thallo\Core\Setup\Doctor\Check;
@@ -173,6 +175,25 @@ final class ProvisionCommand extends BaseCommand
             $this->warning(
                 'Extension cache not rebuilt (' . $e->getMessage() . ') — run `php glueful extensions:cache`.',
             );
+        }
+
+        // The admin bundle ships in core/resources/admin and is served from there by PHP; a copy
+        // is PUBLISHED into public/admin so the web server serves the assets from disk (and no
+        // operator has to route /admin/* to PHP). Refreshed on every provision.
+        $published = (new AdminBundlePublisher())->publish(
+            ThalloServiceProvider::corePath('resources/admin'),
+            $basePath . '/public/admin',
+        );
+        if ($published === null) {
+            $this->warning(
+                'Admin bundle not published: core/resources/admin holds no build (dev checkout without `pnpm build`?).',
+            );
+        } else {
+            $this->line(sprintf(
+                'Admin bundle published to public/admin (%d files, %d stale removed).',
+                $published['published'],
+                $published['removed'],
+            ));
         }
 
         // Postgres is fixed; the password is never shown.

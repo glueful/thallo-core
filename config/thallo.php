@@ -91,9 +91,10 @@ return [
         // bundle_path at your build, or disable and register a different mount in a provider).
         'enabled' => (bool) env('ADMIN_ENABLED', true),
         // Filesystem dir of the compiled SPA bundle the framework serveFrontend() seam mounts
-        // at /admin. Defaults to public/admin (baked into the release tag by .github/workflows/
+        // at /admin. Defaults to core/resources/admin (baked into the release tag; provision also
+        // publishes a copy into public/admin so the web server serves the assets from disk; see
         // release.yml; gitignored in dev). Override for tests/relocation/a custom admin.
-        'bundle_path' => env('ADMIN_BUNDLE_PATH', dirname(__DIR__, 2) . '/public/admin'),
+        'bundle_path' => env('ADMIN_BUNDLE_PATH', dirname(__DIR__) . '/resources/admin'),
     ],
 
     // Capability switchboard for first-party packs. Each installed pack registers a
