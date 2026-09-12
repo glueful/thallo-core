@@ -1,0 +1,1 @@
+import{H as e,g as t,w as n}from"./vue.runtime.esm-bundler-DHLDW_US.js";import{t as r}from"./ProductEntryLinkPanel-CCVEg6xx.js";var i=n({__name:`CommerceLinkPanel`,props:{entryUuid:{}},setup(n){return(i,a)=>(e(),t(r,{mode:`entry`,"entry-uuid":n.entryUuid},null,8,[`entry-uuid`]))}});export{i as default};
