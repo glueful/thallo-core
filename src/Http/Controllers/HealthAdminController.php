@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Thallo\Core\Http\Controllers;
 
+use Thallo\Core\Content\Scheduling\SchedulerHeartbeat;
 use Thallo\Core\Http\DTOs\Responses\HealthResultData;
 use Glueful\Bootstrap\ApplicationContext;
 use Glueful\Http\Response;
@@ -22,8 +23,10 @@ use Glueful\Support\Version;
  */
 final class HealthAdminController
 {
-    public function __construct(private readonly ApplicationContext $context)
-    {
+    public function __construct(
+        private readonly ApplicationContext $context,
+        private readonly SchedulerHeartbeat $heartbeat,
+    ) {
     }
 
     /** GET /v1/admin/health */
@@ -42,6 +45,8 @@ final class HealthAdminController
         foreach ((array) ($report['checks'] ?? []) as $name => $check) {
             $checks[] = self::shapeCheck((string) $name, $check);
         }
+        // Thallo's own check: is anything ticking the scheduler? (config/schedule.php jobs)
+        $checks[] = self::shapeCheck('scheduler', $this->heartbeat->check());
 
         $root = base_path($this->context, '');
 

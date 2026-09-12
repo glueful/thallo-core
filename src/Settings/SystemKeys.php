@@ -38,6 +38,8 @@ final class SystemKeys
         // The update notice (UpdateChecker): the newest published version and when it was last
         // asked for are facts about the install, never about a workspace.
         'update.',
+        // The scheduler heartbeat (SchedulerHeartbeat): when the tick last ran, install-wide.
+        'scheduler.',
         'payvia.',
         // The capability switchboard (CapabilityStateStore): `capability.<full-id>.enabled`
         // rows are platform-wide requested state, never tenant-scoped.

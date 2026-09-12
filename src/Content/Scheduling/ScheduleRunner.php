@@ -41,6 +41,10 @@ final class ScheduleRunner
 
     public function run(int $limit = 100): int
     {
+        // The run itself is the proof that the scheduler is ticking (Health's "scheduler" check),
+        // whether or not scheduled publishing is switched on.
+        (new SchedulerHeartbeat($this->flags))->beat();
+
         if (!app($this->context, GeneralSettings::class)->schedulerEnabled()) {
             return 0;
         }

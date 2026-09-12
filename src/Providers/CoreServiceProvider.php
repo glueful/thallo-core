@@ -207,6 +207,7 @@ use Thallo\Core\Content\Repositories\VersionRepository;
 use Thallo\Core\Content\Retention\VersionPruner;
 use Thallo\Core\Content\Schema\Migration\SchemaProjector;
 use Thallo\Core\Content\Scheduling\ScheduleRunner;
+use Thallo\Core\Content\Scheduling\SchedulerHeartbeat;
 use Thallo\Core\Content\Seo\CanonicalProjector;
 use Thallo\Core\Content\Seo\EngineSeoHeadProvider;
 use Thallo\Core\Content\Routing\RootMountGuard;
@@ -1781,6 +1782,11 @@ final class CoreServiceProvider extends ServiceProvider
             UpdateChecker::class => [
                 'factory' => [self::class, 'makeUpdateChecker'],
                 'shared' => true,
+            ],
+            SchedulerHeartbeat::class => [
+                'class' => SchedulerHeartbeat::class,
+                'shared' => true,
+                'autowire' => true,
             ],
             // Platform-payments-settings spec Task 2: the encrypted write/read surface over the
             // unscoped SystemChannel for payvia.* gateway credentials — SystemChannel and
