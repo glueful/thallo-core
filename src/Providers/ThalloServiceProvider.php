@@ -302,9 +302,8 @@ use Psr\Log\LoggerInterface;
  * directory is the operator's (RouteManifest still auto-discovers it, so nothing of
  * Thallo's may sit there — the Router throws on a duplicate static route).
  *
- * Config: config/thallo.php lives in the app config directory and is loaded by the
- * file-based config system, so it is already available as config('thallo.*'); mergeConfig
- * is therefore unnecessary (it would only re-supply the same values as defaults).
+ * Config: core/config/*.php are merged as defaults in register(); the root config/ is the
+ * operator's overrides (environment overlays under config/{env}/ still win key by key).
  */
 final class ThalloServiceProvider extends ServiceProvider
 {
@@ -1988,14 +1987,27 @@ final class ThalloServiceProvider extends ServiceProvider
         ];
     }
 
+    /** Config files that ship as core/config DEFAULTS (merged below; the root config/ overrides). */
+    private const CORE_CONFIG = ['thallo', 'forms', 'signup', 'theme', 'import_export'];
+
     public function register(ApplicationContext $context): void
     {
-        // config/thallo.php is auto-loaded by the app config system, and DI bindings are
-        // contributed declaratively via services(). The first-run commands register HERE, not
-        // in boot(): boot() needs a reachable database, and in production a provider boot
-        // failure is logged and skipped — commands registered there vanish exactly when the
-        // operator needs doctor/provision to say what is wrong. commands() is a console-only
-        // no-op in the HTTP phase.
+        // Thallo's configuration ships as DEFAULTS from core/config: the operator's config/
+        // directory holds only overrides, so a new key in a new release reaches every install
+        // without touching their files. Root files and environment overlays still win key by
+        // key. (tenancy.php and i18n.php stay root files: the framework's tenancy and i18n
+        // providers read them before this provider registers.)
+        foreach (self::CORE_CONFIG as $name) {
+            /** @var array<string,mixed> $defaults */
+            $defaults = require self::corePath("config/{$name}.php");
+            $this->mergeConfig($name, $defaults);
+        }
+
+        // DI bindings are contributed declaratively via services(). The first-run commands
+        // register HERE, not in boot(): boot() needs a reachable database, and in production a
+        // provider boot failure is logged and skipped — commands registered there vanish exactly
+        // when the operator needs doctor/provision to say what is wrong. commands() is a
+        // console-only no-op in the HTTP phase.
         $this->commands([
             DoctorCommand::class,
             ProvisionCommand::class,
