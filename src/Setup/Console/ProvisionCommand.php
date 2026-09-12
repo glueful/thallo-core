@@ -7,6 +7,7 @@ namespace Thallo\Core\Setup\Console;
 use Thallo\Core\Content\Blocks\StarterBlockTypeSeeder;
 use Thallo\Core\Providers\CoreServiceProvider;
 use Thallo\Core\Setup\AdminBundlePublisher;
+use Thallo\Core\Setup\ApiReferencePublisher;
 use Thallo\Core\Setup\InstallRoleGrants;
 use Thallo\Core\Setup\SetupService;
 use Thallo\Core\Setup\Doctor\Check;
@@ -194,6 +195,24 @@ final class ProvisionCommand extends BaseCommand
                 $published['published'],
                 $published['removed'],
             ));
+        }
+
+        // The API reference (/api-docs) is generated from this install's live routes, so it
+        // reflects its enabled capabilities and the operator's own routes; refreshed on every
+        // provision, exactly what `php glueful generate:openapi -f --ui` writes. Never fatal: an
+        // install without its reference is still an install.
+        try {
+            $reference = (new ApiReferencePublisher())->publish($this->getContext());
+            $this->line(sprintf(
+                'API reference generated: %s and %s.',
+                str_replace($basePath . '/', '', $reference['spec']),
+                str_replace($basePath . '/', '', $reference['ui']),
+            ));
+        } catch (\Throwable $e) {
+            $this->warning(
+                'API reference not generated (' . $e->getMessage()
+                    . ') — run `php glueful generate:openapi -f --ui`.',
+            );
         }
 
         // Postgres is fixed; the password is never shown.
