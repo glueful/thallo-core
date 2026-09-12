@@ -97,6 +97,7 @@ use Thallo\Core\Http\Controllers\FormSubmissionsController;
 use Thallo\Core\Http\Controllers\FormSubmitController;
 use Thallo\Core\Http\Controllers\GeneralSettingsController;
 use Thallo\Core\Http\Controllers\HealthAdminController;
+use Thallo\Core\Http\Controllers\UpdateStatusController;
 use Thallo\Core\Http\Controllers\IconInventoryController;
 use Thallo\Core\Http\Controllers\ImportExportController;
 use Thallo\Core\Http\Controllers\MediaAdminController;
@@ -1892,6 +1893,11 @@ final class CoreServiceProvider extends ServiceProvider
             ],
             HealthAdminController::class => [
                 'class' => HealthAdminController::class,
+                'shared' => true,
+                'autowire' => true,
+            ],
+            UpdateStatusController::class => [
+                'class' => UpdateStatusController::class,
                 'shared' => true,
                 'autowire' => true,
             ],

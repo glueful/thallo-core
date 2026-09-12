@@ -20,6 +20,7 @@ use Thallo\Core\Http\Controllers\ExtensionAdminController;
 use Thallo\Core\Http\Controllers\FormSubmissionsController;
 use Thallo\Core\Http\Controllers\GeneralSettingsController;
 use Thallo\Core\Http\Controllers\HealthAdminController;
+use Thallo\Core\Http\Controllers\UpdateStatusController;
 use Thallo\Core\Http\Controllers\IconInventoryController;
 use Thallo\Core\Http\Controllers\ImportExportController;
 use Thallo\Core\Http\Controllers\MediaAdminController;
@@ -434,6 +435,9 @@ $router->group(['prefix' => '/v1/admin'], function (Router $router): void {
 
     // Utilities — system ops tools (Health, Cache, Scheduled tasks). All gated by system.access.
         $router->get('/health', [HealthAdminController::class, 'show'])
+        ->middleware('content_permission:system.access');
+
+        $router->get('/update-status', [UpdateStatusController::class, 'show'])
         ->middleware('content_permission:system.access');
 
         $router->get('/cache', [CacheAdminController::class, 'show'])
