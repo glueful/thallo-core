@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Theme-adaptive favicon: the mark follows the browser/OS color scheme. The white
+       background rect from the source art is deliberately dropped (transparent tabs). -->
+  <style>
+    path { fill: #111827; }
+    @media (prefers-color-scheme: dark) { path { fill: #ffffff; } }
+  </style>
+  <path fill-rule="evenodd" clip-rule="evenodd" d="M180.265 71H44V209.48C119.492 208.088 180.265 146.625 180.265 71C180.265 147.498 242.433 209.504 319.132 209.504H320.434C243.735 209.504 181.566 271.51 181.566 348.008V445H320.434V209.504H458V71H180.265Z"/>
+</svg>

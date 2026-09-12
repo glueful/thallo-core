@@ -1,0 +1,1 @@
+import{T as e}from"./vue.runtime.esm-bundler-DHLDW_US.js";function t(){let t=e()?.vnode?.scopeId;return t?{[t]:``}:{}}export{t};
