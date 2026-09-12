@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Thallo\Core\Setup\Console;
 
 use Thallo\Core\Content\Blocks\StarterBlockTypeSeeder;
-use Thallo\Core\Providers\ThalloServiceProvider;
+use Thallo\Core\Providers\CoreServiceProvider;
 use Thallo\Core\Setup\AdminBundlePublisher;
 use Thallo\Core\Setup\InstallRoleGrants;
 use Thallo\Core\Setup\SetupService;
@@ -181,7 +181,7 @@ final class ProvisionCommand extends BaseCommand
         // is PUBLISHED into public/admin so the web server serves the assets from disk (and no
         // operator has to route /admin/* to PHP). Refreshed on every provision.
         $published = (new AdminBundlePublisher())->publish(
-            ThalloServiceProvider::corePath('resources/admin'),
+            CoreServiceProvider::corePath('resources/admin'),
             $basePath . '/public/admin',
         );
         if ($published === null) {

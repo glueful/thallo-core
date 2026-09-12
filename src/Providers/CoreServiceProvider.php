@@ -305,7 +305,7 @@ use Psr\Log\LoggerInterface;
  * Config: core/config/*.php are merged as defaults in register(); the root config/ is the
  * operator's overrides (environment overlays under config/{env}/ still win key by key).
  */
-final class ThalloServiceProvider extends ServiceProvider
+final class CoreServiceProvider extends ServiceProvider
 {
     /**
      * Guards registerEventListeners() against a double-run. EventService::addListener
@@ -2258,7 +2258,7 @@ final class ThalloServiceProvider extends ServiceProvider
 
         $events = app($context, EventService::class);
 
-        // `ThalloServiceProvider` (app provider) boots before `AnalyticsServiceProvider`
+        // `CoreServiceProvider` (app provider) boots before `AnalyticsServiceProvider`
         // (pack provider), so CapabilityRegistry::isEnabled() would return false for
         // 'thallo.analytics' at this point (the capability is only registered during the pack's
         // own boot()). Read the capabilities override config directly instead — same semantics as

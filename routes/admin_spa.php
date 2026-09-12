@@ -16,7 +16,7 @@ use Glueful\Routing\Router;
  *
  * Auto-discovered by RouteManifest; the provider must NOT loadRoutesFrom() this file (it would
  * double-register). The compiled bundle itself (/admin + /admin/{rest}) is NOT served here — it is
- * mounted by the framework's serveFrontend() seam in ThalloServiceProvider::boot(). This is a STATIC
+ * mounted by the framework's serveFrontend() seam in CoreServiceProvider::boot(). This is a STATIC
  * route, so the router's O(1) static-first lookup always matches it before serveFrontend's dynamic
  * /admin/{rest} catch-all — it is never swallowed by the SPA fallback.
  *
