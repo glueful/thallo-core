@@ -1,0 +1,78 @@
+{
+  "name": "glueful/thallo-core",
+  "description": "Thallo — the application: content model, admin API, delivery, starter library, and the capability packs it composes.",
+  "type": "library",
+  "license": "MIT",
+  "authors": [
+    {
+      "name": "Michael Tawiah Sowah",
+      "email": "michael@glueful.dev"
+    }
+  ],
+  "require": {
+    "php": "^8.3",
+    "glueful/aegis": "^1.15",
+    "glueful/audit": "^1.4",
+    "glueful/commerce": "^1.13",
+    "glueful/email-notification": "^1.13",
+    "glueful/framework": "^1.85",
+    "glueful/i18n": "^1.2",
+    "glueful/import-export": "^1.2",
+    "glueful/media": "^1.2",
+    "glueful/meilisearch": "^1.7",
+    "glueful/payvia": "^2.8",
+    "glueful/subscriptions": "^2.3",
+    "glueful/tenancy": "^2.1",
+    "glueful/users": "^2.4",
+    "league/commonmark": "^2.8",
+    "symfony/brevo-mailer": "^8.1",
+    "glueful/thallo-account": "self.version",
+    "glueful/thallo-analytics": "self.version",
+    "glueful/thallo-collections": "self.version",
+    "glueful/thallo-commerce": "self.version",
+    "glueful/thallo-contracts": "self.version",
+    "glueful/thallo-importers": "self.version",
+    "glueful/thallo-navigation": "self.version",
+    "glueful/thallo-render": "self.version",
+    "glueful/thallo-search": "self.version",
+    "glueful/thallo-seo": "self.version",
+    "glueful/thallo-subscriptions": "self.version",
+    "glueful/thallo-tenancy": "self.version",
+    "glueful/thallo-workflow": "self.version"
+  },
+  "autoload": {
+    "psr-4": {
+      "Thallo\\Core\\": "src/"
+    }
+  },
+  "extra": {
+    "glueful": {
+      "provider": "Thallo\\Core\\Providers\\CoreServiceProvider",
+      "requires": {
+        "glueful": ">=1.85.0",
+        "extensions": []
+      },
+      "migrations": [
+        {
+          "id": "default",
+          "path": "database/migrations",
+          "priority": "default",
+          "mode": "core",
+          "previous_sources": [
+            "app"
+          ]
+        },
+        {
+          "id": "dependent",
+          "path": "database/dependent-migrations",
+          "priority": "dependent",
+          "mode": "core",
+          "previous_sources": [
+            "app:dependent"
+          ]
+        }
+      ]
+    }
+  },
+  "minimum-stability": "stable"
+}

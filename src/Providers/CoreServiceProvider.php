@@ -2135,18 +2135,11 @@ final class CoreServiceProvider extends ServiceProvider
 
     public function boot(ApplicationContext $context): void
     {
-        // Thallo's migrations live under core/database. The default tier is the framework's MAIN
-        // lane (config app.paths.migrations → core/database/migrations, source 'app'), so a fresh
-        // provision applies it in its first pass; the operator's root database/migrations joins
-        // the same 'app' source here at boot (applied by migrate:run and the create-admin
-        // catch-up, like the dependent lane). Ledger SOURCE names are the historical ones, so a
-        // database migrated by any earlier release shows nothing pending after the move.
-        $this->loadMigrationsFrom(base_path($context, 'database/migrations'), MigrationPriority::DEFAULT, 'app');
-        $this->loadMigrationsFrom(
-            self::corePath('database/dependent-migrations'),
-            MigrationPriority::DEPENDENT,
-            'app:dependent',
-        );
+        // Thallo's own migrations are declared by core/composer.json's manifest (two lanes,
+        // `glueful/thallo-core` and `glueful/thallo-core:dependent`, each naming the source every
+        // earlier database recorded its files under as previous_sources), so provision sees them
+        // in its first pass and no ledger ever looks pending. The root database/migrations is the
+        // operator's own lane — the framework's main path — and needs nothing from here.
 
         $container = $context->getContainer();
         try {
