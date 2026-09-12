@@ -35,6 +35,9 @@ final class SystemKeys
      * @var list<string>
      */
     public const PREFIXES = [
+        // The update notice (UpdateChecker): the newest published version and when it was last
+        // asked for are facts about the install, never about a workspace.
+        'update.',
         'payvia.',
         // The capability switchboard (CapabilityStateStore): `capability.<full-id>.enabled`
         // rows are platform-wide requested state, never tenant-scoped.

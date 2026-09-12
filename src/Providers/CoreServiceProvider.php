@@ -5,6 +5,10 @@ declare(strict_types=1);
 namespace Thallo\Core\Providers;
 
 use Thallo\Core\Capabilities\CapabilityStateStore;
+use Thallo\Contracts\Settings\SystemChannel;
+use Thallo\Core\Updates\PackagistReleaseFeed;
+use Thallo\Core\Updates\ReleaseFeed;
+use Thallo\Core\Updates\UpdateChecker;
 use Thallo\Core\Capabilities\DefaultCapabilityRegistry;
 use Thallo\Core\Capabilities\ExtensionCapabilityAvailabilityResolver;
 use Thallo\Core\Setup\InstallRoleGrants;
@@ -403,6 +407,15 @@ final class CoreServiceProvider extends ServiceProvider
                 'shared' => true,
             ],
         ];
+    }
+
+    public static function makeUpdateChecker(ContainerInterface $container): UpdateChecker
+    {
+        return UpdateChecker::fromContext(
+            $container->get(ApplicationContext::class),
+            $container->get(ReleaseFeed::class),
+            $container->get(SystemChannel::class),
+        );
     }
 
     public static function makeSignupChallenge(ContainerInterface $container): SignupChallenge
@@ -1756,6 +1769,16 @@ final class CoreServiceProvider extends ServiceProvider
                 'class' => CapabilityStateStore::class,
                 'shared' => true,
                 'autowire' => true,
+            ],
+            // The update notice (decision 11): Packagist's public metadata behind the ReleaseFeed
+            // seam, the checker wired from config and Composer's installed-version registry.
+            ReleaseFeed::class => [
+                'class' => PackagistReleaseFeed::class,
+                'shared' => true,
+            ],
+            UpdateChecker::class => [
+                'factory' => [self::class, 'makeUpdateChecker'],
+                'shared' => true,
             ],
             // Platform-payments-settings spec Task 2: the encrypted write/read surface over the
             // unscoped SystemChannel for payvia.* gateway credentials — SystemChannel and

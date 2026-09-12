@@ -118,6 +118,16 @@ return [
         'enabled' => (bool) env('CONTENT_SCHEDULER_ENABLED', true),
     ],
 
+    // The update notice (DISTRIBUTION.md decision 11): a daily job asks Packagist's public
+    // metadata for the newest published glueful/thallo-core — a plain GET, no install
+    // identifier — and administrators see a notice with the changelog link and the upgrade
+    // command. Never an updater. UPDATE_CHECK_ENABLED=false turns the check and the notice off.
+    'update_check' => [
+        'enabled' => (bool) env('UPDATE_CHECK_ENABLED', true),
+        'package' => 'glueful/thallo-core',
+        'notes_url' => 'https://github.com/glueful/thallo/blob/main/CHANGELOG.md',
+    ],
+
     // Version retention / pruning. Raw env pass-through: do not cast here.
     // RetentionPolicy::fromValues() validates positive integers and treats null/'' as off.
     'versions' => [
