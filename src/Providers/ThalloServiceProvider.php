@@ -298,11 +298,9 @@ use Psr\Log\LoggerInterface;
  * array_merges them so the registration reads as a table of contents. All bindings
  * autowire unless they need a factory (config-derived construction) or explicit arguments.
  *
- * Routes: routes/admin.php is NOT loaded here. The framework's RouteManifest
- * auto-discovers every routes/*.php file (underscore-prefixed partials excepted) during
- * the HTTP phase, which already runs AFTER extension boot(). Calling loadRoutesFrom()
- * in boot() would load the file a second time and the Router throws LogicException on a
- * duplicate static route. Auto-discovery is the framework's real mechanism for app routes.
+ * Routes: core/routes/*.php are loaded in boot() via loadRoutesFrom(); the root routes/
+ * directory is the operator's (RouteManifest still auto-discovers it, so nothing of
+ * Thallo's may sit there — the Router throws on a duplicate static route).
  *
  * Config: config/thallo.php lives in the app config directory and is loaded by the
  * file-based config system, so it is already available as config('thallo.*'); mergeConfig
@@ -2125,10 +2123,6 @@ final class ThalloServiceProvider extends ServiceProvider
 
     public function boot(ApplicationContext $context): void
     {
-        // Routes: routes/admin.php is auto-discovered by RouteManifest. Do NOT
-        // call loadRoutesFrom() here — it would double-register the routes and the
-        // Router throws on duplicate static paths.
-
         // These seed rows depend on Aegis' RBAC tables, whose extension migrations run
         // at DEPENDENT priority. Register the seeder in the same tier so it runs after
         // Aegis' lower-numbered migrations instead of before them as an app migration.
@@ -2161,6 +2155,14 @@ final class ThalloServiceProvider extends ServiceProvider
                 (string) config($context, 'thallo.admin.bundle_path', dirname(__DIR__, 3) . '/public/admin'),
                 ['name' => 'Thallo Admin'],
             );
+        }
+
+        // Thallo's routes live under core/ and are loaded here; the root routes/ directory is
+        // the operator's and is still auto-discovered by RouteManifest. (Loading a file from
+        // BOTH mechanisms would register duplicates and the Router throws — which is why the
+        // product's files no longer sit in the discovered directory.)
+        foreach (['admin', 'admin_spa', 'content', 'forms', 'preview', 'signup'] as $file) {
+            $this->loadRoutesFrom(self::corePath("routes/{$file}.php"));
         }
 
         $this->registerEventListeners($context);
