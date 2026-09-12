@@ -2123,13 +2123,17 @@ final class ThalloServiceProvider extends ServiceProvider
 
     public function boot(ApplicationContext $context): void
     {
-        // These seed rows depend on Aegis' RBAC tables, whose extension migrations run
-        // at DEPENDENT priority. Register the seeder in the same tier so it runs after
-        // Aegis' lower-numbered migrations instead of before them as an app migration.
+        // Thallo's migrations live under core/database. The default tier is the framework's MAIN
+        // lane (config app.paths.migrations → core/database/migrations, source 'app'), so a fresh
+        // provision applies it in its first pass; the operator's root database/migrations joins
+        // the same 'app' source here at boot (applied by migrate:run and the create-admin
+        // catch-up, like the dependent lane). Ledger SOURCE names are the historical ones, so a
+        // database migrated by any earlier release shows nothing pending after the move.
+        $this->loadMigrationsFrom(base_path($context, 'database/migrations'), MigrationPriority::DEFAULT, 'app');
         $this->loadMigrationsFrom(
-            dirname(__DIR__, 3) . '/database/dependent-migrations',
+            self::corePath('database/dependent-migrations'),
             MigrationPriority::DEPENDENT,
-            'app:dependent'
+            'app:dependent',
         );
 
         $container = $context->getContainer();
