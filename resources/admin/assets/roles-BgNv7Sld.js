@@ -1,0 +1,1 @@
+import{H as e,g as t,w as n}from"./vue.runtime.esm-bundler-DHLDW_US.js";import{t as r}from"./roles-Bt5c-BoF.js";var i=n({__name:`roles`,setup(n){return(n,i)=>(e(),t(r))}});export{i as default};
