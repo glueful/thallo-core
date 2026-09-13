@@ -526,6 +526,17 @@ final class StarterBlockTypes
                 ]],
 
             // ---- Advanced ---------------------------------------------------
+            ['slug' => 'code', 'label' => 'Code', 'icon' => 'i-lucide-code',
+                'category' => 'Content',
+                'description' => 'A code snippet with a language label and a copy button.',
+                'schema' => [
+                    ['name' => 'code', 'type' => 'text', 'required' => true],
+                    ['name' => 'language', 'type' => 'enum', 'enum' => [
+                        'text', 'bash', 'php', 'json', 'yaml', 'html', 'css', 'javascript', 'typescript', 'twig', 'sql',
+                    ]],
+                    ['name' => 'label', 'type' => 'string'],
+                    ['name' => 'copy', 'type' => 'boolean'],
+                ]],
             ['slug' => 'html', 'label' => 'HTML', 'icon' => 'i-lucide-code',
                 'category' => 'Advanced',
                 'description' => 'Raw HTML, rendered verbatim. Trusted editors only — activate to opt in.',
