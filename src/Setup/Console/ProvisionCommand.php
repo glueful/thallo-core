@@ -7,7 +7,10 @@ namespace Thallo\Core\Setup\Console;
 use Thallo\Core\Content\Blocks\StarterBlockTypeSeeder;
 use Thallo\Core\Providers\CoreServiceProvider;
 use Thallo\Core\Setup\AdminBundlePublisher;
+use Glueful\Cache\CacheStore;
+use Glueful\Routing\RouteCache;
 use Thallo\Core\Setup\ApiReferencePublisher;
+use Thallo\Core\Setup\UpgradeCaches;
 use Thallo\Core\Setup\InstallRoleGrants;
 use Thallo\Core\Setup\SetupService;
 use Thallo\Core\Setup\Doctor\Check;
@@ -212,6 +215,21 @@ final class ProvisionCommand extends BaseCommand
             $this->warning(
                 'API reference not generated (' . $e->getMessage()
                     . ') — run `php glueful generate:openapi -f --ui`.',
+            );
+        }
+
+        // The upgrade is `composer update && thallo:provision`, so provision drops what outlives a
+        // release: the compiled route table and the rendered pages. Never fatal.
+        try {
+            $cleared = (new UpgradeCaches(
+                $this->getService(RouteCache::class),
+                $this->getService(CacheStore::class),
+            ))->clear();
+            $this->line('Caches cleared: ' . implode(', ', $cleared) . '.');
+        } catch (\Throwable $e) {
+            $this->warning(
+                'Caches not cleared (' . $e->getMessage()
+                    . ') — run `php glueful route:cache:clear && php glueful render:cache:clear`.',
             );
         }
 
