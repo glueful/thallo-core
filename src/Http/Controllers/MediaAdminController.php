@@ -508,14 +508,20 @@ final class MediaAdminController
         return SignedUrl::make($this->context)->generate($base, $ttl > 0 ? $ttl : 3600, $params);
     }
 
+    /** Raster formats the blob resizer can produce a variant for. */
+    private const RESIZABLE_MIMES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+
     /**
-     * A width-resized variant URL for images; non-images fall back to the original.
+     * A width-resized variant URL for raster images; everything else (documents, SVG)
+     * falls back to the original. A vector image has no raster variant, and asking the
+     * resizer for one is a 422.
      *
      * @param array<string,mixed> $blob
      */
     private function variantUrl(array $blob, string $host, int $width): string
     {
-        if (!str_starts_with((string) ($blob['mime_type'] ?? ''), 'image/')) {
+        $mime = strtolower(trim((string) ($blob['mime_type'] ?? '')));
+        if (!in_array($mime, self::RESIZABLE_MIMES, true)) {
             return $this->serveUrl($blob, $host);
         }
 
