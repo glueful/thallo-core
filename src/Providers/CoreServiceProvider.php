@@ -688,6 +688,12 @@ final class CoreServiceProvider extends ServiceProvider
                 'shared'   => true,
                 'autowire' => true,
             ],
+            // site.version for templates and the thallo-version shortcode (website plan, decision 7).
+            \Thallo\Contracts\Delivery\SiteVersionProvider::class => [
+                'class'    => \Thallo\Core\Updates\ComposerSiteVersion::class,
+                'shared'   => true,
+                'autowire' => true,
+            ],
             \Thallo\Contracts\Delivery\HomepageEntryProvider::class => [
                 'class'    => \Thallo\Core\Content\Delivery\EngineHomepageEntryProvider::class,
                 'shared'   => true,
