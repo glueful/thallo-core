@@ -437,8 +437,8 @@ $router->group(['prefix' => '/v1/admin'], function (Router $router): void {
         $router->get('/health', [HealthAdminController::class, 'show'])
         ->middleware('content_permission:system.access');
 
-        $router->get('/update-status', [UpdateStatusController::class, 'show'])
-        ->middleware('content_permission:system.access');
+        // Any signed-in admin user may read it (the version shows in the user menu); never anonymous.
+        $router->get('/update-status', [UpdateStatusController::class, 'show']);
 
         $router->get('/cache', [CacheAdminController::class, 'show'])
         ->middleware('content_permission:system.access');
