@@ -57,6 +57,10 @@ final class Doctor
         if ($assetRouting !== null) {
             $checks[] = $assetRouting;
         }
+        $apiRouting = $this->apiRoutingCheck();
+        if ($apiRouting !== null) {
+            $checks[] = $apiRouting;
+        }
         if ($environment !== null) {
             $checks[] = $environment;
         }
@@ -164,6 +168,54 @@ final class Doctor
         }
 
         return Check::ok('asset-routing', 'PHP-served asset paths reach PHP.');
+    }
+
+    /**
+     * Some API paths end like files — the site's custom stylesheet is the template
+     * `/v1/admin/render/templates/custom.css` — and the same static-file rule that breaks the
+     * theme assets answers them 404 on GET and 405 on PUT from the web server, so saving the
+     * custom CSS fails. The probe is anonymous: a 401 means the request reached the API.
+     */
+    private function apiRoutingCheck(): ?Check
+    {
+        $base = $this->publicBaseUrl();
+        if ($base === null) {
+            return null;
+        }
+
+        $status = ($this->httpProbe ?? self::defaultHttpProbe(...))(
+            $base . '/v1/admin/render/templates/custom.css?theme=default',
+        );
+        if ($status === null) {
+            return null;
+        }
+        if ($status === 404 || $status === 405) {
+            return Check::warn(
+                'api-routing',
+                "{$base}/v1/admin/render/templates/custom.css answers {$status} — the web server is serving "
+                . 'file-shaped API paths under /v1/ from disk instead of passing them to PHP; saving the site\'s '
+                . 'custom CSS fails. Add /v1/ (and /api-docs/) to the PHP-served location rule above the '
+                . 'static-file rule (docs/production.md, "PHP-served asset paths (web server)").',
+            );
+        }
+
+        return Check::ok('api-routing', 'File-shaped API paths reach PHP.');
+    }
+
+    /** The public BASE_URL to probe, or null when unset or local (nothing to probe). */
+    private function publicBaseUrl(): ?string
+    {
+        $env = $this->basePath . '/.env';
+        if (!is_file($env)) {
+            return null;
+        }
+        $base = rtrim((string) ((new EnvWriter($env))->get('BASE_URL') ?? ''), '/');
+        $host = (string) (parse_url($base, PHP_URL_HOST) ?? '');
+        if ($host === '' || $this->isLocalHost($host)) {
+            return null;
+        }
+
+        return $base;
     }
 
     private static function defaultHttpProbe(string $url): ?int
