@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace Thallo\Core\Content\Blocks\Migration;
 
 use Thallo\Core\Content\Blocks\BlockTypeRepository;
-use Thallo\Core\Content\Repositories\ContentTypeRepository;
-use Thallo\Core\Content\Repositories\ReferenceProjectionRepository;
-use Thallo\Core\Content\Repositories\VersionRepository;
-use Thallo\Core\Content\Schema\ContentTypeSchema;
+use Thallo\Core\Content\Blocks\Sources\BlockDocumentSource;
+use Thallo\Core\Content\Blocks\Sources\BlockDocumentSources;
+use Thallo\Core\Content\Blocks\Sources\DocumentRef;
+use Thallo\Core\Content\Blocks\Sources\EntryDraftsSource;
+use Thallo\Core\Content\Blocks\Sources\PublishedEntriesSource;
+use Thallo\Core\Content\Blocks\Sources\RegionsSource;
 use Thallo\Core\Content\Schema\Migration\MigrationOpSet;
 use Glueful\Cache\CacheStore;
 use Glueful\Database\Connection;
@@ -32,16 +34,22 @@ final class BlockBackfillRunner
         private readonly Connection $db,
         private readonly BlockMigrationRepository $migrations,
         private readonly BlockTypeRepository $blockTypes,
-        private readonly ContentTypeRepository $contentTypes,
-        private readonly VersionRepository $versions,
-        private readonly ReferenceProjectionRepository $references,
         private readonly BlockInstanceWalker $walker,
         private readonly ContainerInterface $container,
+        private BlockDocumentSources $sources,
         private readonly ?WriteBarrier $barrier = null,
     ) {
     }
 
     /** @return array{done:int,failed:int} */
+    /** The runner over another registry (tests substitute a source that loses every write). */
+    public function withSources(BlockDocumentSources $sources): self
+    {
+        $clone = clone $this;
+        $clone->sources = $sources;
+        return $clone;
+    }
+
     public function run(string $migrationUuid): array
     {
         $this->barrier?->assertWritable();
@@ -55,45 +63,32 @@ final class BlockBackfillRunner
         }
         $slug = (string) $blockType['slug'];
         $opSet = MigrationOpSet::fromArray($migration['ops']);
-        $actor = $migration['created_by'] === null ? null : (string) $migration['created_by'];
 
         $this->migrations->resetFailures($migrationUuid);
 
+        // Every block-bearing document a migration rewrites (visual builder plan A4.4): drafts,
+        // the published version (append-and-repin — older versions keep their era for the restore
+        // projection) and the regions, each persisted only while it is still what was read.
+        $actor = $migration['created_by'] === null ? null : (string) $migration['created_by'];
         $touchedTypeSlugs = [];
-        foreach ($this->blockContentTypes() as $ct) {
-            $schema = ContentTypeSchema::fromArray((array) $ct['schema']);
-            $typeUuid = (string) $ct['uuid'];
-            $hadWork = false;
-
-            foreach ($this->draftItems($typeUuid) as $item) {
-                if (!$this->walker->hasOpSources($this->decodeFields($item['fields']), $schema, $slug, $opSet)) {
-                    continue;
-                }
-                $hadWork = true;
-                $this->processDraft($migrationUuid, $slug, $opSet, $schema, $item);
+        $this->migrationSources()->each(function (
+            BlockDocumentSource $source,
+            DocumentRef $ref,
+        ) use (
+            $migrationUuid,
+            $slug,
+            $opSet,
+            $actor,
+            &$touchedTypeSlugs,
+        ): void {
+            if (!$this->walker->hasOpSources($ref->fields, $ref->schema, $slug, $opSet)) {
+                return;
             }
-            foreach ($this->publishedItems($typeUuid) as $item) {
-                $version = $this->versions->findVersionByUuid((string) $item['version_uuid']);
-                $fields = $version === null ? [] : (array) $version['fields'];
-                if (!$this->walker->hasOpSources($fields, $schema, $slug, $opSet)) {
-                    continue;
-                }
-                $hadWork = true;
-                $this->processPublished(
-                    $migrationUuid,
-                    $slug,
-                    $opSet,
-                    $schema,
-                    (int) ($ct['schema_version'] ?? 1),
-                    $actor,
-                    $item,
-                );
+            if (isset($ref->meta['content_type'])) {
+                $touchedTypeSlugs[(string) $ref->meta['content_type']] = true;
             }
-
-            if ($hadWork) {
-                $touchedTypeSlugs[(string) $ct['slug']] = true;
-            }
-        }
+            $this->process($migrationUuid, $slug, $opSet, $source, $ref, $actor);
+        });
 
         $remaining = $this->countRemaining($slug, $opSet);
         $this->migrations->finish($migrationUuid, $remaining === 0 ? 'completed' : 'failed');
@@ -106,205 +101,60 @@ final class BlockBackfillRunner
         ];
     }
 
-    /**
-     * @param array<string,mixed> $item
-     */
-    private function processDraft(
-        string $migrationUuid,
-        string $slug,
-        MigrationOpSet $opSet,
-        ContentTypeSchema $schema,
-        array $item,
-    ): void {
-        $entry = (string) $item['entry_uuid'];
-        $locale = (string) $item['locale'];
-        $expectedLock = (int) $item['lock_version'];
-
-        try {
-            [$migrated, $changed] = $this->walker->rewrite(
-                $this->decodeFields($item['fields']),
-                $schema,
-                $slug,
-                $opSet,
-            );
-            if (!$changed) {
-                return;
-            }
-            // Optimistic CAS mirroring EntryRepository::saveDraft: only migrate the
-            // row we read. There is NO schema_version guard here (block instances
-            // are unstamped) — idempotence comes from tolerant ops + the op-source
-            // recount; a raced editor save loses nothing (their lock bump makes the
-            // CAS miss and the failure is re-drivable).
-            $affected = $this->db->table('entry_drafts')
-                ->where('entry_uuid', '=', $entry)
-                ->where('locale', '=', $locale)
-                ->where('lock_version', '=', $expectedLock)
-                ->update([
-                    'fields' => json_encode($migrated, JSON_THROW_ON_ERROR),
-                    'lock_version' => $expectedLock + 1,
-                    'updated_at' => gmdate('Y-m-d H:i:s'),
-                ]);
-            if ($affected < 1) {
-                $current = $this->db->table('entry_drafts')
-                    ->select(['fields'])
-                    ->where('entry_uuid', '=', $entry)
-                    ->where('locale', '=', $locale)
-                    ->first();
-                $stillRemaining = $current !== null
-                    && $this->walker->hasOpSources($this->decodeFields($current['fields']), $schema, $slug, $opSet);
-                if ($stillRemaining) {
-                    $this->migrations->recordFailure(
-                        $migrationUuid,
-                        $entry,
-                        $locale,
-                        'draft',
-                        'draft changed concurrently during backfill; re-run to migrate the latest content',
-                    );
-                }
-                return;
-            }
-            $this->migrations->incrementDone($migrationUuid);
-        } catch (\Throwable $e) {
-            $this->migrations->recordFailure($migrationUuid, $entry, $locale, 'draft', $e->getMessage());
-        }
+    /** The sources a migration rewrites; the registry may hold more (the converter's). */
+    private function migrationSources(): BlockDocumentSources
+    {
+        return $this->sources->only(EntryDraftsSource::ID, PublishedEntriesSource::ID, RegionsSource::ID);
     }
 
-    /**
-     * @param array<string,mixed> $item
-     */
-    private function processPublished(
+    private function process(
         string $migrationUuid,
         string $slug,
         MigrationOpSet $opSet,
-        ContentTypeSchema $schema,
-        int $contentTypeSchemaVersion,
+        BlockDocumentSource $source,
+        DocumentRef $ref,
         ?string $actor,
-        array $item,
     ): void {
-        $entry = (string) $item['entry_uuid'];
-        $locale = (string) $item['locale'];
-
+        $entry = (string) ($ref->meta['entry_uuid'] ?? $ref->sourceId);
+        $locale = (string) ($ref->locale ?? '');
         try {
-            $version = $this->versions->findVersionByUuid((string) $item['version_uuid']);
-            if ($version === null) {
-                throw new \RuntimeException('pinned version missing');
-            }
-            [$migrated, $changed] = $this->walker->rewrite((array) $version['fields'], $schema, $slug, $opSet);
+            [$migrated, $changed] = $this->walker->rewrite($ref->fields, $ref->schema, $slug, $opSet);
             if (!$changed) {
                 return;
             }
-            $pinnedVersionUuid = (string) $item['version_uuid'];
-
-            $skipped = false;
-            $this->db->transaction(function () use (
-                $entry,
-                $locale,
-                $migrated,
-                $contentTypeSchemaVersion,
-                $actor,
-                $schema,
-                $pinnedVersionUuid,
-                &$skipped,
-            ): void {
-                // Advisory lock first (same lock PublishService takes), then re-read
-                // the pin under it: a concurrent publish moved on -> skip, never
-                // revert (BackfillRunner::processPublished parity).
-                $number = $this->versions->reserveNextVersionNumber($entry, $locale);
-                $current = $this->versions->findPublication($entry, $locale);
-                if ($current === null || (string) $current['version_uuid'] !== $pinnedVersionUuid) {
-                    $skipped = true;
-                    return;
-                }
-                $newUuid = $this->versions->appendVersion(
+            if (!$source->persist($ref, $migrated, $actor)) {
+                $this->migrations->recordFailure(
+                    $migrationUuid,
                     $entry,
                     $locale,
-                    $number,
-                    $migrated,
-                    $contentTypeSchemaVersion,
-                    $actor,
+                    $source->id(),
+                    'document changed concurrently during backfill; re-run to migrate the latest content',
                 );
-                $this->versions->pin($entry, $locale, $newUuid, $actor);
-                $this->references->rebuildForEntry($entry, $schema, $migrated, $locale);
-            });
-
-            if ($skipped) {
                 return;
             }
             $this->migrations->incrementDone($migrationUuid);
         } catch (\Throwable $e) {
-            $this->migrations->recordFailure($migrationUuid, $entry, $locale, 'published', $e->getMessage());
+            $this->migrations->recordFailure($migrationUuid, $entry, $locale, $source->id(), $e->getMessage());
         }
     }
 
-    /** @return list<array<string,mixed>> content types with at least one blocks field */
-    private function blockContentTypes(): array
-    {
-        $out = [];
-        foreach ($this->contentTypes->all() as $ct) {
-            $schema = ContentTypeSchema::fromArray((array) $ct['schema']);
-            foreach ($schema->fields() as $field) {
-                if ($field->type === 'blocks') {
-                    $out[] = $ct;
-                    break;
-                }
-            }
-        }
-        return $out;
-    }
-
-    /** @return list<array<string,mixed>> */
-    private function draftItems(string $typeUuid): array
-    {
-        return $this->db->table('entry_drafts as d')
-            ->join('entries as e', 'e.uuid', '=', 'd.entry_uuid')
-            ->select(['d.entry_uuid', 'd.locale', 'd.fields', 'd.lock_version'])
-            ->where('e.content_type_uuid', '=', $typeUuid)
-            ->where('e.status', '!=', 'deleted')
-            ->get();
-    }
-
-    /** @return list<array<string,mixed>> */
-    private function publishedItems(string $typeUuid): array
-    {
-        return $this->db->table('entry_publications as p')
-            ->join('entries as e', 'e.uuid', '=', 'p.entry_uuid')
-            ->select(['p.entry_uuid', 'p.locale', 'p.version_uuid'])
-            ->where('e.content_type_uuid', '=', $typeUuid)
-            ->where('e.status', '!=', 'deleted')
-            ->get();
-    }
-
-    /** End-of-run recount — the authoritative completion check. */
+    /** End-of-run recount over every source — the authoritative completion check. */
     private function countRemaining(string $slug, MigrationOpSet $opSet): int
     {
         $remaining = 0;
-        foreach ($this->blockContentTypes() as $ct) {
-            $schema = ContentTypeSchema::fromArray((array) $ct['schema']);
-            $typeUuid = (string) $ct['uuid'];
-            foreach ($this->draftItems($typeUuid) as $item) {
-                if ($this->walker->hasOpSources($this->decodeFields($item['fields']), $schema, $slug, $opSet)) {
-                    $remaining++;
-                }
+        $this->migrationSources()->each(function (
+            BlockDocumentSource $source,
+            DocumentRef $ref,
+        ) use (
+            $slug,
+            $opSet,
+            &$remaining,
+        ): void {
+            if ($this->walker->hasOpSources($ref->fields, $ref->schema, $slug, $opSet)) {
+                $remaining++;
             }
-            foreach ($this->publishedItems($typeUuid) as $item) {
-                $version = $this->versions->findVersionByUuid((string) $item['version_uuid']);
-                $fields = $version === null ? [] : (array) $version['fields'];
-                if ($this->walker->hasOpSources($fields, $schema, $slug, $opSet)) {
-                    $remaining++;
-                }
-            }
-        }
+        });
         return $remaining;
-    }
-
-    /** @return array<string,mixed> */
-    private function decodeFields(mixed $fields): array
-    {
-        if (is_string($fields)) {
-            $decoded = json_decode($fields, true);
-            return is_array($decoded) ? $decoded : [];
-        }
-        return is_array($fields) ? $fields : [];
     }
 
     /** @param list<string> $typeSlugs */

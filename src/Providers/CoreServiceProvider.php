@@ -762,9 +762,38 @@ final class CoreServiceProvider extends ServiceProvider
                 'autowire' => true,
             ],
             BlockBackfillRunner::class => [
-                'class' => BlockBackfillRunner::class,
+                'shared' => true,
+                'factory' => [self::class, 'makeBlockBackfillRunner'],
+            ],
+            // The block-bearing document sources (visual builder plan A4.4).
+            \Thallo\Core\Content\Blocks\Sources\BlockContentTypes::class => [
+                'class' => \Thallo\Core\Content\Blocks\Sources\BlockContentTypes::class,
                 'shared' => true,
                 'autowire' => true,
+            ],
+            \Thallo\Core\Content\Blocks\Sources\EntryDraftsSource::class => [
+                'class' => \Thallo\Core\Content\Blocks\Sources\EntryDraftsSource::class,
+                'shared' => true,
+                'autowire' => true,
+            ],
+            \Thallo\Core\Content\Blocks\Sources\EntryVersionsSource::class => [
+                'class' => \Thallo\Core\Content\Blocks\Sources\EntryVersionsSource::class,
+                'shared' => true,
+                'autowire' => true,
+            ],
+            \Thallo\Core\Content\Blocks\Sources\RegionsSource::class => [
+                'class' => \Thallo\Core\Content\Blocks\Sources\RegionsSource::class,
+                'shared' => true,
+                'autowire' => true,
+            ],
+            \Thallo\Core\Content\Blocks\Sources\PublishedEntriesSource::class => [
+                'class' => \Thallo\Core\Content\Blocks\Sources\PublishedEntriesSource::class,
+                'shared' => true,
+                'autowire' => true,
+            ],
+            \Thallo\Core\Content\Blocks\Sources\BlockDocumentSources::class => [
+                'shared' => true,
+                'factory' => [self::class, 'makeBlockDocumentSources'],
             ],
         ];
     }
@@ -1214,6 +1243,32 @@ final class CoreServiceProvider extends ServiceProvider
     ): \Thallo\Core\Content\Style\SiteStyleGeneration {
         return new \Thallo\Core\Content\Style\SiteStyleGeneration(
             $container->get(\Thallo\Tenancy\System\SystemFlags::class),
+        );
+    }
+
+    public static function makeBlockDocumentSources(
+        ContainerInterface $container,
+    ): \Thallo\Core\Content\Blocks\Sources\BlockDocumentSources {
+        return new \Thallo\Core\Content\Blocks\Sources\BlockDocumentSources(
+            $container->get(\Thallo\Core\Content\Blocks\Sources\EntryDraftsSource::class),
+            $container->get(\Thallo\Core\Content\Blocks\Sources\PublishedEntriesSource::class),
+            $container->get(\Thallo\Core\Content\Blocks\Sources\EntryVersionsSource::class),
+            $container->get(\Thallo\Core\Content\Blocks\Sources\RegionsSource::class),
+        );
+    }
+
+    public static function makeBlockBackfillRunner(ContainerInterface $container): BlockBackfillRunner
+    {
+        return new BlockBackfillRunner(
+            $container->get(\Glueful\Database\Connection::class),
+            $container->get(\Thallo\Core\Content\Blocks\Migration\BlockMigrationRepository::class),
+            $container->get(\Thallo\Core\Content\Blocks\BlockTypeRepository::class),
+            $container->get(\Thallo\Core\Content\Blocks\Migration\BlockInstanceWalker::class),
+            $container,
+            $container->get(\Thallo\Core\Content\Blocks\Sources\BlockDocumentSources::class),
+            $container->has(\Thallo\Contracts\Tenancy\WriteBarrier::class)
+                ? $container->get(\Thallo\Contracts\Tenancy\WriteBarrier::class)
+                : null,
         );
     }
 
