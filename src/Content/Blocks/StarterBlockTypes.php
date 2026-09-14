@@ -227,8 +227,13 @@ final class StarterBlockTypes
                     ['name' => 'description', 'type' => 'text'],
                     ['name' => 'links', 'type' => 'blocks', 'block_types' => ['button']],
                     ['name' => 'image', 'type' => 'asset'],
+                    // Beside the copy (website plan phase 1b): any blocks take the media slot
+                    // instead of the image — a code snippet, a card, a gallery.
+                    ['name' => 'aside', 'type' => 'blocks'],
                     ['name' => 'orientation', 'type' => 'enum', 'enum' => ['vertical', 'horizontal']],
                     ['name' => 'reverse', 'type' => 'boolean'],
+                    // Background is a choice; gradient reproduces the original look.
+                    ['name' => 'background', 'type' => 'enum', 'enum' => ['gradient', 'none', 'muted', 'inverted']],
                     // Heading level (modern-blocks spec §4): lets a hero render as h1
                     // when it's the page's primary heading, or step down when it isn't.
                     ['name' => 'heading_level', 'type' => 'enum', 'enum' => ['h1', 'h2', 'h3']],
