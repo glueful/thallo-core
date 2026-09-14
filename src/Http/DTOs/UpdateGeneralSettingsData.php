@@ -55,6 +55,15 @@ final class UpdateGeneralSettingsData implements RequestData
         /** @var string|null Neutral Tailwind family; enum-validated in the controller. */
         #[Rule('string')]
         public readonly ?string $theme_neutral = null,
+        /** @var string|null Corner radius scale: sharp | soft | round; enum-validated in the controller. */
+        #[Rule('string')]
+        public readonly ?string $theme_radius = null,
+        /** @var string|null Typeface pairing: sans | editorial | serif; enum-validated in the controller. */
+        #[Rule('string')]
+        public readonly ?string $theme_font = null,
+        /** @var string|null Page ground: plain | tinted; enum-validated in the controller. */
+        #[Rule('string')]
+        public readonly ?string $theme_background = null,
         /** @var string|null Admin SPA base URL for preview-bar deep links; '' clears. */
         #[Rule('string')]
         public readonly ?string $admin_url = null,

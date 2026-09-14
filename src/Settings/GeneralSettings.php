@@ -46,6 +46,10 @@ final class GeneralSettings
         // Tailwind families; DB row → config → blue/slate. Enum-validated on save.
         'theme_accent'      => ['thallo.theme.accent', 'string', 'blue'],
         'theme_neutral'     => ['thallo.theme.neutral', 'string', 'slate'],
+        // Design settings (website plan phase 1b): closed enums, defaults are today's look.
+        'theme_radius'      => ['thallo.theme.radius', 'string', 'round'],
+        'theme_font'        => ['thallo.theme.font', 'string', 'sans'],
+        'theme_background'  => ['thallo.theme.background', 'string', 'plain'],
         // Admin SPA base URL — powers the preview bar's Edit/Design deep links.
         // Auto-populated at web setup (the SPA sends its own origin).
         'admin_url'         => ['render.admin_url', 'string', ''],
@@ -111,6 +115,21 @@ final class GeneralSettings
     public function themeNeutral(): string
     {
         return (string) $this->value('theme_neutral');
+    }
+
+    public function themeRadius(): string
+    {
+        return (string) $this->value('theme_radius');
+    }
+
+    public function themeFont(): string
+    {
+        return (string) $this->value('theme_font');
+    }
+
+    public function themeBackground(): string
+    {
+        return (string) $this->value('theme_background');
     }
 
     /**

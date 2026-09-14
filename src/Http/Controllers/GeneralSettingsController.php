@@ -16,6 +16,7 @@ use Thallo\Contracts\Delivery\PreviewThemeValidator;
 use Thallo\Contracts\Settings\ThemeAppearanceChanged;
 use Thallo\Contracts\Settings\ThemeChanged;
 use Thallo\Render\Theme\ThemeColors;
+use Thallo\Render\Theme\ThemeDesign;
 use Glueful\Routing\Attributes\ApiOperation;
 use Glueful\Routing\Attributes\ApiResponse;
 
@@ -78,12 +79,16 @@ final class GeneralSettingsController
         $themeBefore = $this->settings->themeOverride();
         $accentBefore = $this->settings->themeAccent();
         $neutralBefore = $this->settings->themeNeutral();
+        $designBefore = [$this->settings->themeRadius(), $this->settings->themeFont(), $this->settings->themeBackground()];
         $searchBefore = $this->settings->searchEnabled();
 
         $this->settings->save([
             'theme' => $input->theme,
             'theme_accent' => $input->theme_accent,
             'theme_neutral' => $input->theme_neutral,
+            'theme_radius' => $input->theme_radius,
+            'theme_font' => $input->theme_font,
+            'theme_background' => $input->theme_background,
             'site_name' => $input->site_name,
             'site_preview_url' => $input->site_preview_url,
             'default_locale' => $input->default_locale,
@@ -110,9 +115,11 @@ final class GeneralSettingsController
         // ThemeAppearanceChanged only when a STORED appearance value actually
         // changed (theme-color-config spec §7): the render pack purges its page
         // cache (page + error keys) on it.
+        $designAfter = [$this->settings->themeRadius(), $this->settings->themeFont(), $this->settings->themeBackground()];
         if (
             ($input->theme_accent !== null && $this->settings->themeAccent() !== $accentBefore)
             || ($input->theme_neutral !== null && $this->settings->themeNeutral() !== $neutralBefore)
+            || $designAfter !== $designBefore
         ) {
             $this->events?->dispatch(new ThemeAppearanceChanged(
                 $this->settings->themeAccent(),
@@ -198,6 +205,16 @@ final class GeneralSettingsController
         }
         if ($input->theme_neutral !== null && ThemeColors::normalizeNeutral($input->theme_neutral) === null) {
             $errors['theme_neutral'] = 'unknown neutral color';
+        }
+        // Design settings (website plan phase 1b): the same closed-enum discipline.
+        if ($input->theme_radius !== null && ThemeDesign::normalizeRadius($input->theme_radius) === null) {
+            $errors['theme_radius'] = 'unknown radius';
+        }
+        if ($input->theme_font !== null && ThemeDesign::normalizeFont($input->theme_font) === null) {
+            $errors['theme_font'] = 'unknown typeface pairing';
+        }
+        if ($input->theme_background !== null && ThemeDesign::normalizeBackground($input->theme_background) === null) {
+            $errors['theme_background'] = 'unknown page background';
         }
 
         // A non-empty admin URL must be absolute http(s) — relative values

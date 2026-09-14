@@ -27,4 +27,19 @@ final class EngineThemeAppearanceProvider implements ThemeAppearanceProvider
     {
         return $this->settings->themeNeutral();
     }
+
+    public function radius(): string
+    {
+        return $this->settings->themeRadius();
+    }
+
+    public function font(): string
+    {
+        return $this->settings->themeFont();
+    }
+
+    public function background(): string
+    {
+        return $this->settings->themeBackground();
+    }
 }
