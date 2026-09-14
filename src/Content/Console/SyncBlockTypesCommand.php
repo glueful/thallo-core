@@ -99,11 +99,28 @@ final class SyncBlockTypesCommand extends BaseCommand
                     }
                 }
             }
-            if ($toAdd === [] && $labelled === []) {
+            // Style declaration keys (visual builder spec §1.7): the starter is the authority;
+            // a row missing a key the starter declares receives it.
+            $styleKeys = [];
+            foreach (['style_capabilities', 'style_targets', 'flags', 'starter_content'] as $key) {
+                if (($row[$key] ?? null) === null && isset($definition[$key])) {
+                    $styleKeys[] = $key;
+                }
+            }
+            if ($toAdd === [] && $labelled === [] && $styleKeys === []) {
                 $unchanged++;
                 continue;
             }
-            if (!$dryRun) {
+            if (!$dryRun && $styleKeys !== []) {
+                $repo->updateStyle(
+                    (string) $row['uuid'],
+                    $definition['style_capabilities'] ?? $row['style_capabilities'] ?? null,
+                    $definition['style_targets'] ?? $row['style_targets'] ?? null,
+                    $definition['flags'] ?? $row['flags'] ?? null,
+                    $definition['starter_content'] ?? $row['starter_content'] ?? null,
+                );
+            }
+            if (!$dryRun && ($toAdd !== [] || $labelled !== [])) {
                 $repo->updateSchema(
                     (string) $row['uuid'],
                     array_merge($patched, $toAdd),
@@ -119,6 +136,9 @@ final class SyncBlockTypesCommand extends BaseCommand
             }
             if ($labelled !== []) {
                 $parts[] = 'labels: ' . implode(', ', $labelled);
+            }
+            if ($styleKeys !== []) {
+                $parts[] = 'style: ' . implode(', ', $styleKeys);
             }
             $this->line("synced {$definition['slug']} (" . implode('; ', $parts) . ')');
             $synced++;

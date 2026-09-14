@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Thallo\Core\Content\Blocks;
 
 use Thallo\Core\Content\Schema\ContentTypeSchema;
+use Thallo\Contracts\Style\StyleCapabilities;
+use Thallo\Contracts\Style\StyleTargets;
 use Thallo\Core\Content\Schema\SchemaParseException;
 use Glueful\Database\Connection;
 use Glueful\Helpers\Utils;
@@ -29,7 +31,9 @@ final class BlockTypeRepository
 
     /**
      * @param array{slug: string, label: string, icon?: ?string, category?: ?string,
-     *   description?: ?string, schema: list<array<string,mixed>>, active?: bool} $data
+     *   description?: ?string, schema: list<array<string,mixed>>, active?: bool,
+     *   style_capabilities?: ?list<string>, style_targets?: ?array<string,mixed>,
+     *   flags?: ?array<string,mixed>, starter_content?: ?array<string,mixed>} $data
      * @return string the new uuid
      */
     public function create(array $data): string
@@ -43,9 +47,10 @@ final class BlockTypeRepository
             );
         }
         $this->assertBlockSchema($data['schema']);
+        $style = $this->assertStyleDeclaration($data);
         $now = gmdate('Y-m-d H:i:s');
         $uuid = Utils::generateNanoID();
-        $this->db->table('block_types')->insert([
+        $this->db->table('block_types')->insert($style + [
             'uuid' => $uuid,
             'slug' => $data['slug'],
             'label' => $data['label'],
@@ -61,6 +66,87 @@ final class BlockTypeRepository
         ]);
         $this->schemas = null;
         return $uuid;
+    }
+
+    /**
+     * Write the style declaration keys (visual builder spec §1.7) without touching the schema.
+     * Null clears a key; every value is validated against the contracts first.
+     *
+     * @param list<string>|null $capabilities
+     * @param array<string,mixed>|null $targets
+     * @param array<string,mixed>|null $flags
+     * @param array<string,mixed>|null $starterContent
+     */
+    public function updateStyle(
+        string $uuid,
+        ?array $capabilities,
+        ?array $targets,
+        ?array $flags,
+        ?array $starterContent,
+    ): void {
+        $style = $this->assertStyleDeclaration([
+            'style_capabilities' => $capabilities,
+            'style_targets' => $targets,
+            'flags' => $flags,
+            'starter_content' => $starterContent,
+        ]);
+        $this->db->table('block_types')->where('uuid', '=', $uuid)->update($style + [
+            'updated_at' => gmdate('Y-m-d H:i:s'),
+        ]);
+        $this->schemas = null;
+    }
+
+    /** The flags a block type may declare (spec §1.7, §3.5). */
+    public const FLAGS = ['legacy_presentation', 'renders_children_inline'];
+
+    /**
+     * Validate the four style keys of a payload and return them encoded for storage. Absent or
+     * null keys store as NULL (undeclared means none).
+     *
+     * @param array<string,mixed> $data
+     * @return array{style_capabilities: ?string, style_targets: ?string, flags: ?string, starter_content: ?string}
+     */
+    private function assertStyleDeclaration(array $data): array
+    {
+        $capabilities = $data['style_capabilities'] ?? null;
+        $targets = $data['style_targets'] ?? null;
+        $flags = $data['flags'] ?? null;
+        $starter = $data['starter_content'] ?? null;
+        try {
+            $caps = StyleCapabilities::fromDeclaration(is_array($capabilities) ? array_values($capabilities) : null);
+            $declaredTargets = is_array($targets) ? StyleTargets::fromDeclaration($targets) : null;
+            if ($declaredTargets !== null) {
+                $errors = $declaredTargets->validateAgainst($caps);
+                if ($errors !== []) {
+                    throw new \InvalidArgumentException(implode('; ', $errors));
+                }
+            }
+        } catch (\InvalidArgumentException $e) {
+            throw new SchemaParseException('block type style declaration: ' . $e->getMessage());
+        }
+        if ($flags !== null) {
+            if (!is_array($flags)) {
+                throw new SchemaParseException('block type flags must be an object');
+            }
+            foreach ($flags as $flag => $value) {
+                if (!in_array($flag, self::FLAGS, true)) {
+                    throw new SchemaParseException(sprintf('unknown block flag "%s"', (string) $flag));
+                }
+                if (!is_bool($value)) {
+                    throw new SchemaParseException(sprintf('block flag "%s" must be a boolean', (string) $flag));
+                }
+            }
+        }
+        if ($starter !== null && !is_array($starter)) {
+            throw new SchemaParseException('block type starter content must be an object');
+        }
+        $encode = static fn (?array $v): ?string => $v === null ? null : (string) json_encode($v);
+        return [
+            'style_capabilities' => $encode(is_array($capabilities) ? array_values($capabilities) : null),
+            'style_targets' => $encode(is_array($targets) ? $targets : null),
+            'flags' => $encode(is_array($flags) ? $flags : null),
+            'starter_content' => $encode(is_array($starter) ? $starter : null),
+        ];
     }
 
     /** @return array<string,mixed>|null hydrated row (schema decoded) */
@@ -228,6 +314,11 @@ final class BlockTypeRepository
     private function hydrate(array $row): array
     {
         $row['schema'] = (array) json_decode((string) ($row['schema'] ?? '[]'), true);
+        // Style declaration keys (spec §1.7): NULL stays null — undeclared means none.
+        foreach (['style_capabilities', 'style_targets', 'flags', 'starter_content'] as $key) {
+            $raw = $row[$key] ?? null;
+            $row[$key] = $raw === null ? null : json_decode((string) $raw, true);
+        }
         // Boolean on the wire: rows flow straight into API responses, and the
         // admin types `active: boolean` (an int 1 renders Reka switches OFF —
         // strict check). Same hydration rule as content types' flags.

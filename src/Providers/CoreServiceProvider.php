@@ -540,6 +540,11 @@ final class CoreServiceProvider extends ServiceProvider
     private static function repositoryServices(): array
     {
         return [
+            \Thallo\Contracts\Style\BlockStyleRegistry::class => [
+                'class' => \Thallo\Core\Content\Style\EngineBlockStyleRegistry::class,
+                'shared' => true,
+                'autowire' => true,
+            ],
             BlockTypeRepository::class => [
                 'class' => BlockTypeRepository::class,
                 'shared' => true,
