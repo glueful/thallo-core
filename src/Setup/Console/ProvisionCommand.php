@@ -12,6 +12,9 @@ use Glueful\Routing\RouteCache;
 use Thallo\Core\Setup\ApiReferencePublisher;
 use Thallo\Core\Setup\UpgradeCaches;
 use Thallo\Contracts\Style\StyleArtifactCompiler;
+use Thallo\Core\Content\Console\ConvertSettingsCommand;
+use Thallo\Core\Content\Style\Conversion\DecisionsFile;
+use Thallo\Core\Content\Style\Conversion\SettingsConversion;
 use Thallo\Contracts\Style\StyleCompileFailed;
 use Thallo\Core\Setup\InstallRoleGrants;
 use Thallo\Core\Setup\SetupService;
@@ -218,6 +221,50 @@ final class ProvisionCommand extends BaseCommand
                 'API reference not generated (' . $e->getMessage()
                     . ') — run `php glueful generate:openapi -f --ui`.',
             );
+        }
+
+        // Settings conversion (visual builder spec §7.4): provision runs the converter only when
+        // the preflight is clean — a single unresolved diagnostic stops provision here, before the
+        // style artifact and cache steps, with the report path and the decisions file to fill.
+        try {
+            $conversion = $this->container->get(SettingsConversion::class);
+            $blocked = $conversion->blockedBy();
+            if ($blocked !== null) {
+                $this->error("Provision stopped: a block type migration is in progress ({$blocked}).");
+                return self::FAILURE;
+            }
+            $decisionsPath = $basePath . '/' . ConvertSettingsCommand::DEFAULT_DECISIONS;
+            $evaluation = $conversion->evaluate(DecisionsFile::load(is_file($decisionsPath) ? $decisionsPath : null));
+            if ($evaluation['pending'] > 0) {
+                $reportPath = $basePath . '/storage/conversion/report-' . gmdate('Ymd-His') . '.jsonl';
+                $evaluation['report']->write($reportPath);
+                if ($evaluation['unresolved'] > 0) {
+                    $this->error(sprintf(
+                        'Provision stopped: %d unresolved settings conversion diagnostics. Review %s, record '
+                            . 'decisions in %s, then run provision again.',
+                        $evaluation['unresolved'],
+                        $reportPath,
+                        $decisionsPath,
+                    ));
+                    return self::FAILURE;
+                }
+                $result = $conversion->apply($evaluation);
+                if ($result['changed'] !== []) {
+                    $this->error(sprintf(
+                        'Provision stopped: %d documents changed during conversion; run provision again.',
+                        count($result['changed']),
+                    ));
+                    return self::FAILURE;
+                }
+                $this->line(sprintf(
+                    'Settings conversion: %d documents converted (report %s).',
+                    $result['converted'],
+                    $reportPath,
+                ));
+            }
+        } catch (\Throwable $e) {
+            $this->error('Provision stopped: settings conversion failed (' . $e->getMessage() . ').');
+            return self::FAILURE;
         }
 
         // The compiled style artifact (visual builder spec §2.4) is compiled here, before any page

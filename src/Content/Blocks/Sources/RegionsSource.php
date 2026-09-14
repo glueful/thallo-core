@@ -28,9 +28,14 @@ final class RegionsSource implements BlockDocumentSource
 
     public function each(callable $fn): void
     {
-        foreach ($this->db->table('regions')->select(['slug', 'blocks'])->orderBy('slug', 'ASC')->get() as $row) {
+        $rows = $this->db->table('regions')->select(['slug', 'blocks', 'schema_stamp'])->orderBy('slug', 'ASC')->get();
+        foreach ($rows as $row) {
             $blocks = BlockContentTypes::decode($row['blocks']);
             $fields = ['blocks' => array_values($blocks)];
+            $stamp = BlockContentTypes::decode($row['schema_stamp'] ?? null);
+            if ($stamp !== []) {
+                $fields['_schema'] = $stamp;
+            }
             $fn(new DocumentRef(
                 self::ID,
                 (string) $row['slug'],
@@ -52,8 +57,10 @@ final class RegionsSource implements BlockDocumentSource
                 return;
             }
             $blocks = is_array($fields['blocks'] ?? null) ? array_values($fields['blocks']) : [];
+            $stamp = is_array($fields['_schema'] ?? null) ? $fields['_schema'] : null;
             $this->db->table('regions')->where('slug', '=', $ref->sourceId)->update([
                 'blocks' => json_encode($blocks, JSON_THROW_ON_ERROR),
+                'schema_stamp' => $stamp === null ? null : json_encode($stamp, JSON_THROW_ON_ERROR),
                 'updated_at' => date('Y-m-d H:i:s'),
             ]);
             $written = true;

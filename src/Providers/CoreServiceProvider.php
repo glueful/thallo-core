@@ -795,6 +795,21 @@ final class CoreServiceProvider extends ServiceProvider
                 'shared' => true,
                 'factory' => [self::class, 'makeBlockDocumentSources'],
             ],
+            // The settings converter (visual builder spec §7.3).
+            \Thallo\Core\Content\Style\Conversion\Converter::class => [
+                'class' => \Thallo\Core\Content\Style\Conversion\Converter::class,
+                'shared' => true,
+                'autowire' => true,
+            ],
+            \Thallo\Core\Content\Style\Conversion\SettingsConversion::class => [
+                'shared' => true,
+                'factory' => [self::class, 'makeSettingsConversion'],
+            ],
+            \Thallo\Core\Content\Console\ConvertSettingsCommand::class => [
+                'class' => \Thallo\Core\Content\Console\ConvertSettingsCommand::class,
+                'shared' => true,
+                'autowire' => true,
+            ],
         ];
     }
 
@@ -1243,6 +1258,17 @@ final class CoreServiceProvider extends ServiceProvider
     ): \Thallo\Core\Content\Style\SiteStyleGeneration {
         return new \Thallo\Core\Content\Style\SiteStyleGeneration(
             $container->get(\Thallo\Tenancy\System\SystemFlags::class),
+        );
+    }
+
+    public static function makeSettingsConversion(
+        ContainerInterface $container,
+    ): \Thallo\Core\Content\Style\Conversion\SettingsConversion {
+        return new \Thallo\Core\Content\Style\Conversion\SettingsConversion(
+            $container->get(\Thallo\Core\Content\Blocks\Sources\BlockDocumentSources::class),
+            $container->get(\Thallo\Core\Content\Style\Conversion\Converter::class),
+            $container->get(\Thallo\Core\Content\Blocks\Migration\BlockMigrationRepository::class),
+            \Thallo\Core\Content\Style\Conversion\ConversionTables::shipped(),
         );
     }
 
@@ -2327,6 +2353,7 @@ final class CoreServiceProvider extends ServiceProvider
             PolicyManifestCommand::class,
             SeedBlockTypesCommand::class,
             SyncBlockTypesCommand::class,
+            \Thallo\Core\Content\Console\ConvertSettingsCommand::class,
             RetireAccountLinkCommand::class,
             RunBlockBackfillCommand::class,
             RunBackfillCommand::class,

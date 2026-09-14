@@ -80,6 +80,13 @@ final class FieldValidator
             $presentation = $this->validatePresentation($payload['_presentation']);
             unset($payload['_presentation']);
         }
+        // Reserved schema stamp (visual builder spec §7.3): `_schema` records the settings
+        // schema version and the completed conversion stages; it rides with the document.
+        $stamp = null;
+        if (array_key_exists('_schema', $payload)) {
+            $stamp = $this->validateSchemaStamp($payload['_schema']);
+            unset($payload['_schema']);
+        }
 
         // Entry-wide block-id set (visual-canvas spec §5): the canvas bridge keys
         // rendered blocks by BARE id, so uniqueness spans every blocks field AND
@@ -89,7 +96,45 @@ final class FieldValidator
         if ($presentation !== null) {
             $clean['_presentation'] = $presentation;
         }
+        if ($stamp !== null) {
+            $clean['_schema'] = $stamp;
+        }
         return $clean;
+    }
+
+    /**
+     * The `_schema` stamp: `settings` (the settings schema version, an int) and `conversions`
+     * (the completed stage names). Anything else fails loudly.
+     *
+     * @return array{settings: int, conversions: list<string>}|null null = an empty stamp, dropped
+     */
+    private function validateSchemaStamp(mixed $value): ?array
+    {
+        if (!is_array($value)) {
+            throw new ValidationException(['_schema' => 'must be an object']);
+        }
+        if ($value === []) {
+            return null;
+        }
+        foreach (array_keys($value) as $key) {
+            if (!in_array($key, ['settings', 'conversions'], true)) {
+                throw new ValidationException(["_schema.{$key}" => 'unknown schema stamp key']);
+            }
+        }
+        $settings = $value['settings'] ?? null;
+        if (!is_int($settings) || $settings < 1) {
+            throw new ValidationException(['_schema.settings' => 'must be a positive integer']);
+        }
+        $conversions = $value['conversions'] ?? [];
+        if (!is_array($conversions) || !array_is_list($conversions)) {
+            throw new ValidationException(['_schema.conversions' => 'must be a list of stage names']);
+        }
+        foreach ($conversions as $i => $stage) {
+            if (!is_string($stage) || preg_match('/\A[a-z][a-z0-9-]*\z/', $stage) !== 1) {
+                throw new ValidationException(["_schema.conversions.{$i}" => 'must be a stage name']);
+            }
+        }
+        return ['settings' => $settings, 'conversions' => array_values($conversions)];
     }
 
     /**
