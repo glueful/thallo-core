@@ -27,6 +27,12 @@ final class SaveDraftData implements RequestData
         /** @var int|null Optimistic-lock counter echoed from the last read. */
         #[Rule('numeric')]
         public readonly ?int $lock_version = null,
+        /**
+         * The preview revision this save was submitted from (visual builder spec §3.5): the
+         * working copy is cleared only while it is still at that revision. Null = clear it.
+         */
+        #[Rule('nullable|integer')]
+        public readonly ?int $preview_revision = null,
     ) {
     }
 }

@@ -24,6 +24,9 @@ final class PreviewMintData implements ResponseData
         public readonly \DateTimeInterface $expires_at,
         public readonly int $expires_in,
         public readonly ?string $theme_url,
+        /** The accepted working-copy pair, so a second editor initialises from accepted state. */
+        public readonly ?string $epoch = null,
+        public readonly ?int $revision = null,
     ) {
     }
 }

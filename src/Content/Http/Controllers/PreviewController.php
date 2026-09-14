@@ -9,6 +9,7 @@ use Thallo\Core\Content\Http\DTOs\Responses\Preview\PreviewMintData;
 use Thallo\Core\Content\Http\DTOs\Responses\Preview\PreviewResultData;
 use Thallo\Core\Content\Localization\ContentLocaleService;
 use Thallo\Core\Content\Preview\PreviewMinter;
+use Thallo\Core\Content\Preview\PreviewWorkingCopyStore;
 use Thallo\Core\Content\Preview\PreviewNotFoundException;
 use Thallo\Core\Content\Preview\PreviewReader;
 use Thallo\Core\Content\Preview\PreviewTokenException;
@@ -55,6 +56,8 @@ final class PreviewController
         private readonly ContentLocaleService $locales,
         private readonly ApplicationContext $context,
         private readonly ?PreviewThemeValidator $themeValidator = null,
+        /** The working copy (visual builder spec §3.5): the mint names the accepted pair. */
+        private readonly ?PreviewWorkingCopyStore $workingCopies = null,
     ) {
     }
 
@@ -110,11 +113,17 @@ final class PreviewController
         // is unaffected either way. The SPA never builds theme URLs.
         $renderEnabled = app($this->context, CapabilityRegistry::class)->isEnabled('thallo.render');
 
+        // The accepted pair (visual builder spec §3.5): a second editor initialises from the
+        // accepted state instead of a null pair the server would refuse.
+        $current = $this->workingCopies?->current($uuid, $locale);
+
         return Response::success([
             'token' => $token,
             'expires_at' => date('c', $exp),
             'expires_in' => $ttl,
             'theme_url' => $renderEnabled ? '/_preview/' . $token : null,
+            'epoch' => $current['epoch'] ?? null,
+            'revision' => $current['revision'] ?? null,
         ], 'Preview token minted.');
     }
 

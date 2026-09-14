@@ -1187,6 +1187,11 @@ final class CoreServiceProvider extends ServiceProvider
                 'shared' => true,
                 'factory' => [self::class, 'makePreviewWorkingCopyStore'],
             ],
+            // The site style generation (visual builder spec §3.5): a system flag.
+            \Thallo\Core\Content\Style\SiteStyleGeneration::class => [
+                'shared' => true,
+                'factory' => [self::class, 'makeSiteStyleGeneration'],
+            ],
         ];
     }
 
@@ -1200,6 +1205,15 @@ final class CoreServiceProvider extends ServiceProvider
             $container->has(PreviewThemeValidator::class)
                 ? $container->get(PreviewThemeValidator::class)
                 : null,
+            $container->get(PreviewWorkingCopyStore::class),
+        );
+    }
+
+    public static function makeSiteStyleGeneration(
+        ContainerInterface $container,
+    ): \Thallo\Core\Content\Style\SiteStyleGeneration {
+        return new \Thallo\Core\Content\Style\SiteStyleGeneration(
+            $container->get(\Thallo\Tenancy\System\SystemFlags::class),
         );
     }
 

@@ -413,9 +413,12 @@ final class EnginePublicRouteResolver implements PublicRouteResolver
         if ($read['version_uuid'] !== null || $this->workingCopies === null) {
             return $read;
         }
-        $working = $this->workingCopies->get($read['entry_uuid'], $read['locale']);
-        if ($working !== null) {
-            $read['fields'] = $working;
+        $record = $this->workingCopies->record($read['entry_uuid'], $read['locale']);
+        if ($record !== null) {
+            $read['fields'] = $record['fields'];
+            // The accepted pair rides to the render (visual builder spec §3.5): the canvas page
+            // carries it so the bridge and the parent know which revision the stage displays.
+            $read['preview_revision'] = ['epoch' => $record['epoch'], 'revision' => $record['revision']];
         }
         return $read;
     }
@@ -467,6 +470,7 @@ final class EnginePublicRouteResolver implements PublicRouteResolver
             'listing' => null, 'term' => null, 'term_type' => null, 'field' => null,
             'preview' => true,
             'presentation' => $this->presentationOf($read),
+            'preview_revision' => $read['preview_revision'] ?? null,
         ];
     }
 
