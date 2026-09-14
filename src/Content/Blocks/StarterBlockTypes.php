@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Thallo\Core\Content\Blocks;
 
+use Thallo\Contracts\Style\StyleTargets;
 use Thallo\Render\Theme\ThemeColors;
 
 /**
@@ -40,6 +41,12 @@ final class StarterBlockTypes
             ['slug' => 'section', 'label' => 'Section', 'icon' => 'i-lucide-rows-3',
                 'category' => 'Layout', 'description' => 'A titled band of content with a background style.',
                 'flags' => ['legacy_presentation' => true],
+                'style_capabilities' => [
+                    'spacing', 'width', 'visibility', 'colors.surface', 'colors.text', 'radius', 'shadow',
+                ],
+                'style_targets' => StyleTargets::root('box', [
+                    'spacing', 'width', 'visibility', 'colors.surface', 'colors.text', 'radius', 'shadow',
+                ]),
                 'schema' => [
                     ['name' => 'headline', 'type' => 'string'],
                     ['name' => 'title', 'type' => 'string'],
@@ -55,6 +62,8 @@ final class StarterBlockTypes
                 'description' => 'Re-skin a group of blocks with a chosen accent/neutral, '
                     . 'plus an optional custom-CSS class hook.',
                 'flags' => ['legacy_presentation' => true],
+                'style_capabilities' => ['spacing', 'visibility'],
+                'style_targets' => StyleTargets::root('box', ['spacing', 'visibility']),
                 'schema' => [
                     ['name' => 'accent', 'type' => 'enum',
                         'enum' => array_merge(['inherit'], ThemeColors::ACCENTS)],
@@ -79,6 +88,10 @@ final class StarterBlockTypes
                 // the render template ignores it. Fields are ordered by group so each
                 // section is contiguous.
                 'flags' => ['legacy_presentation' => true],
+                'style_capabilities' => ['spacing', 'width', 'visibility', 'colors', 'radius', 'border', 'shadow'],
+                'style_targets' => StyleTargets::root('box', [
+                    'spacing', 'width', 'visibility', 'colors', 'radius', 'border', 'shadow',
+                ]),
                 'schema' => [
                     // ---- Background ----
                     ['name' => 'background_color', 'type' => 'string', 'pattern' => self::HEX,
@@ -146,6 +159,8 @@ final class StarterBlockTypes
                 'category' => 'Layout',
                 'description' => 'A responsive wrapping grid (or masonry flow) of blocks.',
                 'flags' => ['legacy_presentation' => true],
+                'style_capabilities' => ['spacing', 'visibility'],
+                'style_targets' => StyleTargets::root('box', ['spacing', 'visibility']),
                 'schema' => [
                     ['name' => 'columns', 'type' => 'enum', 'enum' => ['1', '2', '3', '4']],
                     ['name' => 'flow', 'type' => 'enum', 'enum' => ['grid', 'masonry']],
@@ -155,6 +170,8 @@ final class StarterBlockTypes
             ['slug' => 'columns', 'label' => 'Columns', 'icon' => 'i-lucide-columns-3',
                 'category' => 'Layout', 'description' => 'Two or three columns of blocks.',
                 'flags' => ['legacy_presentation' => true],
+                'style_capabilities' => ['spacing', 'width', 'visibility'],
+                'style_targets' => StyleTargets::root('box', ['spacing', 'width', 'visibility']),
                 'schema' => [
                     ['name' => 'layout', 'type' => 'enum', 'enum' => ['2', '3']],
                     // Ratio presets (columns-sizing spec): one flat enum for both
@@ -173,6 +190,8 @@ final class StarterBlockTypes
                 'category' => 'Layout',
                 'description' => 'Links from a navigation menu (structured source — pick a menu, not links).',
                 'flags' => ['legacy_presentation' => true],
+                'style_capabilities' => ['spacing', 'alignment.content', 'visibility'],
+                'style_targets' => StyleTargets::root('row', ['spacing', 'alignment.content', 'visibility']),
                 'schema' => [
                     ['name' => 'menu', 'type' => 'string', 'required' => true,
                         'pattern' => '[a-z0-9]+(-[a-z0-9]+)*'],
@@ -202,6 +221,8 @@ final class StarterBlockTypes
                 'category' => 'Layout',
                 'description' => 'A horizontal rule, optionally with a centered label and icon.',
                 'flags' => ['legacy_presentation' => true],
+                'style_capabilities' => ['spacing', 'visibility', 'colors.border'],
+                'style_targets' => StyleTargets::root('box', ['spacing', 'visibility', 'colors.border']),
                 'schema' => [
                     ['name' => 'label', 'type' => 'string'],
                     ['name' => 'type', 'type' => 'enum', 'enum' => ['solid', 'dashed', 'dotted']],
@@ -216,6 +237,10 @@ final class StarterBlockTypes
                 'category' => 'Layout',
                 'description' => 'A footer bar: copyright, links and social, over an optional top band.',
                 'flags' => ['legacy_presentation' => true],
+                'style_capabilities' => ['spacing', 'visibility', 'colors.surface', 'colors.text'],
+                'style_targets' => StyleTargets::root('box', [
+                    'spacing', 'visibility', 'colors.surface', 'colors.text',
+                ]),
                 'schema' => [
                     ['name' => 'top', 'type' => 'blocks'],
                     ['name' => 'copyright', 'type' => 'blocks'],
@@ -225,6 +250,8 @@ final class StarterBlockTypes
             ['slug' => 'spacer', 'label' => 'Spacer', 'icon' => 'i-lucide-move-vertical',
                 'category' => 'Layout', 'description' => 'Vertical breathing room.',
                 'flags' => ['legacy_presentation' => true],
+                'style_capabilities' => ['spacing', 'visibility'],
+                'style_targets' => StyleTargets::root('box', ['spacing', 'visibility']),
                 'schema' => [
                     ['name' => 'size', 'type' => 'enum', 'enum' => ['small', 'medium', 'large']],
                 ]],
@@ -235,6 +262,15 @@ final class StarterBlockTypes
             ['slug' => 'hero', 'label' => 'Hero', 'icon' => 'i-lucide-sparkles',
                 'category' => 'Content', 'description' => 'Big heading, supporting copy, buttons and media.',
                 'flags' => ['legacy_presentation' => true],
+                'style_capabilities' => [
+                    'spacing', 'width', 'visibility', 'colors.surface', 'colors.text', 'typography', 'radius', 'shadow',
+                ],
+                'style_targets' => StyleTargets::root('box', [
+                    'spacing', 'width', 'visibility', 'colors.surface', 'colors.text',
+                ], [
+                    'targets' => ['title' => ['kind' => 'text'], 'media' => ['kind' => 'box', 'optional' => true]],
+                    'map' => ['typography' => 'title', 'radius' => 'media', 'shadow' => 'media'],
+                ]),
                 'schema' => [
                     ['name' => 'headline', 'type' => 'string'],
                     ['name' => 'title', 'type' => 'string', 'required' => true],
@@ -255,6 +291,12 @@ final class StarterBlockTypes
             ['slug' => 'rich_text', 'label' => 'Rich text', 'icon' => 'i-lucide-text',
                 'category' => 'Content', 'description' => 'Free-form formatted text.',
                 'flags' => ['legacy_presentation' => true],
+                'style_capabilities' => [
+                    'spacing', 'width', 'alignment.text', 'typography', 'colors.text', 'visibility',
+                ],
+                'style_targets' => StyleTargets::root('text', [
+                    'spacing', 'width', 'alignment.text', 'typography', 'colors.text', 'visibility',
+                ]),
                 'schema' => [
                     ['name' => 'body', 'type' => 'text', 'format' => 'rich'],
                 ]],
@@ -264,6 +306,10 @@ final class StarterBlockTypes
             ['slug' => 'heading', 'label' => 'Heading', 'icon' => 'i-lucide-heading',
                 'category' => 'Content', 'description' => 'A single heading or label line.',
                 'flags' => ['legacy_presentation' => true],
+                'style_capabilities' => ['spacing', 'alignment.text', 'typography', 'colors.text', 'visibility'],
+                'style_targets' => StyleTargets::root('text', [
+                    'spacing', 'alignment.text', 'typography', 'colors.text', 'visibility',
+                ]),
                 'schema' => [
                     ['name' => 'text', 'type' => 'string', 'required' => true],
                     ['name' => 'level', 'type' => 'enum', 'enum' => ['h1', 'h2', 'h3', 'h4', 'h5', 'h6']],
@@ -276,6 +322,13 @@ final class StarterBlockTypes
                 'category' => 'Content',
                 'description' => 'A content card: icon, title, description and nested blocks.',
                 'flags' => ['legacy_presentation' => true],
+                'style_capabilities' => ['spacing', 'radius', 'shadow', 'colors', 'border', 'visibility', 'typography'],
+                'style_targets' => StyleTargets::root('box', [
+                    'spacing', 'radius', 'shadow', 'colors', 'border', 'visibility',
+                ], [
+                    'targets' => ['title' => ['kind' => 'text', 'optional' => true]],
+                    'map' => ['typography' => 'title'],
+                ]),
                 'schema' => [
                     ['name' => 'icon', 'type' => 'string', 'pattern' => '[a-z0-9]+(-[a-z0-9]+)*', 'format' => 'icon'],
                     ['name' => 'title', 'type' => 'string'],
@@ -288,7 +341,9 @@ final class StarterBlockTypes
                 ]],
             ['slug' => 'accordion', 'label' => 'Accordion', 'icon' => 'i-lucide-list-collapse',
                 'category' => 'Content', 'description' => 'A stack of expandable question/answer items.',
-                'flags' => ['legacy_presentation' => true],
+                'flags' => ['legacy_presentation' => true, 'renders_children_inline' => true],
+                'style_capabilities' => ['spacing', 'visibility'],
+                'style_targets' => StyleTargets::root('box', ['spacing', 'visibility']),
                 'schema' => [
                     ['name' => 'title', 'type' => 'string'],
                     ['name' => 'multiple', 'type' => 'boolean'],
@@ -298,6 +353,10 @@ final class StarterBlockTypes
                 'category' => 'Content',
                 'description' => 'A single show/hide disclosure wrapping nested blocks.',
                 'flags' => ['legacy_presentation' => true],
+                'style_capabilities' => ['spacing', 'visibility', 'radius', 'colors.surface', 'border'],
+                'style_targets' => StyleTargets::root('box', [
+                    'spacing', 'visibility', 'radius', 'colors.surface', 'border',
+                ]),
                 'schema' => [
                     ['name' => 'label', 'type' => 'string'],
                     ['name' => 'open', 'type' => 'boolean'],
@@ -307,6 +366,8 @@ final class StarterBlockTypes
                 'category' => 'Content',
                 'description' => 'A vertical list of navigation links with an optional title.',
                 'flags' => ['legacy_presentation' => true],
+                'style_capabilities' => ['spacing', 'visibility'],
+                'style_targets' => StyleTargets::root('box', ['spacing', 'visibility']),
                 'schema' => [
                     ['name' => 'title', 'type' => 'string'],
                     ['name' => 'items', 'type' => 'json'],
@@ -316,6 +377,15 @@ final class StarterBlockTypes
             ['slug' => 'cta', 'label' => 'Call to action', 'icon' => 'i-lucide-megaphone',
                 'category' => 'Content', 'description' => 'A call-to-action band with buttons.',
                 'flags' => ['legacy_presentation' => true],
+                'style_capabilities' => [
+                    'spacing', 'width', 'radius', 'shadow', 'colors', 'border', 'visibility', 'typography',
+                ],
+                'style_targets' => StyleTargets::root('box', [
+                    'spacing', 'width', 'radius', 'shadow', 'colors', 'border', 'visibility',
+                ], [
+                    'targets' => ['title' => ['kind' => 'text']],
+                    'map' => ['typography' => 'title'],
+                ]),
                 'schema' => [
                     ['name' => 'title', 'type' => 'string', 'required' => true],
                     ['name' => 'description', 'type' => 'text'],
@@ -329,6 +399,12 @@ final class StarterBlockTypes
                 'category' => 'Content',
                 'description' => 'A contact form: stores submissions and emails a recipient.',
                 'flags' => ['legacy_presentation' => true],
+                'style_capabilities' => [
+                    'spacing', 'width', 'visibility', 'radius', 'colors.surface', 'border', 'shadow',
+                ],
+                'style_targets' => StyleTargets::root('box', [
+                    'spacing', 'width', 'visibility', 'radius', 'colors.surface', 'border', 'shadow',
+                ]),
                 'schema' => [
                     ['name' => 'form_name', 'type' => 'string'],
                     ['name' => 'recipient', 'type' => 'string', 'group' => 'Delivery'],
@@ -358,7 +434,9 @@ final class StarterBlockTypes
                 ]],
             ['slug' => 'stepper', 'label' => 'Stepper', 'icon' => 'i-lucide-list-ordered',
                 'category' => 'Content', 'description' => 'A numbered sequence of steps, horizontal or vertical.',
-                'flags' => ['legacy_presentation' => true],
+                'flags' => ['legacy_presentation' => true, 'renders_children_inline' => true],
+                'style_capabilities' => ['spacing', 'visibility'],
+                'style_targets' => StyleTargets::root('box', ['spacing', 'visibility']),
                 'schema' => [
                     ['name' => 'title', 'type' => 'string'],
                     ['name' => 'orientation', 'type' => 'enum', 'enum' => ['vertical', 'horizontal']],
@@ -369,7 +447,9 @@ final class StarterBlockTypes
                 ]],
             ['slug' => 'tabs', 'label' => 'Tabs', 'icon' => 'i-lucide-panels-top-left',
                 'category' => 'Content', 'description' => 'Tabbed panels of blocks.',
-                'flags' => ['legacy_presentation' => true],
+                'flags' => ['legacy_presentation' => true, 'renders_children_inline' => true],
+                'style_capabilities' => ['spacing', 'visibility'],
+                'style_targets' => StyleTargets::root('box', ['spacing', 'visibility']),
                 'schema' => [
                     ['name' => 'items', 'type' => 'blocks', 'block_types' => ['tab']],
                 ]],
@@ -379,6 +459,14 @@ final class StarterBlockTypes
             ['slug' => 'button', 'label' => 'Button', 'icon' => 'i-lucide-mouse-pointer-click',
                 'category' => 'Content', 'description' => 'A standalone action button.',
                 'flags' => ['legacy_presentation' => true],
+                'style_capabilities' => [
+                    'spacing', 'alignment.content', 'visibility', 'radius', 'colors', 'typography', 'shadow',
+                ],
+                'style_targets' => StyleTargets::root('row', ['spacing', 'alignment.content', 'visibility'], [
+                    'targets' => ['control' => ['kind' => 'box']],
+                    'map' => ['radius' => 'control', 'colors' => 'control', 'typography' => 'control',
+                        'shadow' => 'control', 'advanced.accessibility.label' => 'control'],
+                ]),
                 'schema' => [
                     ['name' => 'label', 'type' => 'string', 'required' => true],
                     ['name' => 'url', 'type' => 'string', 'required' => true],
@@ -401,10 +489,14 @@ final class StarterBlockTypes
                 'category' => 'Content',
                 'description' => 'A light / system / dark color-mode switch for visitors.',
                 'flags' => ['legacy_presentation' => true],
+                'style_capabilities' => ['spacing', 'alignment.content', 'visibility'],
+                'style_targets' => StyleTargets::root('row', ['spacing', 'alignment.content', 'visibility']),
                 'schema' => []],
             ['slug' => 'carousel', 'label' => 'Carousel', 'icon' => 'i-lucide-gallery-horizontal',
                 'category' => 'Content', 'description' => 'A swipeable slider — each child block is a slide.',
-                'flags' => ['legacy_presentation' => true],
+                'flags' => ['legacy_presentation' => true, 'renders_children_inline' => true],
+                'style_capabilities' => ['spacing', 'width', 'radius', 'shadow', 'visibility'],
+                'style_targets' => StyleTargets::root('box', ['spacing', 'width', 'radius', 'shadow', 'visibility']),
                 'schema' => [
                     ['name' => 'slides', 'type' => 'blocks'],
                     ['name' => 'slides_per_view', 'type' => 'enum', 'enum' => ['1', '2', '3']],
@@ -437,6 +529,10 @@ final class StarterBlockTypes
                 'category' => 'Content',
                 'description' => 'A heading with a reveal effect and an optional rotating word.',
                 'flags' => ['legacy_presentation' => true],
+                'style_capabilities' => ['spacing', 'alignment.text', 'typography', 'colors.text', 'visibility'],
+                'style_targets' => StyleTargets::root('text', [
+                    'spacing', 'alignment.text', 'typography', 'colors.text', 'visibility',
+                ]),
                 'schema' => [
                     ['name' => 'prefix', 'type' => 'string'],
                     // One alternative per line (phrases allowed) — at most 5 (FieldValidator cap).
@@ -477,6 +573,11 @@ final class StarterBlockTypes
             ['slug' => 'image', 'label' => 'Image', 'icon' => 'i-lucide-image',
                 'category' => 'Media', 'description' => 'A single image with caption.',
                 'flags' => ['legacy_presentation' => true],
+                'style_capabilities' => ['spacing', 'width', 'alignment.self', 'visibility', 'radius', 'shadow'],
+                'style_targets' => StyleTargets::root('box', ['spacing', 'width', 'alignment.self', 'visibility'], [
+                    'targets' => ['picture' => ['kind' => 'box', 'optional' => true]],
+                    'map' => ['radius' => 'picture', 'shadow' => 'picture'],
+                ]),
                 'schema' => [
                     ['name' => 'image', 'type' => 'asset', 'required' => true],
                     ['name' => 'alt', 'type' => 'string'],
@@ -494,7 +595,9 @@ final class StarterBlockTypes
             ['slug' => 'gallery', 'label' => 'Gallery', 'icon' => 'i-lucide-images',
                 'category' => 'Media',
                 'description' => 'A responsive image grid with an optional lightbox.',
-                'flags' => ['legacy_presentation' => true],
+                'flags' => ['legacy_presentation' => true, 'renders_children_inline' => true],
+                'style_capabilities' => ['spacing', 'visibility'],
+                'style_targets' => StyleTargets::root('box', ['spacing', 'visibility']),
                 'schema' => [
                     ['name' => 'items', 'type' => 'blocks',
                      'block_types' => ['image'], 'enforce_block_types' => true],
@@ -506,6 +609,8 @@ final class StarterBlockTypes
                 'category' => 'Media',
                 'description' => 'The site logo (Settings → General); falls back to the site name.',
                 'flags' => ['legacy_presentation' => true],
+                'style_capabilities' => ['spacing', 'visibility'],
+                'style_targets' => StyleTargets::root('box', ['spacing', 'visibility']),
                 'schema' => [
                     ['name' => 'size', 'type' => 'enum', 'enum' => ['small', 'medium', 'large']],
                     ['name' => 'link_home', 'type' => 'boolean'],
@@ -514,6 +619,10 @@ final class StarterBlockTypes
                 'category' => 'Media',
                 'description' => 'A single decorative icon from the Lucide set, optionally linked.',
                 'flags' => ['legacy_presentation' => true],
+                'style_capabilities' => ['spacing', 'visibility', 'colors.text', 'alignment.self'],
+                'style_targets' => StyleTargets::root('box', [
+                    'spacing', 'visibility', 'colors.text', 'alignment.self',
+                ]),
                 'schema' => [
                     ['name' => 'icon', 'type' => 'string', 'required' => true,
                         'pattern' => '[a-z0-9]+(-[a-z0-9]+)*', 'format' => 'icon'],
@@ -526,12 +635,16 @@ final class StarterBlockTypes
                 'category' => 'Content',
                 'description' => 'A row of brand icons linking to social profiles.',
                 'flags' => ['legacy_presentation' => true],
+                'style_capabilities' => ['spacing', 'alignment.content', 'visibility'],
+                'style_targets' => StyleTargets::root('row', ['spacing', 'alignment.content', 'visibility']),
                 'schema' => [
                     ['name' => 'items', 'type' => 'blocks', 'block_types' => ['social_link']],
                 ]],
             ['slug' => 'logos', 'label' => 'Logos', 'icon' => 'i-lucide-building-2',
                 'category' => 'Media', 'description' => 'A “trusted by” strip of brand logos.',
                 'flags' => ['legacy_presentation' => true],
+                'style_capabilities' => ['spacing', 'visibility'],
+                'style_targets' => StyleTargets::root('box', ['spacing', 'visibility']),
                 'schema' => [
                     ['name' => 'title', 'type' => 'string'],
                     ['name' => 'images', 'type' => 'asset', 'multiple' => true],
@@ -542,6 +655,8 @@ final class StarterBlockTypes
                 'category' => 'Media',
                 'description' => 'An uploaded video or a YouTube/Vimeo embed.',
                 'flags' => ['legacy_presentation' => true],
+                'style_capabilities' => ['spacing', 'width', 'radius', 'shadow', 'visibility'],
+                'style_targets' => StyleTargets::root('box', ['spacing', 'width', 'radius', 'shadow', 'visibility']),
                 'schema' => [
                     ['name' => 'source', 'type' => 'enum', 'enum' => ['upload', 'embed']],
                     ['name' => 'video', 'type' => 'asset'],
@@ -553,6 +668,8 @@ final class StarterBlockTypes
             ['slug' => 'audio', 'label' => 'Audio', 'icon' => 'i-lucide-audio-lines',
                 'category' => 'Media', 'description' => 'An uploaded audio file with native controls.',
                 'flags' => ['legacy_presentation' => true],
+                'style_capabilities' => ['spacing', 'width', 'visibility'],
+                'style_targets' => StyleTargets::root('box', ['spacing', 'width', 'visibility']),
                 'schema' => [
                     ['name' => 'audio', 'type' => 'asset', 'required' => true],
                     ['name' => 'title', 'type' => 'string'],
@@ -563,6 +680,8 @@ final class StarterBlockTypes
             ['slug' => 'file', 'label' => 'File', 'icon' => 'i-lucide-file',
                 'category' => 'Media', 'description' => 'A download link to an uploaded file.',
                 'flags' => ['legacy_presentation' => true],
+                'style_capabilities' => ['spacing', 'visibility'],
+                'style_targets' => StyleTargets::root('box', ['spacing', 'visibility']),
                 'schema' => [
                     ['name' => 'file', 'type' => 'asset', 'required' => true],
                     ['name' => 'label', 'type' => 'string'],
@@ -574,6 +693,8 @@ final class StarterBlockTypes
                 'category' => 'Content',
                 'description' => 'A code snippet with a language label and a copy button.',
                 'flags' => ['legacy_presentation' => true],
+                'style_capabilities' => ['spacing', 'width', 'radius', 'shadow', 'visibility'],
+                'style_targets' => StyleTargets::root('box', ['spacing', 'width', 'radius', 'shadow', 'visibility']),
                 'schema' => [
                     ['name' => 'code', 'type' => 'text', 'required' => true],
                     ['name' => 'language', 'type' => 'enum', 'enum' => [
@@ -587,6 +708,8 @@ final class StarterBlockTypes
                 'description' => 'Raw HTML, rendered verbatim. Trusted editors only — activate to opt in.',
                 'active' => false,
                 'flags' => ['legacy_presentation' => true],
+                'style_capabilities' => ['spacing', 'visibility'],
+                'style_targets' => StyleTargets::root('box', ['spacing', 'visibility']),
                 'schema' => [
                     ['name' => 'code', 'type' => 'text'],
                 ]],
@@ -594,6 +717,8 @@ final class StarterBlockTypes
                 'category' => 'Advanced',
                 'description' => 'Renders shortcodes/{name}.twig from the theme (or a DB template).',
                 'flags' => ['legacy_presentation' => true],
+                'style_capabilities' => ['spacing', 'visibility'],
+                'style_targets' => StyleTargets::root('box', ['spacing', 'visibility']),
                 'schema' => [
                     ['name' => 'name', 'type' => 'string', 'required' => true,
                         'pattern' => '[a-z][a-z0-9_-]*'],
@@ -604,6 +729,13 @@ final class StarterBlockTypes
             ['slug' => 'feature', 'label' => 'Feature', 'icon' => 'i-lucide-check',
                 'category' => 'Items', 'description' => 'One feature: icon, title, description, link.',
                 'flags' => ['legacy_presentation' => true],
+                'style_capabilities' => ['spacing', 'radius', 'colors', 'border', 'shadow', 'visibility', 'typography'],
+                'style_targets' => StyleTargets::root('box', [
+                    'spacing', 'radius', 'colors', 'border', 'shadow', 'visibility',
+                ], [
+                    'targets' => ['title' => ['kind' => 'text', 'optional' => true]],
+                    'map' => ['typography' => 'title'],
+                ]),
                 'schema' => [
                     ['name' => 'icon', 'type' => 'string', 'pattern' => '[a-z0-9]+(-[a-z0-9]+)*', 'format' => 'icon'],
                     ['name' => 'title', 'type' => 'string', 'required' => true],
@@ -613,6 +745,8 @@ final class StarterBlockTypes
             ['slug' => 'accordion_item', 'label' => 'Accordion item', 'icon' => 'i-lucide-chevron-down',
                 'category' => 'Items', 'description' => 'One question with a rich-text answer.',
                 'flags' => ['legacy_presentation' => true],
+                'style_capabilities' => ['spacing', 'visibility'],
+                'style_targets' => StyleTargets::root('box', ['spacing', 'visibility']),
                 'schema' => [
                     ['name' => 'question', 'type' => 'string', 'required' => true],
                     ['name' => 'answer', 'type' => 'text', 'format' => 'rich'],
@@ -620,6 +754,8 @@ final class StarterBlockTypes
             ['slug' => 'tab', 'label' => 'Tab', 'icon' => 'i-lucide-panel-top',
                 'category' => 'Items', 'description' => 'One tab: label and panel blocks.',
                 'flags' => ['legacy_presentation' => true],
+                'style_capabilities' => ['spacing', 'visibility'],
+                'style_targets' => StyleTargets::root('box', ['spacing', 'visibility']),
                 'schema' => [
                     ['name' => 'label', 'type' => 'string', 'required' => true],
                     ['name' => 'content', 'type' => 'blocks'],
@@ -627,6 +763,8 @@ final class StarterBlockTypes
             ['slug' => 'stepper_item', 'label' => 'Stepper item', 'icon' => 'i-lucide-circle-dot',
                 'category' => 'Items', 'description' => 'One numbered step: title and description.',
                 'flags' => ['legacy_presentation' => true],
+                'style_capabilities' => ['spacing', 'visibility'],
+                'style_targets' => StyleTargets::root('box', ['spacing', 'visibility']),
                 'schema' => [
                     ['name' => 'title', 'type' => 'string', 'required' => true],
                     ['name' => 'description', 'type' => 'text'],
@@ -634,6 +772,8 @@ final class StarterBlockTypes
             ['slug' => 'social_link', 'label' => 'Social link', 'icon' => 'i-lucide-link',
                 'category' => 'Items', 'description' => 'One social profile: brand icon + URL.',
                 'flags' => ['legacy_presentation' => true],
+                'style_capabilities' => ['spacing', 'visibility', 'colors.text'],
+                'style_targets' => StyleTargets::root('box', ['spacing', 'visibility', 'colors.text']),
                 'schema' => [
                     ['name' => 'icon', 'type' => 'string', 'required' => true,
                         'pattern' => 'brand:[a-z0-9]+(-[a-z0-9]+)*', 'format' => 'brand-icon'],
@@ -650,6 +790,10 @@ final class StarterBlockTypes
                 'category' => 'Content',
                 'description' => 'A single pricing plan card: price, features and a CTA.',
                 'flags' => ['legacy_presentation' => true],
+                'style_capabilities' => ['spacing', 'radius', 'shadow', 'colors', 'border', 'visibility'],
+                'style_targets' => StyleTargets::root('box', [
+                    'spacing', 'radius', 'shadow', 'colors', 'border', 'visibility',
+                ]),
                 'schema' => [
                     ['name' => 'title', 'type' => 'string'],
                     ['name' => 'description', 'type' => 'text'],
@@ -678,6 +822,8 @@ final class StarterBlockTypes
                 'category' => 'Content',
                 'description' => 'A row or stack of pricing plans, with an optional featured plan.',
                 'flags' => ['legacy_presentation' => true],
+                'style_capabilities' => ['spacing', 'width', 'visibility'],
+                'style_targets' => StyleTargets::root('box', ['spacing', 'width', 'visibility']),
                 'schema' => [
                     ['name' => 'plans', 'type' => 'blocks', 'block_types' => ['pricing_plan']],
                     ['name' => 'orientation', 'type' => 'enum', 'enum' => ['horizontal', 'vertical']],
@@ -687,7 +833,9 @@ final class StarterBlockTypes
             ['slug' => 'pricing_table', 'label' => 'Pricing table', 'icon' => 'i-lucide-table',
                 'category' => 'Content',
                 'description' => 'A feature-comparison table across pricing tiers.',
-                'flags' => ['legacy_presentation' => true],
+                'flags' => ['legacy_presentation' => true, 'renders_children_inline' => true],
+                'style_capabilities' => ['spacing', 'width', 'visibility'],
+                'style_targets' => StyleTargets::root('box', ['spacing', 'width', 'visibility']),
                 'schema' => [
                     ['name' => 'tiers', 'type' => 'blocks', 'block_types' => ['pricing_tier']],
                     ['name' => 'features', 'type' => 'blocks', 'block_types' => ['pricing_feature']],
@@ -697,6 +845,8 @@ final class StarterBlockTypes
                 'category' => 'Items',
                 'description' => 'One column of a pricing table: title, price and CTA.',
                 'flags' => ['legacy_presentation' => true],
+                'style_capabilities' => ['spacing', 'visibility'],
+                'style_targets' => StyleTargets::root('box', ['spacing', 'visibility']),
                 'schema' => [
                     ['name' => 'title', 'type' => 'string'],
                     ['name' => 'description', 'type' => 'text'],
@@ -714,6 +864,8 @@ final class StarterBlockTypes
                 'category' => 'Items',
                 'description' => 'One comparison row (or a section heading) with a value per tier.',
                 'flags' => ['legacy_presentation' => true],
+                'style_capabilities' => ['spacing', 'visibility'],
+                'style_targets' => StyleTargets::root('box', ['spacing', 'visibility']),
                 'schema' => [
                     ['name' => 'is_section', 'type' => 'boolean'],
                     ['name' => 'title', 'type' => 'string'],
@@ -726,6 +878,8 @@ final class StarterBlockTypes
                 'category' => 'Content',
                 'description' => 'Lists published posts as cards (dynamic).',
                 'flags' => ['legacy_presentation' => true],
+                'style_capabilities' => ['spacing', 'width', 'visibility'],
+                'style_targets' => StyleTargets::root('box', ['spacing', 'width', 'visibility']),
                 'schema' => [
                     ['name' => 'type', 'type' => 'string', 'pattern' => '[a-z0-9]+(-[a-z0-9]+)*'],
                     ['name' => 'limit', 'type' => 'number', 'min' => 1, 'max' => 12],

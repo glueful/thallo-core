@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Thallo\Core\Content\Console;
 
 use Thallo\Core\Content\Blocks\BlockTypeRepository;
-use Thallo\Core\Content\Blocks\StarterBlockTypes;
+use Thallo\Core\Content\Starter\Kinds\BlockTypeKind;
 use Glueful\Console\BaseCommand;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Input\InputInterface;
@@ -70,7 +70,9 @@ final class SyncBlockTypesCommand extends BaseCommand
         $synced = 0;
         $unchanged = 0;
         $missing = 0;
-        foreach (StarterBlockTypes::definitions() as $definition) {
+        // Starters and every enabled pack contribution: the definition is the authority.
+        foreach ($this->getService(BlockTypeKind::class)->definitions() as $starter) {
+            $definition = $starter->payload;
             $row = $repo->findBySlug($definition['slug']);
             if ($row === null) {
                 $this->line("missing {$definition['slug']} (run thallo:blocks:seed)");
