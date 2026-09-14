@@ -94,7 +94,16 @@ final class SettingsConversion
         $converted = 0;
         $unchanged = 0;
         $changed = [];
+        // The rehearsal's interruption hook (plan A4.7): abort once every document of the named
+        // source is written, leaving the run half done — a rerun must land on the same state.
+        $abortAfter = getenv('THALLO_CONVERT_ABORT_AFTER_SOURCE') ?: null;
+        $lastSource = null;
         foreach ($evaluation['documents'] as $document) {
+            $sourceId = $document['source']->id();
+            if ($abortAfter !== null && $lastSource === $abortAfter && $sourceId !== $abortAfter) {
+                throw new \RuntimeException("conversion aborted after source {$abortAfter} (rehearsal)");
+            }
+            $lastSource = $sourceId;
             if (!$document['converted']->changed) {
                 $unchanged++;
                 continue;
@@ -133,14 +142,10 @@ final class SettingsConversion
                 if (count($schema) === count((array) $row['schema'])) {
                     continue;
                 }
-                $this->blockTypes->updateSchema(
-                    (string) $row['uuid'],
-                    $schema,
-                    (string) $row['label'],
-                    $row['icon'] !== null ? (string) $row['icon'] : null,
-                    $row['description'] !== null ? (string) $row['description'] : null,
-                    $row['category'] !== null ? (string) $row['category'] : null,
-                );
+                // The additive-only guard exists so a removed field never silently strips
+                // stored data; every document was just converted, so this is the migration
+                // flow's guard-exempt path with the same justification.
+                $this->blockTypes->applyMigratedSchema((string) $row['uuid'], $schema);
             }
         }
     }
