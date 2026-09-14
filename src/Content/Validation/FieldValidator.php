@@ -13,6 +13,11 @@ use Thallo\Core\Content\Schema\FieldDefinition;
 use Glueful\Bootstrap\ApplicationContext;
 use Glueful\Database\Connection;
 use Glueful\Helpers\Utils;
+use Thallo\Contracts\Content\Block;
+use Thallo\Contracts\Style\BlockStyleRegistry;
+use Thallo\Contracts\Style\StyleCapabilities;
+use Thallo\Core\Content\Style\EngineBlockStyleRegistry;
+use Thallo\Core\Content\Style\SettingsValidator;
 
 final class FieldValidator
 {
@@ -21,7 +26,17 @@ final class FieldValidator
         private readonly ?ApplicationContext $context = null,
         private ?BlockTypeRepository $blockTypes = null,
         private ?RichHtmlSanitizer $sanitizer = null,
+        private ?BlockStyleRegistry $styleRegistry = null,
+        private readonly SettingsValidator $settingsValidator = new SettingsValidator(),
     ) {
+    }
+
+    private function styleRegistry(): ?BlockStyleRegistry
+    {
+        if ($this->styleRegistry === null && $this->blockTypes() !== null) {
+            $this->styleRegistry = new EngineBlockStyleRegistry($this->blockTypes());
+        }
+        return $this->styleRegistry;
     }
 
     private function blockTypes(): ?BlockTypeRepository
@@ -482,7 +497,26 @@ final class FieldValidator
                 }
                 continue;
             }
-            $clean[] = ['id' => $id, 'type' => $type, 'data' => $cleanData];
+            // Settings (visual builder spec §1): validated against the style contract and the
+            // block type's capabilities; normalised so every stored block carries the key.
+            $registry = $this->styleRegistry();
+            [$cleanSettings, $settingsErrors] = $this->settingsValidator->validate(
+                $block['settings'] ?? null,
+                $registry?->capabilitiesFor($type) ?? StyleCapabilities::none(),
+                (bool) (($registry?->flagsFor($type) ?? [])['legacy_presentation'] ?? false),
+            );
+            if ($settingsErrors !== []) {
+                foreach ($settingsErrors as $settingsPath => $message) {
+                    $errors["{$path}.{$settingsPath}"] = $message;
+                }
+                continue;
+            }
+            $clean[] = Block::fromArray([
+                'id' => $id,
+                'type' => $type,
+                'data' => $cleanData,
+                'settings' => $cleanSettings,
+            ])->toArray();
         }
         return [$clean, $errors];
     }
