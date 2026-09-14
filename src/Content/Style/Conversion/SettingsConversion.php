@@ -94,16 +94,7 @@ final class SettingsConversion
         $converted = 0;
         $unchanged = 0;
         $changed = [];
-        // The rehearsal's interruption hook (plan A4.7): abort once every document of the named
-        // source is written, leaving the run half done — a rerun must land on the same state.
-        $abortAfter = getenv('THALLO_CONVERT_ABORT_AFTER_SOURCE') ?: null;
-        $lastSource = null;
         foreach ($evaluation['documents'] as $document) {
-            $sourceId = $document['source']->id();
-            if ($abortAfter !== null && $lastSource === $abortAfter && $sourceId !== $abortAfter) {
-                throw new \RuntimeException("conversion aborted after source {$abortAfter} (rehearsal)");
-            }
-            $lastSource = $sourceId;
             if (!$document['converted']->changed) {
                 $unchanged++;
                 continue;
