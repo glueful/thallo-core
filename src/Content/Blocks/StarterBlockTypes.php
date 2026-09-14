@@ -658,7 +658,11 @@ final class StarterBlockTypes
                 'description' => 'A code snippet with a language label and a copy button.',
                 'flags' => [],
                 'style_capabilities' => ['spacing', 'width', 'radius', 'shadow', 'visibility'],
-                'style_targets' => StyleTargets::root('box', ['spacing', 'width', 'radius', 'shadow', 'visibility']),
+                // The framed figure (`panel`) is where the theme paints corners and shadow.
+                'style_targets' => StyleTargets::root('box', ['spacing', 'width', 'visibility'], [
+                    'targets' => ['panel' => ['kind' => 'box']],
+                    'map' => ['radius' => 'panel', 'shadow' => 'panel'],
+                ]),
                 'schema' => [
                     ['name' => 'code', 'type' => 'text', 'required' => true],
                     ['name' => 'language', 'type' => 'enum', 'enum' => [
