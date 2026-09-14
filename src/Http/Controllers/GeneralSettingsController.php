@@ -14,6 +14,8 @@ use Glueful\Routing\RouteCache;
 use Glueful\Routing\RouteManifest;
 use Thallo\Contracts\Delivery\PreviewThemeValidator;
 use Thallo\Contracts\Settings\ThemeAppearanceChanged;
+use Thallo\Contracts\Style\StyleArtifactCompiler;
+use Thallo\Contracts\Style\StyleCompileFailed;
 use Thallo\Contracts\Settings\ThemeChanged;
 use Thallo\Render\Theme\ThemeColors;
 use Thallo\Render\Theme\ThemeDesign;
@@ -43,6 +45,8 @@ final class GeneralSettingsController
         private readonly ?EventService $events = null,
         /** Names the failing homepage condition; the resolver above stays the authority. */
         private readonly ?\Thallo\Core\Content\Delivery\HomepageEligibility $homepageEligibility = null,
+        /** Soft-bound (visual builder spec §2.4): a theme switch compiles its artifact before activating. */
+        private readonly ?StyleArtifactCompiler $styleCompiler = null,
     ) {
     }
 
@@ -74,6 +78,16 @@ final class GeneralSettingsController
         $errors = $this->validate($input);
         if ($errors !== []) {
             return Response::validation($errors);
+        }
+
+        // Compile before activate (visual builder spec §2.4): the theme's compiled style artifact
+        // is published before the theme is stored, so a theme that cannot compile never goes live.
+        if ($input->theme !== null && $input->theme !== '' && $this->styleCompiler !== null) {
+            try {
+                $this->styleCompiler->compile($input->theme);
+            } catch (StyleCompileFailed $e) {
+                return Response::validation(['theme' => $e->getMessage()]);
+            }
         }
 
         $themeBefore = $this->settings->themeOverride();

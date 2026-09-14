@@ -11,6 +11,8 @@ use Glueful\Cache\CacheStore;
 use Glueful\Routing\RouteCache;
 use Thallo\Core\Setup\ApiReferencePublisher;
 use Thallo\Core\Setup\UpgradeCaches;
+use Thallo\Contracts\Style\StyleArtifactCompiler;
+use Thallo\Contracts\Style\StyleCompileFailed;
 use Thallo\Core\Setup\InstallRoleGrants;
 use Thallo\Core\Setup\SetupService;
 use Thallo\Core\Setup\Doctor\Check;
@@ -216,6 +218,19 @@ final class ProvisionCommand extends BaseCommand
                 'API reference not generated (' . $e->getMessage()
                     . ') — run `php glueful generate:openapi -f --ui`.',
             );
+        }
+
+        // The compiled style artifact (visual builder spec §2.4) is compiled here, before any page
+        // links it. Fatal: a vocabulary that cannot compile must not go live; the previous artifact
+        // stays on disk and keeps serving the pages already in browsers.
+        if ($this->container->has(StyleArtifactCompiler::class)) {
+            try {
+                $hash = $this->container->get(StyleArtifactCompiler::class)->compile();
+                $this->line("Style artifact compiled: storage/cache/style/settings-{$hash}.css.");
+            } catch (StyleCompileFailed $e) {
+                $this->error('Provision failed: ' . $e->getMessage());
+                return self::FAILURE;
+            }
         }
 
         // The upgrade is `composer update && thallo:provision`, so provision drops what outlives a

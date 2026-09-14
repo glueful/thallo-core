@@ -7,6 +7,8 @@ namespace Thallo\Core\Setup\Doctor;
 use Glueful\Installer\ConnectionTester;
 use Glueful\Installer\DatabaseConfig;
 use Glueful\Installer\EnvWriter;
+use Thallo\Render\Style\CompiledStyleArtifacts;
+use Thallo\Render\Style\StyleCompiler;
 use Thallo\Render\Style\ThemeVocabulary;
 use Thallo\Render\ThemeConfigError;
 use Thallo\Render\ThemeLocator;
@@ -60,7 +62,11 @@ final class Doctor
         if ($assetRouting !== null) {
             $checks[] = $assetRouting;
         }
-        $checks[] = $this->themeVocabularyCheck();
+        [$vocabulary, $vocabularyCheck] = $this->themeVocabularyCheck();
+        $checks[] = $vocabularyCheck;
+        if ($vocabulary !== null) {
+            $checks[] = $this->styleArtifactCheck($vocabulary);
+        }
         $apiRouting = $this->apiRoutingCheck();
         if ($apiRouting !== null) {
             $checks[] = $apiRouting;
@@ -212,7 +218,8 @@ final class Doctor
      * builder spec §2.2): a theme that fails this cannot load, so say so before activation.
      * `RENDER_THEME` names an app theme under themes/; absent means the shipped default.
      */
-    private function themeVocabularyCheck(): Check
+    /** @return array{0: ?ThemeVocabulary, 1: Check} the vocabulary when it loads, and the verdict */
+    private function themeVocabularyCheck(): array
     {
         $env = $this->basePath . '/.env';
         $name = is_file($env) ? (string) ((new EnvWriter($env))->get('RENDER_THEME') ?? 'default') : 'default';
@@ -221,25 +228,41 @@ final class Doctor
             ? dirname((new \ReflectionClass(ThemeLocator::class))->getFileName(), 2) . '/themes/default'
             : $this->basePath . '/themes/' . $name;
         if (!is_file($dir . '/theme.json')) {
-            return Check::fail(
+            return [null, Check::fail(
                 'theme-vocabulary',
                 "Theme \"{$name}\" has no theme.json at themes/{$name}/theme.json (RENDER_THEME={$name}).",
-            );
+            )];
         }
         $json = json_decode((string) file_get_contents($dir . '/theme.json'), true);
         if (!is_array($json)) {
-            return Check::fail('theme-vocabulary', "Theme \"{$name}\": theme.json is not valid JSON.");
+            return [null, Check::fail('theme-vocabulary', "Theme \"{$name}\": theme.json is not valid JSON.")];
         }
         try {
-            ThemeVocabulary::fromThemeJson($json, $dir);
+            $vocabulary = ThemeVocabulary::fromThemeJson($json, $dir);
         } catch (ThemeConfigError $e) {
-            return Check::fail(
+            return [null, Check::fail(
                 'theme-vocabulary',
                 $e->getMessage() . " — every theme maps the platform vocabulary and lists its stylesheets "
                 . "(RENDER_THEME={$name}; see packages/thallo-render/docs/THEMING.md).",
-            );
+            )];
         }
-        return Check::ok('theme-vocabulary', "Theme \"{$name}\" maps the platform vocabulary.");
+        return [$vocabulary, Check::ok('theme-vocabulary', "Theme \"{$name}\" maps the platform vocabulary.")];
+    }
+
+    /**
+     * The compiled style artifact (visual builder spec §2.4): provision compiles it before any
+     * page links it; until then the first render compiles it lazily, which is a warning, not a
+     * failure.
+     */
+    private function styleArtifactCheck(ThemeVocabulary $vocabulary): Check
+    {
+        $file = CompiledStyleArtifacts::fileName(StyleCompiler::hash($vocabulary));
+        return is_file($this->basePath . '/storage/cache/style/' . $file)
+            ? Check::ok('style-artifact', "Compiled style artifact {$file} is published.")
+            : Check::warn(
+                'style-artifact',
+                "Compiled style artifact {$file} is not published yet — run `php glueful thallo:provision`.",
+            );
     }
 
     private function publicBaseUrl(): ?string
