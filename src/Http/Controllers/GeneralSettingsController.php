@@ -79,7 +79,11 @@ final class GeneralSettingsController
         $themeBefore = $this->settings->themeOverride();
         $accentBefore = $this->settings->themeAccent();
         $neutralBefore = $this->settings->themeNeutral();
-        $designBefore = [$this->settings->themeRadius(), $this->settings->themeFont(), $this->settings->themeBackground()];
+        $designBefore = [
+            $this->settings->themeRadius(),
+            $this->settings->themeFont(),
+            $this->settings->themeBackground(),
+        ];
         $searchBefore = $this->settings->searchEnabled();
 
         $this->settings->save([
@@ -115,7 +119,11 @@ final class GeneralSettingsController
         // ThemeAppearanceChanged only when a STORED appearance value actually
         // changed (theme-color-config spec §7): the render pack purges its page
         // cache (page + error keys) on it.
-        $designAfter = [$this->settings->themeRadius(), $this->settings->themeFont(), $this->settings->themeBackground()];
+        $designAfter = [
+            $this->settings->themeRadius(),
+            $this->settings->themeFont(),
+            $this->settings->themeBackground(),
+        ];
         if (
             ($input->theme_accent !== null && $this->settings->themeAccent() !== $accentBefore)
             || ($input->theme_neutral !== null && $this->settings->themeNeutral() !== $neutralBefore)
