@@ -113,6 +113,11 @@ final class ConversionTables
                     return ConversionOutcome::data('speed', $speed);
                 },
             ),
+        ], [
+            'heading' => ['align', 'color'],
+            'button' => ['align', 'shape'],
+            'image' => ['size', 'width', 'height'],
+            'carousel' => ['transition_duration'],
         ]);
     }
 }

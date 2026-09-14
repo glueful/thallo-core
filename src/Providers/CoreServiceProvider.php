@@ -1269,6 +1269,7 @@ final class CoreServiceProvider extends ServiceProvider
             $container->get(\Thallo\Core\Content\Style\Conversion\Converter::class),
             $container->get(\Thallo\Core\Content\Blocks\Migration\BlockMigrationRepository::class),
             \Thallo\Core\Content\Style\Conversion\ConversionTables::shipped(),
+            $container->get(\Thallo\Core\Content\Blocks\BlockTypeRepository::class),
         );
     }
 

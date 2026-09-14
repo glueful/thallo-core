@@ -305,7 +305,7 @@ final class StarterBlockTypes
             // (h1 is the page title); align is logical (start/center/end).
             ['slug' => 'heading', 'label' => 'Heading', 'icon' => 'i-lucide-heading',
                 'category' => 'Content', 'description' => 'A single heading or label line.',
-                'flags' => ['legacy_presentation' => true],
+                'flags' => [],
                 'style_capabilities' => ['spacing', 'alignment.text', 'typography', 'colors.text', 'visibility'],
                 'style_targets' => StyleTargets::root('text', [
                     'spacing', 'alignment.text', 'typography', 'colors.text', 'visibility',
@@ -313,10 +313,7 @@ final class StarterBlockTypes
                 'schema' => [
                     ['name' => 'text', 'type' => 'string', 'required' => true],
                     ['name' => 'level', 'type' => 'enum', 'enum' => ['h1', 'h2', 'h3', 'h4', 'h5', 'h6']],
-                    ['name' => 'align', 'type' => 'enum', 'enum' => ['start', 'center', 'end']],
-                    // Freeform font color (optional) → inline `color:` at render. The
-                    // 'color' format renders a swatch picker in the editor.
-                    ['name' => 'color', 'type' => 'string', 'pattern' => self::HEX, 'format' => 'color'],
+                    // Alignment and colour are settings (visual builder spec §7.2, group one).
                 ]],
             ['slug' => 'card', 'label' => 'Card', 'icon' => 'i-lucide-rectangle-horizontal',
                 'category' => 'Content',
@@ -458,7 +455,7 @@ final class StarterBlockTypes
             // (full-width) and alignment.
             ['slug' => 'button', 'label' => 'Button', 'icon' => 'i-lucide-mouse-pointer-click',
                 'category' => 'Content', 'description' => 'A standalone action button.',
-                'flags' => ['legacy_presentation' => true],
+                'flags' => [],
                 'style_capabilities' => [
                     'spacing', 'alignment.content', 'visibility', 'radius', 'colors', 'typography', 'shadow',
                 ],
@@ -474,14 +471,12 @@ final class StarterBlockTypes
                         'enum' => ['solid', 'outline', 'soft', 'subtle', 'ghost', 'link']],
                     ['name' => 'color', 'type' => 'enum', 'enum' => ['primary', 'neutral']],
                     ['name' => 'size', 'type' => 'enum', 'enum' => ['xs', 'sm', 'md', 'lg', 'xl']],
-                    // Shape (website plan phase 1b); unset follows the site's radius setting.
-                    ['name' => 'shape', 'type' => 'enum', 'enum' => ['pill', 'rounded', 'square']],
+                    // Corners (radius on the control) and alignment are settings (spec §7.2).
                     ['name' => 'leading_icon', 'type' => 'string',
                         'pattern' => '[a-z0-9]+(-[a-z0-9]+)*', 'format' => 'icon'],
                     ['name' => 'trailing_icon', 'type' => 'string',
                         'pattern' => '[a-z0-9]+(-[a-z0-9]+)*', 'format' => 'icon'],
                     ['name' => 'block', 'type' => 'boolean'],
-                    ['name' => 'align', 'type' => 'enum', 'enum' => ['left', 'center', 'right']],
                 ]],
             // Color-mode switch (color-mode spec §3.5): a 3-way light/system/dark
             // segmented control. Presentation only — no data fields.
@@ -494,7 +489,7 @@ final class StarterBlockTypes
                 'schema' => []],
             ['slug' => 'carousel', 'label' => 'Carousel', 'icon' => 'i-lucide-gallery-horizontal',
                 'category' => 'Content', 'description' => 'A swipeable slider — each child block is a slide.',
-                'flags' => ['legacy_presentation' => true, 'renders_children_inline' => true],
+                'flags' => ['renders_children_inline' => true],
                 'style_capabilities' => ['spacing', 'width', 'radius', 'shadow', 'visibility'],
                 'style_targets' => StyleTargets::root('box', ['spacing', 'width', 'radius', 'shadow', 'visibility']),
                 'schema' => [
@@ -513,11 +508,10 @@ final class StarterBlockTypes
                     // the admin select displays; stored values stay the bare enum.
                     ['name' => 'transition', 'type' => 'enum', 'enum' => ['slide', 'fade', 'zoom'],
                         'enum_labels' => ['slide' => 'Slide', 'fade' => 'Fade', 'zoom' => 'Zoom (Ken Burns)']],
-                    // Seconds; ONE pace for every mode — the runtime drives the slide
-                    // scroll from it (native smooth pace is UA-fixed) and fade/zoom
-                    // consume it as --carousel-duration. Blank = theme defaults
-                    // (native scroll pace / 1.2s cross-fade).
-                    ['name' => 'transition_duration', 'type' => 'number', 'min' => 0.2, 'max' => 5],
+                    // One pace for every mode (spec §7.2: a choice, never a number): the
+                    // runtime drives the slide scroll from data-speed and fade/zoom read the
+                    // theme's --carousel-duration per speed class. Blank = normal.
+                    ['name' => 'speed', 'type' => 'enum', 'enum' => ['slow', 'normal', 'fast']],
                     // Hero height preset (same ruling): svh-based with pixel floors —
                     // compact 40svh / standard 60svh (fallback) / tall 80svh / full 100svh.
                     ['name' => 'height', 'type' => 'enum', 'enum' => ['compact', 'standard', 'tall', 'full']],
@@ -528,7 +522,7 @@ final class StarterBlockTypes
             ['slug' => 'animated_text', 'label' => 'Animated text', 'icon' => 'i-lucide-type',
                 'category' => 'Content',
                 'description' => 'A heading with a reveal effect and an optional rotating word.',
-                'flags' => ['legacy_presentation' => true],
+                'flags' => [],
                 'style_capabilities' => ['spacing', 'alignment.text', 'typography', 'colors.text', 'visibility'],
                 'style_targets' => StyleTargets::root('text', [
                     'spacing', 'alignment.text', 'typography', 'colors.text', 'visibility',
@@ -551,18 +545,20 @@ final class StarterBlockTypes
                     // Per-segment styling (2026-08 follow-up): prefix / rotating words /
                     // suffix each take independent color, relative size, and weight/style.
                     // Grouped: the form folds each trio into a collapsed section.
-                    ['name' => 'prefix_color', 'type' => 'string', 'format' => 'color', 'group' => 'Prefix style'],
+                    // Per-part colours are `token` fields of the colour vocabulary (spec §1.7): the
+                    // template applies them through token_class(), never an inline style.
+                    ['name' => 'prefix_color', 'type' => 'token', 'domain' => 'color', 'group' => 'Prefix style'],
                     ['name' => 'prefix_size', 'type' => 'enum', 'enum' => ['inherit', 'sm', 'lg', 'xl'],
                         'group' => 'Prefix style'],
                     ['name' => 'prefix_bold', 'type' => 'boolean', 'group' => 'Prefix style'],
                     ['name' => 'prefix_italic', 'type' => 'boolean', 'group' => 'Prefix style'],
-                    ['name' => 'rotate_color', 'type' => 'string', 'format' => 'color',
+                    ['name' => 'rotate_color', 'type' => 'token', 'domain' => 'color',
                         'group' => 'Rotating words style'],
                     ['name' => 'rotate_size', 'type' => 'enum', 'enum' => ['inherit', 'sm', 'lg', 'xl'],
                         'group' => 'Rotating words style'],
                     ['name' => 'rotate_bold', 'type' => 'boolean', 'group' => 'Rotating words style'],
                     ['name' => 'rotate_italic', 'type' => 'boolean', 'group' => 'Rotating words style'],
-                    ['name' => 'suffix_color', 'type' => 'string', 'format' => 'color', 'group' => 'Suffix style'],
+                    ['name' => 'suffix_color', 'type' => 'token', 'domain' => 'color', 'group' => 'Suffix style'],
                     ['name' => 'suffix_size', 'type' => 'enum', 'enum' => ['inherit', 'sm', 'lg', 'xl'],
                         'group' => 'Suffix style'],
                     ['name' => 'suffix_bold', 'type' => 'boolean', 'group' => 'Suffix style'],
@@ -572,7 +568,7 @@ final class StarterBlockTypes
             // ---- Media ------------------------------------------------------
             ['slug' => 'image', 'label' => 'Image', 'icon' => 'i-lucide-image',
                 'category' => 'Media', 'description' => 'A single image with caption.',
-                'flags' => ['legacy_presentation' => true],
+                'flags' => [],
                 'style_capabilities' => ['spacing', 'width', 'alignment.self', 'visibility', 'radius', 'shadow'],
                 'style_targets' => StyleTargets::root('box', ['spacing', 'width', 'alignment.self', 'visibility'], [
                     'targets' => ['picture' => ['kind' => 'box', 'optional' => true]],
@@ -582,12 +578,7 @@ final class StarterBlockTypes
                     ['name' => 'image', 'type' => 'asset', 'required' => true],
                     ['name' => 'alt', 'type' => 'string'],
                     ['name' => 'caption', 'type' => 'string'],
-                    // Layout-size preset: how wide the figure sits within the content column.
-                    ['name' => 'size', 'type' => 'enum', 'enum' => ['normal', 'wide', 'full']],
-                    // Explicit intrinsic dimensions in px (optional, independent of `size`).
-                    // Set either or both: one alone preserves aspect ratio, both are exact.
-                    ['name' => 'width', 'type' => 'number', 'min' => 1],
-                    ['name' => 'height', 'type' => 'number', 'min' => 1],
+                    // Sizing is a `width` token and placement on the root (spec §7.2).
                 ]],
             // Responsive image grid (modern-blocks spec §2): items is hard-enforced
             // (enforce_block_types) to only accept `image` child blocks — unlike the

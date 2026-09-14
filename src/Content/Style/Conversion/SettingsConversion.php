@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Thallo\Core\Content\Style\Conversion;
 
+use Thallo\Core\Content\Blocks\BlockTypeRepository;
 use Thallo\Core\Content\Blocks\Migration\BlockMigrationRepository;
 use Thallo\Core\Content\Blocks\Sources\BlockDocumentSource;
 use Thallo\Core\Content\Blocks\Sources\BlockDocumentSources;
@@ -25,6 +26,7 @@ final class SettingsConversion
         private readonly Converter $converter,
         private readonly BlockMigrationRepository $migrations,
         private readonly ConversionStages $stages,
+        private readonly ?BlockTypeRepository $blockTypes = null,
     ) {
     }
 
@@ -103,6 +105,43 @@ final class SettingsConversion
                 $changed[] = $document['ref']->identity();
             }
         }
+        if ($changed === []) {
+            $this->retireFields();
+        }
         return ['converted' => $converted, 'unchanged' => $unchanged, 'changed' => $changed];
+    }
+
+    /**
+     * Once every document is converted, the legacy fields leave the block type rows too, so
+     * the editor stops offering them (the starter definitions no longer carry them either).
+     */
+    private function retireFields(): void
+    {
+        if ($this->blockTypes === null) {
+            return;
+        }
+        foreach ($this->stages->all() as $stage) {
+            foreach ($stage->retiredFields as $slug => $fields) {
+                $row = $this->blockTypes->findBySlug($slug);
+                if ($row === null) {
+                    continue;
+                }
+                $schema = array_values(array_filter(
+                    (array) $row['schema'],
+                    static fn (array $f): bool => !in_array($f['name'] ?? null, $fields, true),
+                ));
+                if (count($schema) === count((array) $row['schema'])) {
+                    continue;
+                }
+                $this->blockTypes->updateSchema(
+                    (string) $row['uuid'],
+                    $schema,
+                    (string) $row['label'],
+                    $row['icon'] !== null ? (string) $row['icon'] : null,
+                    $row['description'] !== null ? (string) $row['description'] : null,
+                    $row['category'] !== null ? (string) $row['category'] : null,
+                );
+            }
+        }
     }
 }

@@ -14,9 +14,16 @@ final class ConversionStage
     /** @var array<string, array<string, ConversionRule>> block type => field => rule */
     private array $rules = [];
 
-    /** @param list<ConversionRule> $rules */
-    public function __construct(public readonly string $name, array $rules)
-    {
+    /**
+     * @param list<ConversionRule> $rules
+     * @param array<string, list<string>> $retiredFields block type => the legacy fields the
+     *        stage removes from the block type's schema once every document is converted
+     */
+    public function __construct(
+        public readonly string $name,
+        array $rules,
+        public readonly array $retiredFields = [],
+    ) {
         foreach ($rules as $rule) {
             $this->rules[$rule->blockType][$rule->field] = $rule;
         }
