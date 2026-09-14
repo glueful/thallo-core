@@ -361,6 +361,8 @@ final class StarterBlockTypes
                         'enum' => ['solid', 'outline', 'soft', 'subtle', 'ghost', 'link']],
                     ['name' => 'color', 'type' => 'enum', 'enum' => ['primary', 'neutral']],
                     ['name' => 'size', 'type' => 'enum', 'enum' => ['xs', 'sm', 'md', 'lg', 'xl']],
+                    // Shape (website plan phase 1b); unset follows the site's radius setting.
+                    ['name' => 'shape', 'type' => 'enum', 'enum' => ['pill', 'rounded', 'square']],
                     ['name' => 'leading_icon', 'type' => 'string',
                         'pattern' => '[a-z0-9]+(-[a-z0-9]+)*', 'format' => 'icon'],
                     ['name' => 'trailing_icon', 'type' => 'string',
