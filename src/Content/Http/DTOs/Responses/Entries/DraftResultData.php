@@ -17,8 +17,6 @@ final class DraftResultData implements ResponseData
 {
     public function __construct(
         public readonly DraftData $draft,
-        /** Whether the preview working copy was cleared by this save (visual builder spec §3.5). */
-        public readonly bool $preview_cleared = false,
     ) {
     }
 }

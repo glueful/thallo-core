@@ -14,6 +14,7 @@ use Thallo\Core\Content\Http\DTOs\ApplyPreviewData;
 use Thallo\Core\Content\Http\DTOs\CopyLocaleData;
 use Thallo\Core\Content\Http\DTOs\SaveDraftData;
 use Thallo\Core\Content\Http\DTOs\Responses\Entries\DraftResultData;
+use Thallo\Core\Content\Http\DTOs\Responses\Entries\DraftSaveResultData;
 use Thallo\Core\Content\Http\DTOs\Responses\Entries\EntryCreateResultData;
 use Thallo\Core\Content\Http\DTOs\Responses\Entries\EntryLocalesResultData;
 use Thallo\Core\Content\Http\DTOs\Responses\Entries\EntryResultData;
@@ -259,7 +260,7 @@ final class EntryController
             . '409 carrying the current draft so the client can rebase.',
         tags: ['Thallo Admin'],
     )]
-    #[ApiResponse(200, schema: DraftResultData::class, description: 'Draft saved.')]
+    #[ApiResponse(200, schema: DraftSaveResultData::class, description: 'Draft saved.')]
     #[ApiResponse(404, schema: ErrorResponse::class, envelope: false, description: 'No entry with that UUID.')]
     #[ApiResponse(
         409,
