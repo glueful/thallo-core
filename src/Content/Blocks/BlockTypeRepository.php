@@ -97,7 +97,8 @@ final class BlockTypeRepository
     }
 
     /** The flags a block type may declare (spec §1.7, §3.5). */
-    public const FLAGS = ['legacy_presentation', 'renders_children_inline'];
+    /** Rendering hints a block type may carry (visual builder spec §3.1). */
+    public const FLAGS = ['renders_children_inline'];
 
     /**
      * Validate the four style keys of a payload and return them encoded for storage. Absent or

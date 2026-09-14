@@ -571,7 +571,6 @@ final class FieldValidator
             [$cleanSettings, $settingsErrors] = $this->settingsValidator->validate(
                 $block['settings'] ?? null,
                 $registry?->capabilitiesFor($type) ?? StyleCapabilities::none(),
-                (bool) (($registry?->flagsFor($type) ?? [])['legacy_presentation'] ?? false),
             );
             if ($settingsErrors !== []) {
                 foreach ($settingsErrors as $settingsPath => $message) {

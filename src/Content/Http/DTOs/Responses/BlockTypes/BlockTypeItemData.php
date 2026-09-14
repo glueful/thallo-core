@@ -31,7 +31,7 @@ final class BlockTypeItemData implements ResponseData
         public readonly ?array $style_capabilities = null,
         /** @var array<string,mixed>|null Named style targets and the capability → target map. */
         public readonly ?array $style_targets = null,
-        /** @var array<string,bool>|null `legacy_presentation`, `renders_children_inline`. */
+        /** @var array<string,bool>|null Rendering hints: `renders_children_inline`. */
         public readonly ?array $flags = null,
         /** @var array<string,mixed>|null Starter content for a freshly inserted block. */
         public readonly ?array $starter_content = null,

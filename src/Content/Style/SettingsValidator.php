@@ -13,9 +13,7 @@ use Thallo\Contracts\Style\Vocabulary;
 /**
  * Validates one block's `settings` (visual builder spec §1.1–1.5) against the style contract and
  * the block's capabilities. Returns the normalised settings and errors keyed by a path relative
- * to the block (`settings.style.spacing.padding.top`). While a block type still carries
- * `legacy_presentation`, any managed style is refused so a setting never competes with a legacy
- * field; `advanced` and `classes` are allowed regardless.
+ * to the block (`settings.style.spacing.padding.top`); `advanced` and `classes` need no capability.
  */
 final class SettingsValidator
 {
@@ -27,7 +25,7 @@ final class SettingsValidator
     /**
      * @return array{0: array<string,mixed>, 1: array<string,string>}
      */
-    public function validate(mixed $settings, StyleCapabilities $caps, bool $legacyPresentation): array
+    public function validate(mixed $settings, StyleCapabilities $caps): array
     {
         if ($settings === null || $settings === []) {
             return [[], []];
@@ -41,10 +39,6 @@ final class SettingsValidator
             switch ($key) {
                 case 'style':
                     if ($value === null || $value === []) {
-                        break;
-                    }
-                    if ($legacyPresentation) {
-                        $errors['settings.style'] = 'styling for this block arrives with its conversion';
                         break;
                     }
                     [$style, $styleErrors] = $this->validateStyle($value, $caps);
