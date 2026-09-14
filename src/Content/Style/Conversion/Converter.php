@@ -97,6 +97,7 @@ final class Converter
                         continue;
                     }
                     $this->applyRule(
+                        $stage->name,
                         $rule,
                         $field,
                         $blockId,
@@ -139,6 +140,7 @@ final class Converter
      * @param array<string,mixed> $settings
      */
     private function applyRule(
+        string $stage,
         ConversionRule $rule,
         string $field,
         string $blockId,
@@ -152,6 +154,8 @@ final class Converter
         bool &$changed,
     ): void {
         $old = $data[$field];
+        $line = fn (string $status, ?string $reason): array
+            => $this->line($stage, $ref, $blockId, $field, $old, $status, $reason, $hash);
         $outcome = $rule->apply($old, $data);
         $status = ConversionOutcome::KEPT;
         $reason = null;
@@ -164,14 +168,14 @@ final class Converter
                 $reason = $stale
                     ? 'decision is stale: the document changed since it was reviewed'
                     : (string) $outcome->reason;
-                $report->add($this->line($ref, $blockId, $field, $old, 'unmappable', $reason, $hash));
+                $report->add($line('unmappable', $reason));
                 return;
             }
             $outcome = $this->decided($rule, $decision);
             if ($outcome === null) {
                 $unresolved++;
                 $reason = 'decision is not applicable';
-                $report->add($this->line($ref, $blockId, $field, $old, 'unmappable', $reason, $hash));
+                $report->add($line('unmappable', $reason));
                 return;
             }
         }
@@ -218,7 +222,7 @@ final class Converter
             default:
                 $status = 'kept';
         }
-        $report->add($this->line($ref, $blockId, $field, $old, $status, $reason, $hash));
+        $report->add($line($status, $reason));
     }
 
     /**
@@ -272,6 +276,7 @@ final class Converter
 
     /** @return array<string,mixed> */
     private function line(
+        string $stage,
         DocumentRef $ref,
         string $blockId,
         string $field,
@@ -281,6 +286,7 @@ final class Converter
         string $hash,
     ): array {
         return [
+            'stage' => $stage,
             'source_type' => $ref->sourceType,
             'source_id' => $ref->sourceId,
             'source_revision' => $ref->revision,

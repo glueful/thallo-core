@@ -30,12 +30,7 @@ final class RegionsSource implements BlockDocumentSource
     {
         $rows = $this->db->table('regions')->select(['slug', 'blocks', 'schema_stamp'])->orderBy('slug', 'ASC')->get();
         foreach ($rows as $row) {
-            $blocks = BlockContentTypes::decode($row['blocks']);
-            $fields = ['blocks' => array_values($blocks)];
-            $stamp = BlockContentTypes::decode($row['schema_stamp'] ?? null);
-            if ($stamp !== []) {
-                $fields['_schema'] = $stamp;
-            }
+            $fields = self::document($row);
             $fn(new DocumentRef(
                 self::ID,
                 (string) $row['slug'],
@@ -51,9 +46,13 @@ final class RegionsSource implements BlockDocumentSource
     {
         $written = false;
         $this->db->transaction(function () use ($ref, $fields, &$written): void {
-            $row = $this->db->table('regions')->select(['blocks'])->where('slug', '=', $ref->sourceId)->first();
-            $current = ['blocks' => array_values(BlockContentTypes::decode($row['blocks'] ?? null))];
-            if ($row === null || EntryVersionsSource::fingerprint($current) !== $ref->revision) {
+            $row = $this->db->table('regions')
+                ->select(['blocks', 'schema_stamp'])
+                ->where('slug', '=', $ref->sourceId)
+                ->first();
+            // The revision checked here is the one each() handed out: the same document, stamp
+            // included, so a region stamped by one stage persists again under the next.
+            if ($row === null || EntryVersionsSource::fingerprint(self::document($row)) !== $ref->revision) {
                 return;
             }
             $blocks = is_array($fields['blocks'] ?? null) ? array_values($fields['blocks']) : [];
@@ -66,6 +65,22 @@ final class RegionsSource implements BlockDocumentSource
             $written = true;
         });
         return $written;
+    }
+
+    /**
+     * The region row as a document: its blocks, and the schema stamp when it carries one.
+     *
+     * @param array<string,mixed> $row
+     * @return array<string,mixed>
+     */
+    private static function document(array $row): array
+    {
+        $fields = ['blocks' => array_values(BlockContentTypes::decode($row['blocks'] ?? null))];
+        $stamp = BlockContentTypes::decode($row['schema_stamp'] ?? null);
+        if ($stamp !== []) {
+            $fields['_schema'] = $stamp;
+        }
+        return $fields;
     }
 
     /** A region's document schema: one blocks field named `blocks`. */
