@@ -9,6 +9,7 @@ use Thallo\Core\Content\Events\BaseModelEvent;
 use Thallo\Core\Content\Repositories\ContentTypeRepository;
 use Glueful\Cache\CacheStore;
 use Psr\Container\ContainerInterface;
+use Thallo\Contracts\Delivery\RenderedPageCachePurge;
 
 /**
  * Purges the delivery layer's surrogate cache keys when content changes (V1_DESIGN §5).
@@ -52,7 +53,14 @@ final class InvalidateCacheTagsListener
         if ($tags === []) {
             return;
         }
-        $this->cache()->invalidateTags($tags);
+        if ($this->cache()->invalidateTags($tags)) {
+            return;
+        }
+        // A driver without tag invalidation (the default file driver): rendered pages must still
+        // reflect the change on the next request, so the render pack drops them all.
+        if ($this->container->has(RenderedPageCachePurge::class)) {
+            $this->container->get(RenderedPageCachePurge::class)->purgeAll();
+        }
     }
 
     private function cache(): CacheStore
