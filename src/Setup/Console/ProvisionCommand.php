@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Thallo\Core\Setup\Console;
 
 use Thallo\Core\Content\Blocks\StarterBlockTypeSeeder;
+use Thallo\Core\Content\Blocks\StarterBlockTypeSync;
 use Thallo\Core\Providers\CoreServiceProvider;
 use Thallo\Core\Setup\AdminBundlePublisher;
 use Glueful\Cache\CacheStore;
@@ -155,21 +156,28 @@ final class ProvisionCommand extends BaseCommand
         }
 
         // Starter block types: seed any the library has that this instance lacks (a starter
-        // added on upgrade; an instance that only ever received migration 021's subset).
-        // Existing rows are never touched. Only once installed — the fresh-install seed runs
-        // inside setup — and only single-store: with workspaces on, run `thallo:blocks:seed --all`.
+        // added on upgrade; an instance that only ever received migration 021's subset), then
+        // sync the evolved definitions onto the existing rows — new fields, and the style
+        // declaration the settings conversion below and every render rely on. Only once
+        // installed — the fresh-install seed runs inside setup — and only single-store: with
+        // workspaces on, run `thallo:blocks:seed --all` and `thallo:blocks:sync --all`.
         try {
             $setup = $this->getContainer()->get(SetupService::class);
             $flags = $this->getContainer()->get(SystemFlags::class);
             if ($setup->isInstalled() && !$flags->tenancyEnabled()) {
                 $blocks = $this->getContainer()->get(StarterBlockTypeSeeder::class)->seedMissing();
+                $synced = $this->getContainer()->get(StarterBlockTypeSync::class)->sync();
                 $this->line(sprintf(
-                    'Starter block types: created %d, already present %d.',
+                    'Starter block types: created %d, synced %d, unchanged %d.',
                     count($blocks['created']),
-                    count($blocks['skipped']),
+                    count($synced['synced']),
+                    $synced['unchanged'],
                 ));
             } elseif ($setup->isInstalled()) {
-                $this->line('Starter block types: workspaces are on — run `php glueful thallo:blocks:seed --all`.');
+                $this->line(
+                    'Starter block types: workspaces are on — run `php glueful thallo:blocks:seed --all` '
+                        . 'and `php glueful thallo:blocks:sync --all`.',
+                );
             }
         } catch (\Throwable $e) {
             $this->warning('Starter block types not seeded (' . $e->getMessage() . ').');

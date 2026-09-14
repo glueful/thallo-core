@@ -4,8 +4,7 @@ declare(strict_types=1);
 
 namespace Thallo\Core\Content\Console;
 
-use Thallo\Core\Content\Blocks\BlockTypeRepository;
-use Thallo\Core\Content\Starter\Kinds\BlockTypeKind;
+use Thallo\Core\Content\Blocks\StarterBlockTypeSync;
 use Glueful\Console\BaseCommand;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Input\InputInterface;
@@ -15,17 +14,10 @@ use Glueful\Extensions\Contracts\Tenancy\TenantContextRunner;
 use Thallo\Tenancy\System\SystemFlags;
 
 /**
- * Additively syncs evolved starter block-type schemas onto existing rows.
- *
- * The seeder (thallo:blocks:seed) is create-only by design — it never touches an
- * existing row, so new fields added to a StarterBlockTypes definition never reach
- * already-seeded installs. This closes that gap the SAFE way: for each starter it
- * PRESERVES the existing field order and APPENDS (via array_merge) any starter field
- * whose `name` is absent from the DB row's schema. Operator-added fields and the
- * row's label/icon/description/category are left untouched, and field REMOVAL is
- * never performed here — that is the migration flow's job — so this is non-destructive
- * and mirrors updateSchema's additive-only guard. `--dry-run` reports the same
- * "synced …" lines without writing, so it doubles as a safe pre-upgrade preview.
+ * Syncs evolved starter block-type definitions onto existing rows ({@see StarterBlockTypeSync}):
+ * additive for fields, the starter's own for the style declaration. `thallo:provision` runs the
+ * same sync once installed; this command is the manual and multi-workspace path, and
+ * `--dry-run` reports the same "synced …" lines without writing.
  */
 #[AsCommand(
     name: 'thallo:blocks:sync',
@@ -65,87 +57,19 @@ final class SyncBlockTypesCommand extends BaseCommand
 
     private function syncCurrent(bool $dryRun): int
     {
-        /** @var BlockTypeRepository $repo */
-        $repo = $this->getService(BlockTypeRepository::class);
-        $synced = 0;
-        $unchanged = 0;
-        $missing = 0;
-        // Starters and every enabled pack contribution: the definition is the authority.
-        foreach ($this->getService(BlockTypeKind::class)->definitions() as $starter) {
-            $definition = $starter->payload;
-            $row = $repo->findBySlug($definition['slug']);
-            if ($row === null) {
-                $this->line("missing {$definition['slug']} (run thallo:blocks:seed)");
-                $missing++;
-                continue;
-            }
-            $existing = array_column($row['schema'], 'name');
-            $toAdd = array_values(array_filter(
-                $definition['schema'],
-                static fn (array $f): bool => !in_array($f['name'], $existing, true),
-            ));
-            // Presentation-metadata attach: a same-name field the starter now
-            // labels (enum_labels) gets the labels ADDED when the row has none.
-            // Additive-only, like everything here: an operator's own labels are
-            // never overwritten, and no other key of an existing field changes.
-            $patched = $row['schema'];
-            $labelled = [];
-            foreach ($definition['schema'] as $starterField) {
-                if (!isset($starterField['enum_labels'])) {
-                    continue;
-                }
-                foreach ($patched as $i => $rowField) {
-                    if (($rowField['name'] ?? null) === $starterField['name'] && !isset($rowField['enum_labels'])) {
-                        $patched[$i]['enum_labels'] = $starterField['enum_labels'];
-                        $labelled[] = (string) $starterField['name'];
-                    }
-                }
-            }
-            // Style declaration keys (visual builder spec §1.7): the starter is the authority;
-            // a row missing a key the starter declares receives it.
-            $styleKeys = [];
-            foreach (['style_capabilities', 'style_targets', 'flags', 'starter_content'] as $key) {
-                if (($row[$key] ?? null) === null && isset($definition[$key])) {
-                    $styleKeys[] = $key;
-                }
-            }
-            if ($toAdd === [] && $labelled === [] && $styleKeys === []) {
-                $unchanged++;
-                continue;
-            }
-            if (!$dryRun && $styleKeys !== []) {
-                $repo->updateStyle(
-                    (string) $row['uuid'],
-                    $definition['style_capabilities'] ?? $row['style_capabilities'] ?? null,
-                    $definition['style_targets'] ?? $row['style_targets'] ?? null,
-                    $definition['flags'] ?? $row['flags'] ?? null,
-                    $definition['starter_content'] ?? $row['starter_content'] ?? null,
-                );
-            }
-            if (!$dryRun && ($toAdd !== [] || $labelled !== [])) {
-                $repo->updateSchema(
-                    (string) $row['uuid'],
-                    array_merge($patched, $toAdd),
-                    (string) $row['label'],
-                    $row['icon'] !== null ? (string) $row['icon'] : null,
-                    $row['description'] !== null ? (string) $row['description'] : null,
-                    $row['category'] !== null ? (string) $row['category'] : null,
-                );
-            }
-            $parts = [];
-            if ($toAdd !== []) {
-                $parts[] = '+' . count($toAdd) . ': ' . implode(', ', array_column($toAdd, 'name'));
-            }
-            if ($labelled !== []) {
-                $parts[] = 'labels: ' . implode(', ', $labelled);
-            }
-            if ($styleKeys !== []) {
-                $parts[] = 'style: ' . implode(', ', $styleKeys);
-            }
-            $this->line("synced {$definition['slug']} (" . implode('; ', $parts) . ')');
-            $synced++;
+        $result = $this->getService(StarterBlockTypeSync::class)->sync($dryRun);
+        foreach ($result['missing'] as $slug) {
+            $this->line("missing {$slug} (run thallo:blocks:seed)");
         }
-        $summary = "Synced {$synced}, unchanged {$unchanged}, missing {$missing}.";
+        foreach ($result['synced'] as $entry) {
+            $this->line("synced {$entry['slug']} (" . implode('; ', $entry['parts']) . ')');
+        }
+        $summary = sprintf(
+            'Synced %d, unchanged %d, missing %d.',
+            count($result['synced']),
+            $result['unchanged'],
+            count($result['missing']),
+        );
         $this->success($dryRun ? "[dry-run] {$summary} No changes written." : $summary);
         return self::SUCCESS;
     }

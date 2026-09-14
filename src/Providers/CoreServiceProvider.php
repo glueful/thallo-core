@@ -994,6 +994,11 @@ final class CoreServiceProvider extends ServiceProvider
                 'shared' => true,
                 'autowire' => true,
             ],
+            \Thallo\Core\Content\Blocks\StarterBlockTypeSync::class => [
+                'class' => \Thallo\Core\Content\Blocks\StarterBlockTypeSync::class,
+                'shared' => true,
+                'autowire' => true,
+            ],
             \Thallo\Core\Content\Blocks\ContributedBlockTypeReconciler::class => [
                 'class' => \Thallo\Core\Content\Blocks\ContributedBlockTypeReconciler::class,
                 'shared' => true,

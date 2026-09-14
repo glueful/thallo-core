@@ -178,19 +178,28 @@ final class Converter
 
         switch ($outcome->kind) {
             case ConversionOutcome::SETTING:
-                $segments = ['style', ...explode('.', (string) $outcome->target)];
-                $def = StyleSchema::property((string) $outcome->target);
-                if ($def !== null && $def->responsive) {
-                    $segments[] = $outcome->breakpoint;
-                }
-                if (self::has($settings, $segments)) {
-                    $status = 'superseded';
-                    $reason = 'an explicit settings value already exists and wins';
-                } else {
+                $status = 'converted';
+                foreach (self::pathsFor((string) $outcome->target) as $path) {
+                    $segments = ['style', ...explode('.', $path)];
+                    $def = StyleSchema::property($path);
+                    if ($def !== null && $def->responsive) {
+                        $segments[] = $outcome->breakpoint;
+                    }
+                    if (self::has($settings, $segments)) {
+                        $status = 'superseded';
+                        $reason = 'an explicit settings value already exists and wins';
+                        continue;
+                    }
                     $settings = self::set($settings, $segments, $outcome->value);
-                    $status = 'converted';
                 }
                 unset($data[$field]);
+                $changed = true;
+                break;
+            case ConversionOutcome::ADVANCED:
+                $segments = ['advanced', ...explode('.', (string) $outcome->target)];
+                $settings = self::set($settings, $segments, $outcome->value);
+                unset($data[$field]);
+                $status = 'converted';
                 $changed = true;
                 break;
             case ConversionOutcome::DATA:
@@ -240,6 +249,24 @@ final class Converter
             'setting' => is_array($value) ? ConversionOutcome::setting($name, $value) : null,
             'data' => ConversionOutcome::data($name, $value),
             default => null,
+        };
+    }
+
+    /**
+     * The settings paths an outcome writes: a property path is itself; `spacing.padding` is the
+     * four sides and `spacing.margin` the two, so one decision styles a whole box.
+     *
+     * @return list<string>
+     */
+    private static function pathsFor(string $target): array
+    {
+        return match ($target) {
+            'spacing.padding' => array_map(
+                static fn (string $s): string => "spacing.padding.{$s}",
+                ['top', 'right', 'bottom', 'left'],
+            ),
+            'spacing.margin' => ['spacing.margin.top', 'spacing.margin.bottom'],
+            default => [$target],
         };
     }
 

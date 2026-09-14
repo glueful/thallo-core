@@ -8,6 +8,7 @@ namespace Thallo\Core\Content\Style\Conversion;
 final readonly class ConversionOutcome
 {
     public const SETTING = 'setting';
+    public const ADVANCED = 'advanced';
     public const DATA = 'data';
     public const DISCARD = 'discard';
     public const UNMAPPABLE = 'unmappable';
@@ -26,6 +27,12 @@ final readonly class ConversionOutcome
     public static function setting(string $path, array $value, string $breakpoint = 'base'): self
     {
         return new self(self::SETTING, $path, $value, $breakpoint);
+    }
+
+    /** The value becomes an advanced setting (`anchor`, `css_classes`, `attributes`, `accessibility.label`). */
+    public static function advanced(string $path, mixed $value): self
+    {
+        return new self(self::ADVANCED, $path, $value);
     }
 
     /** The value becomes (or rewrites) a data field: block semantics that stay in `data`. */
