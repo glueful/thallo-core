@@ -7,6 +7,9 @@ namespace Thallo\Core\Setup\Doctor;
 use Glueful\Installer\ConnectionTester;
 use Glueful\Installer\DatabaseConfig;
 use Glueful\Installer\EnvWriter;
+use Thallo\Render\Style\ThemeVocabulary;
+use Thallo\Render\ThemeConfigError;
+use Thallo\Render\ThemeLocator;
 
 /**
  * First-run environment checks. Two phases:
@@ -57,6 +60,7 @@ final class Doctor
         if ($assetRouting !== null) {
             $checks[] = $assetRouting;
         }
+        $checks[] = $this->themeVocabularyCheck();
         $apiRouting = $this->apiRoutingCheck();
         if ($apiRouting !== null) {
             $checks[] = $apiRouting;
@@ -203,6 +207,41 @@ final class Doctor
     }
 
     /** The public BASE_URL to probe, or null when unset or local (nothing to probe). */
+    /**
+     * The active theme must map the platform vocabulary and list its stylesheets (visual
+     * builder spec §2.2): a theme that fails this cannot load, so say so before activation.
+     * `RENDER_THEME` names an app theme under themes/; absent means the shipped default.
+     */
+    private function themeVocabularyCheck(): Check
+    {
+        $env = $this->basePath . '/.env';
+        $name = is_file($env) ? (string) ((new EnvWriter($env))->get('RENDER_THEME') ?? 'default') : 'default';
+        $name = $name === '' ? 'default' : $name;
+        $dir = $name === 'default'
+            ? dirname((new \ReflectionClass(ThemeLocator::class))->getFileName(), 2) . '/themes/default'
+            : $this->basePath . '/themes/' . $name;
+        if (!is_file($dir . '/theme.json')) {
+            return Check::fail(
+                'theme-vocabulary',
+                "Theme \"{$name}\" has no theme.json at themes/{$name}/theme.json (RENDER_THEME={$name}).",
+            );
+        }
+        $json = json_decode((string) file_get_contents($dir . '/theme.json'), true);
+        if (!is_array($json)) {
+            return Check::fail('theme-vocabulary', "Theme \"{$name}\": theme.json is not valid JSON.");
+        }
+        try {
+            ThemeVocabulary::fromThemeJson($json, $dir);
+        } catch (ThemeConfigError $e) {
+            return Check::fail(
+                'theme-vocabulary',
+                $e->getMessage() . " — every theme maps the platform vocabulary and lists its stylesheets "
+                . "(RENDER_THEME={$name}; see packages/thallo-render/docs/THEMING.md).",
+            );
+        }
+        return Check::ok('theme-vocabulary', "Theme \"{$name}\" maps the platform vocabulary.");
+    }
+
     private function publicBaseUrl(): ?string
     {
         $env = $this->basePath . '/.env';
