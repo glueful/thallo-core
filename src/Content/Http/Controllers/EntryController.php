@@ -23,6 +23,7 @@ use Thallo\Core\Content\Preview\PreviewToken;
 use Thallo\Core\Content\Preview\PreviewTokenException;
 use Thallo\Core\Content\Preview\PreviewWorkingCopyStore;
 use Thallo\Core\Content\Style\SiteStyleGeneration;
+use Thallo\Contracts\Preview\PreviewFragmentRenderer;
 use Thallo\Core\Content\Http\DTOs\Responses\Preview\ApplyPreviewResultData;
 use Thallo\Core\Content\Preview\ResolvesPreviewKey;
 use Thallo\Core\Content\Repositories\ContentTypeRepository;
@@ -77,6 +78,8 @@ final class EntryController
         private readonly ?RootMountGuard $rootGuard = null,
         /** The site style generation named by every apply (visual builder spec §3.5). */
         private readonly ?SiteStyleGeneration $styleGeneration = null,
+        /** The fragment path (spec §3.5); null = the render pack is off, the stage refreshes. */
+        private readonly ?PreviewFragmentRenderer $fragments = null,
     ) {
     }
 
@@ -417,6 +420,9 @@ final class EntryController
             }
         }
         $ttl = min(max($token->expiresAt - time(), 1), 300);
+        // The accepted-before document: what the stage displays, which the fragment path
+        // validates the operations against.
+        $before = $this->workingCopies->fields($uuid, $locale);
         $result = $this->workingCopies->accept(
             $uuid,
             $locale,
@@ -434,12 +440,29 @@ final class EntryController
                     : ['epoch' => $result['epoch'], 'revision' => $result['revision']],
             ]);
         }
+        // 8. The fragment path (spec §3.5): behind its flag, the affected roots rendered in
+        // isolation; null whenever the whole page must be refreshed instead.
+        $blockFields = [];
+        foreach ($schema->fields() as $field) {
+            if ($field->type === 'blocks') {
+                $blockFields[] = $field->name;
+            }
+        }
+        $fragments = $this->fragments?->render(
+            $input->token,
+            $ops,
+            $before,
+            $clean,
+            $blockFields,
+            $input->debug_changed,
+        );
         return Response::success([
             'epoch' => $result['epoch'],
             'revision' => $result['revision'],
             'baseline' => $result['baseline'],
             'style_generation' => $this->styleGeneration?->current() ?? 0,
             'applied_at' => $result['accepted_at'],
+            'fragments' => $fragments,
         ], 'Preview applied.');
     }
 

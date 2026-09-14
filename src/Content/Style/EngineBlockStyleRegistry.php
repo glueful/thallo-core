@@ -41,6 +41,17 @@ final class EngineBlockStyleRegistry implements BlockStyleRegistry
         return is_array($flags) ? $flags : [];
     }
 
+    public function regionsFor(string $type): array
+    {
+        $names = [];
+        foreach ((array) ($this->row($type)['schema'] ?? []) as $field) {
+            if (is_array($field) && ($field['type'] ?? null) === 'blocks' && is_string($field['name'] ?? null)) {
+                $names[] = $field['name'];
+            }
+        }
+        return $names;
+    }
+
     /** Drop the memo (tests and long-running processes that change block types). */
     public function reset(): void
     {
