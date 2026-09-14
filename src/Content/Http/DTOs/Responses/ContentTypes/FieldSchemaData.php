@@ -55,6 +55,8 @@ final class FieldSchemaData implements ResponseData
         public readonly ?float $min = null,
         /** Inclusive upper bound for a `number` field; absent = unbounded. */
         public readonly ?float $max = null,
+        /** The vocabulary domain a `token` field draws from (`color`, `spacing`, …). */
+        public readonly ?string $domain = null,
     ) {
     }
 }

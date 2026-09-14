@@ -4,12 +4,13 @@ declare(strict_types=1);
 
 namespace Thallo\Core\Content\Schema;
 
+use Thallo\Contracts\Style\Vocabulary;
 use Thallo\Contracts\Schema\FieldDescriptor;
 
 final class FieldDefinition implements FieldDescriptor
 {
     public const TYPES = [
-        'string', 'text', 'number', 'boolean', 'datetime', 'enum', 'reference', 'asset', 'json', 'blocks',
+        'string', 'text', 'number', 'boolean', 'datetime', 'enum', 'reference', 'asset', 'json', 'blocks', 'token',
         // A 4-side spacing/radius box: an object with optional non-negative numeric
         // top/right/bottom/left (px). Renders a linked T/R/B/L editor widget.
         'box',
@@ -69,6 +70,8 @@ final class FieldDefinition implements FieldDescriptor
         public readonly int|float|null $min = null,
         /** Inclusive upper bound for a `number` field; null = unbounded. */
         public readonly int|float|null $max = null,
+        /** The vocabulary domain a `token` field draws from (visual builder spec §1.7). */
+        public readonly ?string $domain = null,
     ) {
     }
 
@@ -197,6 +200,22 @@ final class FieldDefinition implements FieldDescriptor
         // default — FieldValidator does not enforce it unless enforce_block_types opts
         // in (tightening the DEFAULT must never strand existing content). Blocks fields
         // are never filterable.
+        // `token` (visual builder spec §1.7): block semantics that stay in data as a typed token
+        // of one vocabulary domain (animated text's per-part colours). Never filterable.
+        $domain = null;
+        if ($type === 'token') {
+            $rawDomain = $raw['domain'] ?? null;
+            if (!is_string($rawDomain) || !in_array($rawDomain, Vocabulary::domains(), true)) {
+                throw new SchemaParseException(
+                    "token field '{$name}' must declare a domain (" . implode('|', Vocabulary::domains()) . ')'
+                );
+            }
+            if ($filterable) {
+                throw new SchemaParseException("token field '{$name}' cannot be filterable");
+            }
+            $domain = $rawDomain;
+        }
+
         $blockTypes = [];
         $enforceBlockTypes = false;
         if ($type === 'blocks') {
@@ -256,6 +275,7 @@ final class FieldDefinition implements FieldDescriptor
             pattern: $pattern,
             min: $min,
             max: $max,
+            domain: $domain,
         );
     }
 }

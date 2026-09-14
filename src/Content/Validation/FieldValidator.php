@@ -16,6 +16,7 @@ use Glueful\Helpers\Utils;
 use Thallo\Contracts\Content\Block;
 use Thallo\Contracts\Style\BlockStyleRegistry;
 use Thallo\Contracts\Style\StyleCapabilities;
+use Thallo\Contracts\Style\Vocabulary;
 use Thallo\Core\Content\Style\EngineBlockStyleRegistry;
 use Thallo\Core\Content\Style\SettingsValidator;
 
@@ -345,9 +346,31 @@ final class FieldValidator
             'reference', 'asset' => (is_string($value) && $value !== '') ? null : 'must be a uuid',
             'json' => (is_array($value)) ? null : 'must be an object/array',
             'box' => $this->checkBox($value),
+            'token' => $this->checkToken($field, $value),
             'blocks' => 'must be an ordered list of blocks', // handled by validateBlocks(); guard only
             default => 'unknown field type',
         };
+    }
+
+    /** A token value is `{type: "token", value: "<domain>.<name>"}` of the field's domain (spec §1.7). */
+    private function checkToken(FieldDefinition $field, mixed $value): ?string
+    {
+        $domain = (string) $field->domain;
+        if (!is_array($value) || ($value['type'] ?? null) !== 'token' || !is_string($value['value'] ?? null)) {
+            return 'must be a token of the ' . $domain . ' vocabulary';
+        }
+        if (array_keys($value) !== ['type', 'value'] && array_keys($value) !== ['value', 'type']) {
+            return 'must be a token of the ' . $domain . ' vocabulary';
+        }
+        $prefix = $domain . '.';
+        $name = str_starts_with($value['value'], $prefix) ? substr($value['value'], strlen($prefix)) : null;
+        if ($name === null || !in_array($name, Vocabulary::names($domain), true)) {
+            return 'must be one of: ' . implode(', ', array_map(
+                static fn (string $n): string => $prefix . $n,
+                Vocabulary::names($domain),
+            ));
+        }
+        return null;
     }
 
     /** A box is an object with optional non-negative numeric top/right/bottom/left (px). */
