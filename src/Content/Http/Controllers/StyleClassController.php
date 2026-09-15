@@ -13,12 +13,16 @@ use Thallo\Contracts\Style\StyleClassProvider;
 use Thallo\Core\Content\Http\DTOs\Responses\StyleClasses\StyleClassListData;
 use Thallo\Core\Content\Http\DTOs\Responses\StyleClasses\StyleClassResultData;
 use Thallo\Core\Content\Http\DTOs\Responses\StyleClasses\StyleClassUsageData;
+use Thallo\Core\Content\Http\DTOs\Responses\StyleClasses\StyleClassJobData;
 use Thallo\Core\Content\Http\DTOs\StyleClassData;
+use Thallo\Core\Content\Http\DTOs\StyleClassJobRequestData;
 use Thallo\Core\Content\Http\DTOs\UpdateStyleClassData;
 use Thallo\Core\Content\Style\Classes\StyleClassLocked;
 use Thallo\Core\Content\Style\Classes\StyleClassNameTaken;
 use Thallo\Core\Content\Style\Classes\StyleClassNotFound;
 use Thallo\Core\Content\Style\Classes\StyleClassRepository;
+use Thallo\Core\Content\Style\Classes\StyleClassJobRepository;
+use Thallo\Core\Content\Style\Classes\StyleClassJobService;
 use Thallo\Core\Content\Style\Classes\StyleClassUsage;
 use Thallo\Core\Content\Style\Classes\StyleClassVersionConflict;
 use Thallo\Core\Content\Style\SettingsValidator;
@@ -38,6 +42,8 @@ final class StyleClassController
         private readonly StyleClassProvider $provider,
         private readonly StyleClassUsage $usage,
         private readonly SettingsValidator $settings = new SettingsValidator(),
+        private readonly ?StyleClassJobService $jobService = null,
+        private readonly ?StyleClassJobRepository $jobs = null,
     ) {
     }
 
@@ -194,6 +200,44 @@ final class StyleClassController
             return Response::notFound('Style class not found.');
         }
         return Response::success(['usage' => $this->usage->of($id, $class['style'])], 'Usage retrieved.');
+    }
+
+    #[ApiOperation(
+        summary: 'Queue a detach-everywhere or remove-everywhere job',
+        description: 'Locks the class until the job completes (spec §4.5): no edit and no new reference '
+            . 'meanwhile. `detach` writes what the class contributed into every block and removes the '
+            . 'reference; `remove` removes the reference only and changes how pages look.',
+        tags: ['Thallo Admin'],
+    )]
+    #[ApiResponse(202, schema: StyleClassJobData::class, description: 'Job queued.')]
+    #[ApiResponse(404, schema: ErrorResponse::class, envelope: false, description: 'Unknown id.')]
+    #[ApiResponse(409, schema: ErrorResponse::class, envelope: false, description: 'A job is already active.')]
+    public function queueJob(StyleClassJobRequestData $input, Request $request, string $id): Response
+    {
+        if ($this->jobService === null || $this->jobs === null) {
+            return Response::error('Style class jobs are not available.', Response::HTTP_SERVICE_UNAVAILABLE);
+        }
+        try {
+            $jobId = $this->jobService->queue($id, $input->kind);
+        } catch (StyleClassNotFound) {
+            return Response::notFound('Style class not found.');
+        } catch (StyleClassLocked $e) {
+            return self::locked($e);
+        }
+        $job = $this->jobs->find($jobId);
+        return Response::success(['job' => $job], 'Style class job queued.')->setStatusCode(Response::HTTP_ACCEPTED);
+    }
+
+    #[ApiOperation(summary: 'One style class job', tags: ['Thallo Admin'])]
+    #[ApiResponse(200, schema: StyleClassJobData::class, description: 'The job with its progress.')]
+    #[ApiResponse(404, schema: ErrorResponse::class, envelope: false, description: 'Unknown job.')]
+    public function showJob(Request $request, string $id, string $job): Response
+    {
+        $row = $this->jobs?->find($job);
+        if ($row === null || $row['class_id'] !== $id) {
+            return Response::notFound('Style class job not found.');
+        }
+        return Response::success(['job' => $row], 'Style class job retrieved.');
     }
 
     /**

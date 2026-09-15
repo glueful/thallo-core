@@ -1258,6 +1258,21 @@ final class CoreServiceProvider extends ServiceProvider
                 'shared' => true,
                 'autowire' => true,
             ],
+            \Thallo\Core\Content\Style\Classes\StyleClassJobRepository::class => [
+                'class' => \Thallo\Core\Content\Style\Classes\StyleClassJobRepository::class,
+                'shared' => true,
+                'autowire' => true,
+            ],
+            \Thallo\Core\Content\Style\Classes\StyleClassJobRunner::class => [
+                'class' => \Thallo\Core\Content\Style\Classes\StyleClassJobRunner::class,
+                'shared' => true,
+                'autowire' => true,
+            ],
+            \Thallo\Core\Content\Style\Classes\StyleClassJobService::class => [
+                'class' => \Thallo\Core\Content\Style\Classes\StyleClassJobService::class,
+                'shared' => true,
+                'autowire' => true,
+            ],
         ];
     }
 
@@ -2104,6 +2119,11 @@ final class CoreServiceProvider extends ServiceProvider
                 'shared' => true,
                 'autowire' => true,
             ],
+            \Thallo\Core\Content\Console\RunStyleClassJobCommand::class => [
+                'class' => \Thallo\Core\Content\Console\RunStyleClassJobCommand::class,
+                'shared' => true,
+                'autowire' => true,
+            ],
             RunBackfillCommand::class => [
                 'class' => RunBackfillCommand::class,
                 'shared' => true,
@@ -2384,6 +2404,7 @@ final class CoreServiceProvider extends ServiceProvider
             \Thallo\Core\Content\Console\ConvertSettingsCommand::class,
             RetireAccountLinkCommand::class,
             RunBlockBackfillCommand::class,
+            \Thallo\Core\Content\Console\RunStyleClassJobCommand::class,
             RunBackfillCommand::class,
             RunDueSchedulesCommand::class,
             UpdateCheckCommand::class,

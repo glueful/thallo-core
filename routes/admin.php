@@ -154,6 +154,12 @@ $router->group(['prefix' => '/v1/admin'], function (Router $router): void {
         $router->get('/style-classes/{id}/usage', [StyleClassController::class, 'usage'])
         ->middleware('content_permission:content.view');
 
+        $router->post('/style-classes/{id}/jobs', [StyleClassController::class, 'queueJob'])
+        ->middleware('content_permission:styles.manage');
+
+        $router->get('/style-classes/{id}/jobs/{job}', [StyleClassController::class, 'showJob'])
+        ->middleware('content_permission:content.view');
+
     // Entry authoring (identity, drafts, preview).
         $router->get('/entries', [EntryController::class, 'index'])
         ->middleware('content_permission:content.view');
