@@ -35,6 +35,8 @@ final class PublishService
         private readonly ?BlockMigrationGate $blockGate = null,
         /** Restore projection (spec §5); null = plain re-pin rollbacks (tests, minimal wiring). */
         private readonly ?BlockRestoreProjector $blockRestore = null,
+        /** Restored references are checked for a job's lock at the write (spec §4.5); null = unchecked. */
+        private readonly ?\Thallo\Core\Content\Style\Classes\StyleClassReferenceGuard $guard = null,
     ) {
     }
 
@@ -222,6 +224,17 @@ final class PublishService
             &$pinnedUuid,
             &$pinnedNumber
         ): void {
+            // A restore's references are trusted (spec §4.5): a retained revision may name an
+            // archived class, never a locked one. Checked against the current publication.
+            if ($this->guard !== null && $schema !== null) {
+                $current = $this->versions->findPublication($entryUuid, $locale);
+                $currentFields = $current === null
+                    ? []
+                    : (array) ($this->versions->findVersionByUuid((string) $current['version_uuid'])['fields'] ?? []);
+                $restored = $projectedFields ?? (array) $version['fields'];
+                $trusted = $this->guard->referencesOf($restored, $schema);
+                $this->guard->assertWritable($currentFields, $restored, $schema, $trusted);
+            }
             if ($projectedFields !== null && $entry !== null && $schema !== null) {
                 // Materialize: append-and-repin, the backfill's shape. The new
                 // version records the CURRENT content-type schema_version (the

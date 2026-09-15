@@ -31,7 +31,7 @@ final class EntryVersionsSource implements BlockDocumentSource
         foreach ($this->types->all() as $type) {
             $rows = $this->db->table('entry_versions as v')
                 ->join('entries as e', 'e.uuid', '=', 'v.entry_uuid')
-                ->select(['v.uuid', 'v.entry_uuid', 'v.locale', 'v.version', 'v.fields'])
+                ->select(['v.uuid', 'v.entry_uuid', 'v.locale', 'v.version', 'v.fields', 'v.lock_version'])
                 ->where('e.content_type_uuid', '=', $type['uuid'])
                 ->where('e.status', '!=', 'deleted')
                 ->orderBy('v.id', 'ASC')
@@ -42,7 +42,7 @@ final class EntryVersionsSource implements BlockDocumentSource
                     self::ID,
                     (string) $row['uuid'],
                     (string) $row['locale'],
-                    self::fingerprint($fields),
+                    (string) (int) ($row['lock_version'] ?? 0),
                     $type['schema'],
                     $fields,
                     [
@@ -57,23 +57,15 @@ final class EntryVersionsSource implements BlockDocumentSource
 
     public function persist(DocumentRef $ref, array $fields, ?string $actor = null): bool
     {
-        $written = false;
-        $this->db->transaction(function () use ($ref, $fields, &$written): void {
-            $row = $this->db->table('entry_versions')->select(['fields'])->where('uuid', '=', $ref->sourceId)->first();
-            if ($row === null || self::fingerprint(BlockContentTypes::decode($row['fields'])) !== $ref->revision) {
-                return;
-            }
-            $this->db->table('entry_versions')
-                ->where('uuid', '=', $ref->sourceId)
-                ->update(['fields' => json_encode($fields, JSON_THROW_ON_ERROR)]);
-            $written = true;
-        });
-        return $written;
-    }
-
-    /** @param array<string,mixed> $fields */
-    public static function fingerprint(array $fields): string
-    {
-        return sha1((string) json_encode($fields));
+        // Conditional on the lock version each() handed out (spec §4.5).
+        $expected = (int) $ref->revision;
+        $affected = $this->db->table('entry_versions')
+            ->where('uuid', '=', $ref->sourceId)
+            ->where('lock_version', '=', $expected)
+            ->update([
+                'fields' => json_encode($fields, JSON_THROW_ON_ERROR),
+                'lock_version' => $expected + 1,
+            ]);
+        return $affected >= 1;
     }
 }

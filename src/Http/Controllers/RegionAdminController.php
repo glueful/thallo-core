@@ -84,7 +84,17 @@ final class RegionAdminController
 
         // RegionValidator throws ValidationException (ValidationFailed) → 422 with dot paths.
         $clean = $this->validator->validate($slug, $input->blocks, $input->settings);
-        $this->regions->save($slug, $clean['blocks'], $clean['settings'], null);
+        try {
+            $this->regions->save($slug, $clean['blocks'], $clean['settings'], null);
+        } catch (\Thallo\Core\Content\Style\Classes\StyleClassLocked $e) {
+            return Response::error('A job holds a style class this save applies.', Response::HTTP_CONFLICT, [
+                'code' => 'STYLE_CLASS_LOCKED',
+                'job' => $e->job,
+                'style_class' => $e->id,
+            ]);
+        } catch (\Thallo\Core\Content\Style\Classes\StyleClassArchived $e) {
+            return Response::validation(['blocks' => $e->getMessage()]);
+        }
 
         // Chrome appears on every page: broad-purge the render page cache (spec §11).
         app($this->context, EventService::class)->dispatch(new RegionUpdated($slug));

@@ -1253,6 +1253,11 @@ final class CoreServiceProvider extends ServiceProvider
                 'shared' => true,
                 'autowire' => true,
             ],
+            \Thallo\Core\Content\Style\Classes\StyleClassReferenceGuard::class => [
+                'class' => \Thallo\Core\Content\Style\Classes\StyleClassReferenceGuard::class,
+                'shared' => true,
+                'autowire' => true,
+            ],
         ];
     }
 
@@ -2232,6 +2237,9 @@ final class CoreServiceProvider extends ServiceProvider
             array_values(array_filter((array) $gates, static fn($g): bool => $g instanceof PublishGate)),
             $c->has(BlockMigrationGate::class) ? $c->get(BlockMigrationGate::class) : null,
             $c->has(BlockRestoreProjector::class) ? $c->get(BlockRestoreProjector::class) : null,
+            $c->has(\Thallo\Core\Content\Style\Classes\StyleClassReferenceGuard::class)
+                ? $c->get(\Thallo\Core\Content\Style\Classes\StyleClassReferenceGuard::class)
+                : null,
         );
     }
 

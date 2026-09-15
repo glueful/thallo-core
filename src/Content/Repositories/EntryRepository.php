@@ -25,6 +25,8 @@ final class EntryRepository
         private readonly ContentTypeRepository $types,
         private readonly ?PublishEventEmitter $events = null,
         private readonly LocaleFieldSeeder $seeder = new LocaleFieldSeeder(),
+        /** Style class references a save introduces are checked at the write (spec §4.5); null = unchecked. */
+        private readonly ?\Thallo\Core\Content\Style\Classes\StyleClassReferenceGuard $guard = null,
     ) {
     }
 
@@ -92,10 +94,19 @@ final class EntryRepository
             $entryUuid,
             $locale,
             $fields,
+            $oldFields,
             $schemaVersion,
             $expectedLockVersion,
             $actor,
         ): void {
+            if ($this->guard !== null) {
+                $entry = $this->findEntry($entryUuid);
+                $type = $entry === null ? null : $this->types->findByUuid((string) $entry['content_type_uuid']);
+                if ($type !== null) {
+                    $schema = ContentTypeSchema::fromArray((array) $type['schema']);
+                    $this->guard->assertWritable($oldFields, $fields, $schema);
+                }
+            }
             $affected = $this->db->table('entry_drafts')
                 ->where('entry_uuid', '=', $entryUuid)
                 ->where('locale', '=', $locale)

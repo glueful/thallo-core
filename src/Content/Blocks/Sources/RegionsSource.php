@@ -28,14 +28,17 @@ final class RegionsSource implements BlockDocumentSource
 
     public function each(callable $fn): void
     {
-        $rows = $this->db->table('regions')->select(['slug', 'blocks', 'schema_stamp'])->orderBy('slug', 'ASC')->get();
+        $rows = $this->db->table('regions')
+            ->select(['slug', 'blocks', 'schema_stamp', 'lock_version'])
+            ->orderBy('slug', 'ASC')
+            ->get();
         foreach ($rows as $row) {
             $fields = self::document($row);
             $fn(new DocumentRef(
                 self::ID,
                 (string) $row['slug'],
                 null,
-                EntryVersionsSource::fingerprint($fields),
+                (string) (int) ($row['lock_version'] ?? 0),
                 $this->schema(),
                 $fields,
             ));
@@ -44,27 +47,21 @@ final class RegionsSource implements BlockDocumentSource
 
     public function persist(DocumentRef $ref, array $fields, ?string $actor = null): bool
     {
-        $written = false;
-        $this->db->transaction(function () use ($ref, $fields, &$written): void {
-            $row = $this->db->table('regions')
-                ->select(['blocks', 'schema_stamp'])
-                ->where('slug', '=', $ref->sourceId)
-                ->first();
-            // The revision checked here is the one each() handed out: the same document, stamp
-            // included, so a region stamped by one stage persists again under the next.
-            if ($row === null || EntryVersionsSource::fingerprint(self::document($row)) !== $ref->revision) {
-                return;
-            }
-            $blocks = is_array($fields['blocks'] ?? null) ? array_values($fields['blocks']) : [];
-            $stamp = is_array($fields['_schema'] ?? null) ? $fields['_schema'] : null;
-            $this->db->table('regions')->where('slug', '=', $ref->sourceId)->update([
+        // Conditional on the lock version each() handed out (spec §4.5): a region saved since
+        // is a refused write the caller records and retries from a fresh read.
+        $expected = (int) $ref->revision;
+        $blocks = is_array($fields['blocks'] ?? null) ? array_values($fields['blocks']) : [];
+        $stamp = is_array($fields['_schema'] ?? null) ? $fields['_schema'] : null;
+        $affected = $this->db->table('regions')
+            ->where('slug', '=', $ref->sourceId)
+            ->where('lock_version', '=', $expected)
+            ->update([
                 'blocks' => json_encode($blocks, JSON_THROW_ON_ERROR),
                 'schema_stamp' => $stamp === null ? null : json_encode($stamp, JSON_THROW_ON_ERROR),
+                'lock_version' => $expected + 1,
                 'updated_at' => date('Y-m-d H:i:s'),
             ]);
-            $written = true;
-        });
-        return $written;
+        return $affected >= 1;
     }
 
     /**

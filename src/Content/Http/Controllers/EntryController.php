@@ -319,6 +319,15 @@ final class EntryController
                 'code' => 'STALE_DRAFT',
                 'current' => $this->entries->findDraft($uuid, $locale),
             ]);
+        } catch (\Thallo\Core\Content\Style\Classes\StyleClassLocked $e) {
+            // A job holds the class this save newly applies (visual builder spec §4.5).
+            return Response::error('A job holds a style class this save applies.', Response::HTTP_CONFLICT, [
+                'code' => 'STYLE_CLASS_LOCKED',
+                'job' => $e->job,
+                'style_class' => $e->id,
+            ]);
+        } catch (\Thallo\Core\Content\Style\Classes\StyleClassArchived $e) {
+            return Response::validation(['settings.classes' => $e->getMessage()]);
         }
         // Clear-on-save (visual builder spec §3.5): the DB draft now matches the working tree
         // the save was submitted from — but only that revision; an older save never discards a

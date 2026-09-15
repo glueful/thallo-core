@@ -173,6 +173,13 @@ final class PublicationController
             // spec §5): the version references a hard-deleted block type — blocked
             // BEFORE any write, the message names the type.
             return Response::validation(['version_uuid' => $e->getMessage()]);
+        } catch (\Thallo\Core\Content\Style\Classes\StyleClassLocked $e) {
+            // The restored revision names a class a job holds (visual builder spec §4.5).
+            return Response::error('A job holds a style class this revision applies.', Response::HTTP_CONFLICT, [
+                'code' => 'STYLE_CLASS_LOCKED',
+                'job' => $e->job,
+                'style_class' => $e->id,
+            ]);
         } catch (\RuntimeException $e) {
             return Response::validation(['version_uuid' => $e->getMessage()]);
         }
