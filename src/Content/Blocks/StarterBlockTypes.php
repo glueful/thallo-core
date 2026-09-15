@@ -350,11 +350,13 @@ final class StarterBlockTypes
                 'style_capabilities' => [
                     'spacing', 'width', 'radius', 'shadow', 'colors', 'border', 'visibility', 'typography',
                 ],
-                'style_targets' => StyleTargets::root('box', [
-                    'spacing', 'width', 'radius', 'shadow', 'colors', 'border', 'visibility',
-                ], [
-                    'targets' => ['title' => ['kind' => 'text']],
-                    'map' => ['typography' => 'title'],
+                // The inner box (`panel`) is where the variants paint background, border and shadow.
+                'style_targets' => StyleTargets::root('box', ['spacing', 'width', 'visibility'], [
+                    'targets' => ['title' => ['kind' => 'text'], 'panel' => ['kind' => 'box']],
+                    'map' => [
+                        'typography' => 'title',
+                        'radius' => 'panel', 'shadow' => 'panel', 'colors' => 'panel', 'border' => 'panel',
+                    ],
                 ]),
                 'schema' => [
                     ['name' => 'title', 'type' => 'string', 'required' => true],
@@ -620,7 +622,11 @@ final class StarterBlockTypes
                 'description' => 'An uploaded video or a YouTube/Vimeo embed.',
                 'flags' => [],
                 'style_capabilities' => ['spacing', 'width', 'radius', 'shadow', 'visibility'],
-                'style_targets' => StyleTargets::root('box', ['spacing', 'width', 'radius', 'shadow', 'visibility']),
+                // The frame (iframe or player) is where the theme paints corners and shadow.
+                'style_targets' => StyleTargets::root('box', ['spacing', 'width', 'visibility'], [
+                    'targets' => ['frame' => ['kind' => 'box', 'optional' => true]],
+                    'map' => ['radius' => 'frame', 'shadow' => 'frame'],
+                ]),
                 'schema' => [
                     ['name' => 'source', 'type' => 'enum', 'enum' => ['upload', 'embed']],
                     ['name' => 'video', 'type' => 'asset'],
