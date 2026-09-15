@@ -138,14 +138,36 @@ final class StyleClassController
 
     #[ApiOperation(
         summary: 'Archive a style class',
-        description: 'Deletion archives the definition so old revisions still restore (spec §4.5).',
+        description: 'Deletion archives the definition so old revisions still restore (spec §4.5). '
+            . 'With `?unreferenced=1` a class nothing references is deleted outright — the editor uses it '
+            . 'for a lift that could not preserve appearance; a referenced class answers 409 '
+            . '`STYLE_CLASS_REFERENCED`.',
         tags: ['Thallo Admin'],
     )]
-    #[ApiResponse(200, schema: StyleClassResultData::class, description: 'Style class archived.')]
+    #[ApiResponse(200, schema: StyleClassResultData::class, description: 'Style class archived or deleted.')]
     #[ApiResponse(404, schema: ErrorResponse::class, envelope: false, description: 'Unknown id.')]
-    #[ApiResponse(409, schema: ErrorResponse::class, envelope: false, description: 'Locked by a job.')]
+    #[ApiResponse(409, schema: ErrorResponse::class, envelope: false, description: 'Locked or referenced.')]
     public function destroy(Request $request, string $id): Response
     {
+        if ($request->query->getBoolean('unreferenced')) {
+            $class = $this->classes->find($id);
+            if ($class === null) {
+                return Response::notFound('Style class not found.');
+            }
+            $references = $this->usage->of($id, $class['style'])['references'];
+            if ($references > 0) {
+                return Response::error('The style class is referenced; archive it instead.', Response::HTTP_CONFLICT, [
+                    'code' => 'STYLE_CLASS_REFERENCED',
+                    'references' => $references,
+                ]);
+            }
+            try {
+                $this->classes->deleteUnreferenced($id);
+            } catch (StyleClassNotFound) {
+                return Response::notFound('Style class not found.');
+            }
+            return Response::success(['style_class' => $class + ['deleted' => true]], 'Style class deleted.');
+        }
         try {
             $class = $this->classes->archive($id);
         } catch (StyleClassNotFound) {

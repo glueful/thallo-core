@@ -146,6 +146,19 @@ final class StyleClassRepository
         });
     }
 
+    /**
+     * Delete the record outright — only for a class nothing references (a lift that could not
+     * preserve appearance, spec §4.5); the caller proves that through usage. A class write.
+     */
+    public function deleteUnreferenced(string $id): void
+    {
+        $this->write(function (Connection $db) use ($id): array {
+            $row = $this->require($id);
+            $db->table('style_classes')->where('id', '=', $id)->delete();
+            return $row;
+        });
+    }
+
     /** @return array<string,mixed>|null */
     public function find(string $id): ?array
     {
