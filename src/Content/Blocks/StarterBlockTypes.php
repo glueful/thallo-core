@@ -254,6 +254,9 @@ final class StarterBlockTypes
                     // instead of the image — a code snippet, a card, a gallery.
                     ['name' => 'aside', 'type' => 'blocks'],
                     ['name' => 'orientation', 'type' => 'enum', 'enum' => ['vertical', 'horizontal']],
+                    // The horizontal split: equal columns, or a wider copy or media column.
+                    ['name' => 'split', 'type' => 'enum', 'enum' => ['equal', 'copy', 'media'],
+                        'enum_labels' => ['equal' => 'Equal', 'copy' => 'Wider copy', 'media' => 'Wider media']],
                     ['name' => 'reverse', 'type' => 'boolean'],
                     // Background is a choice; gradient reproduces the original look.
                     ['name' => 'background', 'type' => 'enum', 'enum' => ['gradient', 'none', 'muted', 'inverted']],
