@@ -18,6 +18,7 @@ use Thallo\Contracts\Style\BlockStyleRegistry;
 use Thallo\Contracts\Style\StyleCapabilities;
 use Thallo\Contracts\Style\Vocabulary;
 use Thallo\Core\Content\Style\EngineBlockStyleRegistry;
+use Thallo\Contracts\Style\StyleClassProvider;
 use Thallo\Core\Content\Style\SettingsValidator;
 
 final class FieldValidator
@@ -29,6 +30,8 @@ final class FieldValidator
         private ?RichHtmlSanitizer $sanitizer = null,
         private ?BlockStyleRegistry $styleRegistry = null,
         private readonly SettingsValidator $settingsValidator = new SettingsValidator(),
+        /** The site's style classes; null = references are not checked for ownership (minimal wiring). */
+        private readonly ?StyleClassProvider $styleClasses = null,
     ) {
     }
 
@@ -571,6 +574,7 @@ final class FieldValidator
             [$cleanSettings, $settingsErrors] = $this->settingsValidator->validate(
                 $block['settings'] ?? null,
                 $registry?->capabilitiesFor($type) ?? StyleCapabilities::none(),
+                $this->styleClasses?->snapshot(),
             );
             if ($settingsErrors !== []) {
                 foreach ($settingsErrors as $settingsPath => $message) {

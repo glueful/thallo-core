@@ -22,6 +22,7 @@ use Thallo\Core\Content\Localization\ContentLocaleService;
 use Thallo\Core\Content\Preview\PreviewToken;
 use Thallo\Core\Content\Preview\PreviewTokenException;
 use Thallo\Core\Content\Preview\PreviewWorkingCopyStore;
+use Thallo\Contracts\Style\StyleClassProvider;
 use Thallo\Core\Content\Style\SiteStyleGeneration;
 use Thallo\Contracts\Preview\PreviewFragmentRenderer;
 use Thallo\Core\Content\Http\DTOs\Responses\Preview\ApplyPreviewResultData;
@@ -80,6 +81,8 @@ final class EntryController
         private readonly ?SiteStyleGeneration $styleGeneration = null,
         /** The fragment path (spec §3.5); null = the render pack is off, the stage refreshes. */
         private readonly ?PreviewFragmentRenderer $fragments = null,
+        /** The site's style classes (spec §4.3): refreshed first, so a request works from one snapshot. */
+        private readonly ?StyleClassProvider $styleClasses = null,
     ) {
     }
 
@@ -280,6 +283,7 @@ final class EntryController
     // 401/403/429/500 inferred from middleware + documentation.errors config.
     public function saveDraft(SaveDraftData $input, Request $request, string $uuid, string $locale): Response
     {
+        $this->styleClasses?->refresh();
         if (($errors = $this->locales->validate($locale)) !== []) {
             return Response::validation($errors);
         }
@@ -357,6 +361,7 @@ final class EntryController
     // 401/403(permission)/429/500 inferred from middleware + documentation.errors config.
     public function applyPreview(ApplyPreviewData $input, Request $request, string $uuid, string $locale): Response
     {
+        $this->styleClasses?->refresh();
         if ($this->workingCopies === null) {
             return Response::error('Preview apply is unavailable.', 503);
         }

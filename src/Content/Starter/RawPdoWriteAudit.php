@@ -16,6 +16,7 @@ final class RawPdoWriteAudit implements StaticWriteAudit
         'packages/thallo-workflow/src/WorkflowStateRepository.php',
         'core/src/Content/Blocks/Migration/BlockMigrationRepository.php',
         'core/src/Content/Repositories/MigrationRepository.php',
+        'core/src/Content/Style/SiteStyleGeneration.php',
         'core/src/Content/Media/TenantBlobPolicy.php',
         'core/src/Content/Authorization/TenantRoleOverrideRepository.php',
     ];
@@ -75,6 +76,7 @@ final class RawPdoWriteAudit implements StaticWriteAudit
         'packages/thallo-workflow/src/WorkflowStateRepository.php' => 1,
         'core/src/Content/Blocks/Migration/BlockMigrationRepository.php' => 1,
         'core/src/Content/Repositories/MigrationRepository.php' => 1,
+        'core/src/Content/Style/SiteStyleGeneration.php' => 1,
         'core/src/Content/Repositories/ScheduleRepository.php' => 3,
         'core/src/Content/Retention/VersionPruner.php' => 1,
         'core/src/Content/Indexing/EnsureFilterIndexesJob.php' => 5,

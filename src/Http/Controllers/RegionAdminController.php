@@ -33,6 +33,8 @@ final class RegionAdminController
         private readonly ApplicationContext $context,
         private readonly RegionRepository $regions,
         private readonly RegionValidator $validator,
+        /** The site's style classes (visual builder spec §4.3): refreshed first, one snapshot per request. */
+        private readonly ?\Thallo\Contracts\Style\StyleClassProvider $styleClasses = null,
     ) {
     }
 
@@ -75,6 +77,7 @@ final class RegionAdminController
     #[ApiResponse(422, description: 'Out-of-palette block, schema violation, or unknown setting.')]
     public function update(UpdateRegionData $input, string $slug): Response
     {
+        $this->styleClasses?->refresh();
         if (!in_array($slug, RegionDefinitions::slugs(), true)) {
             return Response::notFound('Unknown region.');
         }
@@ -111,6 +114,7 @@ final class RegionAdminController
     #[ApiResponse(422, description: 'Same validation a save would fail.')]
     public function preview(PreviewRegionsData $input, Request $request): Response
     {
+        $this->styleClasses?->refresh();
         $container = container($this->context);
         if (!$container->has(TwigFactory::class)) {
             return Response::error('Preview unavailable: the render pack is not active.', 409);

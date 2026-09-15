@@ -6,6 +6,7 @@ namespace Thallo\Core\Content\Style;
 
 use Thallo\Contracts\Style\PropertyDefinition;
 use Thallo\Contracts\Style\StyleCapabilities;
+use Thallo\Contracts\Style\StyleClassSnapshot;
 use Thallo\Contracts\Style\StyleSchema;
 use Thallo\Contracts\Style\ValueKind;
 use Thallo\Contracts\Style\Vocabulary;
@@ -14,6 +15,8 @@ use Thallo\Contracts\Style\Vocabulary;
  * Validates one block's `settings` (visual builder spec §1.1–1.5) against the style contract and
  * the block's capabilities. Returns the normalised settings and errors keyed by a path relative
  * to the block (`settings.style.spacing.padding.top`); `advanced` and `classes` need no capability.
+ * `classes` is validated for ownership, not mere existence (§4.1): with a snapshot, every id must be
+ * one the site holds — archived included, so old revisions restore — and none may repeat.
  */
 final class SettingsValidator
 {
@@ -25,7 +28,7 @@ final class SettingsValidator
     /**
      * @return array{0: array<string,mixed>, 1: array<string,string>}
      */
-    public function validate(mixed $settings, StyleCapabilities $caps): array
+    public function validate(mixed $settings, StyleCapabilities $caps, ?StyleClassSnapshot $classes = null): array
     {
         if ($settings === null || $settings === []) {
             return [[], []];
@@ -48,10 +51,10 @@ final class SettingsValidator
                     }
                     break;
                 case 'classes':
-                    [$classes, $classErrors] = $this->validateClasses($value);
+                    [$ids, $classErrors] = $this->validateClasses($value, $classes);
                     $errors += $classErrors;
-                    if ($classes !== []) {
-                        $clean['classes'] = $classes;
+                    if ($ids !== []) {
+                        $clean['classes'] = $ids;
                     }
                     break;
                 case 'advanced':
@@ -205,7 +208,7 @@ final class SettingsValidator
     }
 
     /** @return array{0: list<string>, 1: array<string,string>} */
-    private function validateClasses(mixed $value): array
+    private function validateClasses(mixed $value, ?StyleClassSnapshot $snapshot): array
     {
         if ($value === null) {
             return [[], []];
@@ -218,6 +221,14 @@ final class SettingsValidator
         foreach ($value as $i => $id) {
             if (!is_string($id) || $id === '') {
                 $errors["settings.classes.{$i}"] = 'must be a style class id';
+                continue;
+            }
+            if (in_array($id, $clean, true)) {
+                $errors["settings.classes.{$i}"] = 'listed twice';
+                continue;
+            }
+            if ($snapshot !== null && !$snapshot->has($id)) {
+                $errors["settings.classes.{$i}"] = 'unknown style class';
                 continue;
             }
             $clean[] = $id;
