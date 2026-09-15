@@ -22,6 +22,7 @@ final class CapabilityCatalog implements PermissionImplicationSource
         'navigation.manage' => ['label' => 'Manage navigation', 'group' => 'Experience', 'platform_only' => false],
         'seo.manage' => ['label' => 'Manage SEO', 'group' => 'Experience', 'platform_only' => false],
         'templates.manage' => ['label' => 'Manage templates', 'group' => 'Experience', 'platform_only' => false],
+        'styles.manage' => ['label' => 'Manage style classes', 'group' => 'Experience', 'platform_only' => false],
         'analytics.read' => ['label' => 'View analytics', 'group' => 'Operations', 'platform_only' => false],
         'workflow.review' => ['label' => 'Review workflow', 'group' => 'Operations', 'platform_only' => false],
         'tenant.members.manage' => ['label' => 'Manage members', 'group' => 'Workspace', 'platform_only' => false],

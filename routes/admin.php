@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Thallo\Core\Content\Http\Controllers\BlockMigrationController;
 use Thallo\Core\Content\Http\Controllers\BlockTypeController;
+use Thallo\Core\Content\Http\Controllers\StyleClassController;
 use Thallo\Core\Content\Http\Controllers\ContentTypeController;
 use Thallo\Core\Content\Http\Controllers\EntryController;
 use Thallo\Core\Content\Http\Controllers\LocaleAdminController;
@@ -132,6 +133,26 @@ $router->group(['prefix' => '/v1/admin'], function (Router $router): void {
 
         $router->delete('/block-types/{slug}', [BlockTypeController::class, 'destroy'])
         ->middleware('content_permission:content.manage');
+
+    // Style classes (visual builder spec §4): site-owned records blocks compose through
+    // settings.classes. Reads need content.view; writes need their own styles.manage.
+        $router->get('/style-classes', [StyleClassController::class, 'index'])
+        ->middleware('content_permission:content.view');
+
+        $router->post('/style-classes', [StyleClassController::class, 'store'])
+        ->middleware('content_permission:styles.manage');
+
+        $router->get('/style-classes/{id}', [StyleClassController::class, 'show'])
+        ->middleware('content_permission:content.view');
+
+        $router->patch('/style-classes/{id}', [StyleClassController::class, 'update'])
+        ->middleware('content_permission:styles.manage');
+
+        $router->delete('/style-classes/{id}', [StyleClassController::class, 'destroy'])
+        ->middleware('content_permission:styles.manage');
+
+        $router->get('/style-classes/{id}/usage', [StyleClassController::class, 'usage'])
+        ->middleware('content_permission:content.view');
 
     // Entry authoring (identity, drafts, preview).
         $router->get('/entries', [EntryController::class, 'index'])

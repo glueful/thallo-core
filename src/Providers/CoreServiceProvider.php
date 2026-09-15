@@ -1510,6 +1510,16 @@ final class CoreServiceProvider extends ServiceProvider
                 'shared' => true,
                 'autowire' => true,
             ],
+            \Thallo\Core\Content\Http\Controllers\StyleClassController::class => [
+                'class' => \Thallo\Core\Content\Http\Controllers\StyleClassController::class,
+                'shared' => true,
+                'autowire' => true,
+            ],
+            \Thallo\Core\Content\Style\Classes\StyleClassUsage::class => [
+                'class' => \Thallo\Core\Content\Style\Classes\StyleClassUsage::class,
+                'shared' => true,
+                'autowire' => true,
+            ],
             ContentTypeController::class => [
                 'class' => ContentTypeController::class,
                 'shared' => true,
