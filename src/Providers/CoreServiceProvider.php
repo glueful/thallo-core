@@ -575,6 +575,11 @@ final class CoreServiceProvider extends ServiceProvider
                 'shared' => true,
                 'autowire' => true,
             ],
+            \Thallo\Core\Content\Blocks\BlockFactory::class => [
+                'class' => \Thallo\Core\Content\Blocks\BlockFactory::class,
+                'shared' => true,
+                'autowire' => true,
+            ],
             ContentTypeRepository::class => [
                 'class' => ContentTypeRepository::class,
                 'shared' => true,

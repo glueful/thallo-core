@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace Thallo\Core\Content\Http\Controllers;
 
+use Thallo\Core\Content\Blocks\BlockFactory;
 use Thallo\Core\Content\Blocks\BlockTypeRepository;
 use Thallo\Core\Content\Blocks\BlockUsageScanner;
 use Thallo\Core\Content\Blocks\Migration\BlockMigrationRepository;
 use Thallo\Core\Content\Http\DTOs\BlockTypeData;
 use Thallo\Core\Content\Http\DTOs\FieldDefinitionData;
+use Thallo\Core\Content\Http\DTOs\Responses\BlockTypes\BlockInstanceData;
 use Thallo\Core\Content\Http\DTOs\Responses\BlockTypes\BlockTypeListData;
 use Thallo\Core\Content\Http\DTOs\Responses\BlockTypes\BlockTypeResultData;
 use Thallo\Core\Content\Http\DTOs\UpdateBlockTypeData;
@@ -34,6 +36,7 @@ final class BlockTypeController
         private readonly BlockUsageScanner $usageScanner,
         private readonly BlockMigrationRepository $blockMigrations,
         private readonly BlockTypeKind $starters,
+        private readonly BlockFactory $factory,
     ) {
     }
 
@@ -105,6 +108,33 @@ final class BlockTypeController
         return $row === null
             ? Response::error('Unknown block type.', 404)
             : Response::success(['block_type' => $row]);
+    }
+
+    #[ApiOperation(
+        summary: 'A fresh block instance of a type',
+        description: 'The server block factory (visual builder spec §5.5): the canonical structure and '
+            . 'defaults of a new block — no id, every blocks field an empty list, every enum field its '
+            . 'first option, settings empty — with the type\'s starter content alongside for the editor '
+            . 'to merge and to mint ids for.',
+        tags: ['Thallo Admin'],
+    )]
+    #[ApiResponse(200, schema: BlockInstanceData::class, description: 'The block and its starter content.')]
+    #[ApiResponse(404, schema: ErrorResponse::class, envelope: false, description: 'Unknown slug.')]
+    #[ApiResponse(422, schema: ErrorResponse::class, envelope: false, description: 'The type is inactive.')]
+    public function instance(Request $request, string $slug): Response
+    {
+        $made = $this->factory->make($slug);
+        if ($made === null) {
+            return Response::notFound('Block type not found.');
+        }
+        if (!$made['active']) {
+            return Response::error(
+                'Block type is inactive.',
+                Response::HTTP_UNPROCESSABLE_ENTITY,
+                ['code' => 'BLOCK_TYPE_INACTIVE'],
+            );
+        }
+        return Response::success(['block' => $made['block'], 'starter' => $made['starter']], 'Block instance.');
     }
 
     #[ApiOperation(summary: 'Update a block type (slug is immutable)', tags: ['Thallo Admin'])]

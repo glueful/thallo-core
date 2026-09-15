@@ -116,6 +116,11 @@ $router->group(['prefix' => '/v1/admin'], function (Router $router): void {
         $router->post('/block-types/{slug}/deactivate', [BlockTypeController::class, 'deactivate'])
         ->middleware('content_permission:content.manage');
 
+    // The server block factory (visual builder spec §5.5): a fresh block's canonical structure
+    // and starter content, for anyone who may edit content.
+        $router->post('/block-types/{slug}/instance', [BlockTypeController::class, 'instance'])
+        ->middleware('content_permission:content.edit');
+
     // Block-type schema migrations (block-migrations spec §2): declared rename/delete
     // ops with an eager queued backfill; one active migration per type.
         $router->post('/block-types/{slug}/migrations', [BlockMigrationController::class, 'store'])

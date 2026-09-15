@@ -39,6 +39,7 @@ final class StarterBlockTypes
             ['slug' => 'section', 'label' => 'Section', 'icon' => 'i-lucide-rows-3',
                 'category' => 'Layout', 'description' => 'A titled band of content with a background style.',
                 'flags' => [],
+                'starter_content' => ['content' => []],
                 'style_capabilities' => [
                     'spacing', 'width', 'visibility', 'colors.surface', 'colors.text', 'radius', 'shadow',
                 ],
@@ -143,6 +144,7 @@ final class StarterBlockTypes
             ['slug' => 'columns', 'label' => 'Columns', 'icon' => 'i-lucide-columns-3',
                 'category' => 'Layout', 'description' => 'Two or three columns of blocks.',
                 'flags' => [],
+                'starter_content' => ['layout' => '2'],
                 'style_capabilities' => ['spacing', 'width', 'visibility'],
                 'style_targets' => StyleTargets::root('box', ['spacing', 'width', 'visibility']),
                 'schema' => [
@@ -235,6 +237,9 @@ final class StarterBlockTypes
             ['slug' => 'hero', 'label' => 'Hero', 'icon' => 'i-lucide-sparkles',
                 'category' => 'Content', 'description' => 'Big heading, supporting copy, buttons and media.',
                 'flags' => [],
+                'starter_content' => [
+                    'headline' => 'Headline', 'description' => 'One sentence that says what this is.',
+                ],
                 'style_capabilities' => [
                     'spacing', 'width', 'visibility', 'colors.surface', 'colors.text', 'typography', 'radius', 'shadow',
                 ],
@@ -267,6 +272,7 @@ final class StarterBlockTypes
             ['slug' => 'rich_text', 'label' => 'Rich text', 'icon' => 'i-lucide-text',
                 'category' => 'Content', 'description' => 'Free-form formatted text.',
                 'flags' => [],
+                'starter_content' => ['body' => '<p>Start writing.</p>'],
                 'style_capabilities' => [
                     'spacing', 'width', 'alignment.text', 'typography', 'colors.text', 'visibility',
                 ],
@@ -282,6 +288,7 @@ final class StarterBlockTypes
             ['slug' => 'heading', 'label' => 'Heading', 'icon' => 'i-lucide-heading',
                 'category' => 'Content', 'description' => 'A single heading or label line.',
                 'flags' => [],
+                'starter_content' => ['text' => 'Heading'],
                 'style_capabilities' => ['spacing', 'alignment.text', 'typography', 'colors.text', 'visibility'],
                 'style_targets' => StyleTargets::root('text', [
                     'spacing', 'alignment.text', 'typography', 'colors.text', 'visibility',
@@ -295,6 +302,7 @@ final class StarterBlockTypes
                 'category' => 'Content',
                 'description' => 'A content card: icon, title, description and nested blocks.',
                 'flags' => [],
+                'starter_content' => ['title' => 'Card'],
                 'style_capabilities' => ['spacing', 'radius', 'shadow', 'colors', 'border', 'visibility', 'typography'],
                 'style_targets' => StyleTargets::root('box', [
                     'spacing', 'radius', 'shadow', 'colors', 'border', 'visibility',
@@ -350,6 +358,7 @@ final class StarterBlockTypes
             ['slug' => 'cta', 'label' => 'Call to action', 'icon' => 'i-lucide-megaphone',
                 'category' => 'Content', 'description' => 'A call-to-action band with buttons.',
                 'flags' => [],
+                'starter_content' => ['title' => 'Ready to begin?'],
                 'style_capabilities' => [
                     'spacing', 'width', 'radius', 'shadow', 'colors', 'border', 'visibility', 'typography',
                 ],
@@ -434,6 +443,7 @@ final class StarterBlockTypes
             ['slug' => 'button', 'label' => 'Button', 'icon' => 'i-lucide-mouse-pointer-click',
                 'category' => 'Content', 'description' => 'A standalone action button.',
                 'flags' => [],
+                'starter_content' => ['label' => 'Learn more', 'url' => '#'],
                 'style_capabilities' => [
                     'spacing', 'alignment.content', 'visibility', 'radius', 'colors', 'typography', 'shadow',
                 ],
