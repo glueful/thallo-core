@@ -23,7 +23,6 @@ use Thallo\Core\Content\Preview\PreviewToken;
 use Thallo\Core\Content\Preview\PreviewTokenException;
 use Thallo\Core\Content\Preview\PreviewWorkingCopyStore;
 use Thallo\Contracts\Style\StyleClassProvider;
-use Thallo\Core\Content\Style\SiteStyleGeneration;
 use Thallo\Contracts\Preview\PreviewFragmentRenderer;
 use Thallo\Core\Content\Http\DTOs\Responses\Preview\ApplyPreviewResultData;
 use Thallo\Core\Content\Preview\ResolvesPreviewKey;
@@ -77,8 +76,6 @@ final class EntryController
         private readonly ?PreviewWorkingCopyStore $workingCopies = null,
         /** Root URL namespace guard; null = ungated (tests, minimal wiring). */
         private readonly ?RootMountGuard $rootGuard = null,
-        /** The site style generation named by every apply (visual builder spec §3.5). */
-        private readonly ?SiteStyleGeneration $styleGeneration = null,
         /** The fragment path (spec §3.5); null = the render pack is off, the stage refreshes. */
         private readonly ?PreviewFragmentRenderer $fragments = null,
         /** The site's style classes (spec §4.3): refreshed first, so a request works from one snapshot. */
@@ -465,7 +462,7 @@ final class EntryController
             'epoch' => $result['epoch'],
             'revision' => $result['revision'],
             'baseline' => $result['baseline'],
-            'style_generation' => $this->styleGeneration?->current() ?? 0,
+            'style_generation' => $this->styleClasses?->snapshot()->generation ?? 0,
             'applied_at' => $result['accepted_at'],
             'fragments' => $fragments,
         ], 'Preview applied.');

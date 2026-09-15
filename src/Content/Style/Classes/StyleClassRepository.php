@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace Thallo\Core\Content\Style\Classes;
 
 use Glueful\Database\Connection;
+use Glueful\Events\EventService;
 use Glueful\Helpers\Utils;
 use Thallo\Contracts\Style\StyleClassProvider;
+use Thallo\Contracts\Style\StyleClassSaved;
 use Thallo\Core\Content\Style\SiteStyleGeneration;
 
 /**
@@ -24,6 +26,7 @@ final class StyleClassRepository
         private readonly Connection $db,
         private readonly SiteStyleGeneration $generation,
         private readonly ?StyleClassProvider $provider = null,
+        private readonly ?EventService $events = null,
     ) {
     }
 
@@ -35,15 +38,20 @@ final class StyleClassRepository
     public function write(callable $fn): mixed
     {
         $this->generation->ensureRow();
+        $generation = 0;
         try {
-            return $this->db->transaction(function () use ($fn): mixed {
+            $result = $this->db->transaction(function () use ($fn, &$generation): mixed {
                 $result = $fn($this->db);
-                $this->generation->incrementWithin($this->db);
+                $generation = $this->generation->incrementWithin($this->db);
                 return $result;
             });
         } finally {
             $this->provider?->refresh();
         }
+        // After the commit only: a rolled-back write is not a class write.
+        $id = is_array($result) && isset($result['id']) ? (string) $result['id'] : '';
+        $this->events?->dispatch(new StyleClassSaved($id, $generation));
+        return $result;
     }
 
     /**
