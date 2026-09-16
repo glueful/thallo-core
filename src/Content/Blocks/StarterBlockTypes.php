@@ -722,7 +722,7 @@ final class StarterBlockTypes
 
             // ---- Items (children of collection blocks) ----------------------
             ['slug' => 'feature', 'label' => 'Feature', 'icon' => 'i-lucide-check',
-                'category' => 'Items', 'description' => 'One feature: icon, title, description, link.',
+                'category' => 'Items', 'description' => 'One feature: icon or number, title, description, link.',
                 'flags' => [],
                 'style_capabilities' => ['spacing', 'radius', 'colors', 'border', 'shadow', 'visibility', 'typography'],
                 'style_targets' => StyleTargets::root('box', [
@@ -736,6 +736,21 @@ final class StarterBlockTypes
                     ['name' => 'title', 'type' => 'string', 'required' => true],
                     ['name' => 'description', 'type' => 'text'],
                     ['name' => 'url', 'type' => 'string'],
+                    // The marker before the title: the icon, a number badge ("01", "Step 3"), or none.
+                    ['name' => 'marker', 'type' => 'enum', 'enum' => ['icon', 'number', 'none'], 'group' => 'Marker'],
+                    ['name' => 'number', 'type' => 'string', 'group' => 'Marker'],
+                    // The badge's colours, from the theme's colour tokens (the Style tab's names) so
+                    // they follow dark mode and a theme change. Unset: surface-2 behind, accent on it.
+                    ['name' => 'marker_background', 'type' => 'enum', 'group' => 'Marker',
+                        'enum' => ['transparent', 'surface', 'surface-2', 'accent', 'text']],
+                    ['name' => 'marker_color', 'type' => 'enum', 'group' => 'Marker',
+                        'enum' => ['accent', 'text', 'muted', 'accent-contrast', 'background']],
+                    // plain: the inline leaf; outline/soft/subtle: a card (the card block's names).
+                    ['name' => 'variant', 'type' => 'enum', 'enum' => ['plain', 'outline', 'soft', 'subtle'],
+                        'group' => 'Layout'],
+                    // horizontal: icon or number beside the text; vertical: above it.
+                    ['name' => 'orientation', 'type' => 'enum', 'enum' => ['horizontal', 'vertical'],
+                        'group' => 'Layout'],
                 ]],
             ['slug' => 'accordion_item', 'label' => 'Accordion item', 'icon' => 'i-lucide-chevron-down',
                 'category' => 'Items', 'description' => 'One question with a rich-text answer.',
