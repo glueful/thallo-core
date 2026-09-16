@@ -440,10 +440,33 @@ final class StarterBlockTypes
             ['slug' => 'tabs', 'label' => 'Tabs', 'icon' => 'i-lucide-panels-top-left',
                 'category' => 'Content', 'description' => 'Tabbed panels of blocks.',
                 'flags' => ['renders_children_inline' => true],
-                'style_capabilities' => ['spacing', 'visibility'],
-                'style_targets' => StyleTargets::root('box', ['spacing', 'visibility']),
+                // The Style tab's colours, radius, border and shadow land on the ONE panels area
+                // (whichever tab is shown); the tab strip is configured from the Block tab below.
+                'style_capabilities' => ['spacing', 'visibility', 'colors', 'radius', 'border', 'shadow'],
+                'style_targets' => StyleTargets::root('box', ['spacing', 'visibility'], [
+                    'targets' => ['panels' => ['kind' => 'box']],
+                    'map' => ['colors' => 'panels', 'radius' => 'panels', 'border' => 'panels', 'shadow' => 'panels'],
+                ]),
                 'schema' => [
                     ['name' => 'items', 'type' => 'blocks', 'block_types' => ['tab']],
+                    // The strip: pill (the default: a filled strip, the active tab lifted), underline
+                    // (bare labels, the active one underlined), boxed (labels as boxes on the panel).
+                    ['name' => 'variant', 'type' => 'enum', 'enum' => ['pill', 'underline', 'boxed'],
+                        'group' => 'Tabs'],
+                    ['name' => 'align', 'type' => 'enum', 'enum' => ['start', 'center', 'end', 'stretch'],
+                        'group' => 'Tabs'],
+                    // Colours from the theme's tokens (the Style tab's names); unset keeps the variant's.
+                    ['name' => 'list_background', 'type' => 'enum', 'group' => 'Tabs',
+                        'enum' => ['transparent', 'surface', 'surface-2', 'accent', 'text']],
+                    ['name' => 'tab_color', 'type' => 'enum', 'group' => 'Tabs',
+                        'enum' => ['accent', 'text', 'muted', 'accent-contrast', 'background']],
+                    ['name' => 'active_background', 'type' => 'enum', 'group' => 'Tabs',
+                        'enum' => ['transparent', 'surface', 'surface-2', 'accent', 'text', 'background']],
+                    ['name' => 'active_color', 'type' => 'enum', 'group' => 'Tabs',
+                        'enum' => ['accent', 'text', 'muted', 'accent-contrast', 'background']],
+                    // Space inside the panels area, around whichever panel is shown.
+                    ['name' => 'panel_padding', 'type' => 'enum', 'enum' => ['none', 'sm', 'md', 'lg'],
+                        'group' => 'Panel'],
                 ]],
             // Nuxt UI Button shape (refs.md `button`): variant + color (primary|neutral,
             // matching navigation) + size, optional leading/trailing icons, block

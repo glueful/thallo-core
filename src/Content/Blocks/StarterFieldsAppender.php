@@ -61,6 +61,35 @@ final class StarterFieldsAppender
     }
 
     /**
+     * Adopt the starter's current style declaration (capabilities + targets) on a row that still
+     * carries the starter's PREVIOUS capabilities exactly — an admin who changed the declaration
+     * keeps theirs. Returns whether the row changed.
+     *
+     * @param list<string> $ifCapabilities the previous starter capabilities, order included
+     */
+    public function adoptStarterStyle(string $slug, array $ifCapabilities): bool
+    {
+        $row = $this->repo->findBySlug($slug);
+        if ($row === null || $row['style_capabilities'] !== $ifCapabilities) {
+            return false;
+        }
+        foreach (StarterBlockTypes::definitions() as $definition) {
+            if ($definition['slug'] !== $slug) {
+                continue;
+            }
+            $this->repo->updateStyle(
+                (string) $row['uuid'],
+                $definition['style_capabilities'] ?? null,
+                $definition['style_targets'] ?? null,
+                is_array($row['flags'] ?? null) ? $row['flags'] : null,
+                is_array($row['starter_content'] ?? null) ? $row['starter_content'] : null,
+            );
+            return true;
+        }
+        return false;
+    }
+
+    /**
      * @param list<string> $fieldNames
      * @return list<array<string,mixed>>
      */
