@@ -52,6 +52,14 @@ final class StarterBlockTypes
                     ['name' => 'description', 'type' => 'text'],
                     ['name' => 'background', 'type' => 'enum', 'enum' => ['none', 'muted', 'subtle', 'inverted']],
                     ['name' => 'orientation', 'type' => 'enum', 'enum' => ['vertical', 'horizontal']],
+                    // Per-part header alignment (logical: end = right in LTR). Unset keeps the
+                    // orientation's default (vertical centres, horizontal leads).
+                    ['name' => 'headline_align', 'type' => 'enum', 'enum' => ['start', 'center', 'end'],
+                        'group' => 'Alignment'],
+                    ['name' => 'title_align', 'type' => 'enum', 'enum' => ['start', 'center', 'end'],
+                        'group' => 'Alignment'],
+                    ['name' => 'description_align', 'type' => 'enum', 'enum' => ['start', 'center', 'end'],
+                        'group' => 'Alignment'],
                     ['name' => 'reverse', 'type' => 'boolean'],
                     ['name' => 'links', 'type' => 'blocks', 'block_types' => ['button']],
                     ['name' => 'content', 'type' => 'blocks'],
