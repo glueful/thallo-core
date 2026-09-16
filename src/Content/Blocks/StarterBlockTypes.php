@@ -386,6 +386,10 @@ final class StarterBlockTypes
                     ['name' => 'orientation', 'type' => 'enum', 'enum' => ['vertical', 'horizontal']],
                     ['name' => 'reverse', 'type' => 'boolean'],
                     ['name' => 'links', 'type' => 'blocks', 'block_types' => ['button']],
+                    // Where the buttons sit in their row; unset keeps the orientation's default
+                    // (vertical centres, horizontal leads).
+                    ['name' => 'links_align', 'type' => 'enum', 'enum' => ['start', 'center', 'end'],
+                        'group' => 'Links'],
                 ]],
             ['slug' => 'form', 'label' => 'Form', 'icon' => 'i-lucide-mail',
                 'category' => 'Content',
