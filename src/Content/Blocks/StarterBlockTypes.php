@@ -768,6 +768,9 @@ final class StarterBlockTypes
                         'enum' => ['transparent', 'surface', 'surface-2', 'accent', 'text']],
                     ['name' => 'marker_color', 'type' => 'enum', 'group' => 'Marker',
                         'enum' => ['accent', 'text', 'muted', 'accent-contrast', 'background']],
+                    // The marker's size — the icon's glyph and the badge's box and text alike.
+                    ['name' => 'marker_size', 'type' => 'enum', 'enum' => ['sm', 'md', 'lg', 'xl'],
+                        'group' => 'Marker'],
                     // plain: the inline leaf; outline/soft/subtle: a card (the card block's names).
                     ['name' => 'variant', 'type' => 'enum', 'enum' => ['plain', 'outline', 'soft', 'subtle'],
                         'group' => 'Layout'],
