@@ -83,20 +83,37 @@ final class StarterBlockTypes
                 ]],
             ['slug' => 'container', 'label' => 'Container', 'icon' => 'i-lucide-square-dashed',
                 'category' => 'Layout',
-                'description' => 'Free-form wrapper: background image or video, overlay, width and layout.',
+                'description' => 'Free-form wrapper: background image or video, overlay, and layout.',
                 // Fields carry an editor `group` so the config folds into collapsible sections
                 // in the block editor; `content` stays ungrouped so the nested region is always
-                // visible. Spacing, colours, corners, border and shadow are settings (visual
-                // builder spec §7.2, group two): what a container *is* stays here, how it is
-                // styled lives on its root target.
+                // visible. What a container *is* stays here; how it is laid out and styled lives
+                // on its targets (container-layout spec §4): `root` is the band, `inner` the
+                // content area that arranges the children.
                 'flags' => [],
-                // No `layout.item` yet: the container takes its layout capabilities all at once
-                // when it cuts over (container-layout plan, Task 2.1).
-                'style_capabilities' => ['spacing', 'width', 'visibility', 'colors', 'radius', 'border', 'shadow'],
+                'style_capabilities' => [
+                    'spacing', 'width', 'alignment.self', 'visibility', 'colors', 'radius', 'border',
+                    'shadow', 'layout.min_height', 'layout.overflow', 'layout.item',
+                    'layout.display', 'layout.direction', 'layout.wrap', 'alignment.content',
+                    'layout.align_items', 'layout.columns', 'layout.gap.column', 'layout.gap.row',
+                    'layout.content_width', 'layout.gutter',
+                ],
                 'style_targets' => StyleTargets::root('box', [
-                    'spacing', 'width', 'visibility', 'colors', 'radius', 'border', 'shadow',
+                    'spacing', 'width', 'alignment.self', 'visibility', 'colors', 'radius', 'border',
+                    'shadow', 'layout.min_height', 'layout.overflow', 'layout.item',
+                ], [
+                    'targets' => ['inner' => ['kind' => 'stack']],
+                    'map' => [
+                        'layout.display' => 'inner', 'layout.direction' => 'inner',
+                        'layout.wrap' => 'inner', 'alignment.content' => 'inner',
+                        'layout.align_items' => 'inner', 'layout.columns' => 'inner',
+                        'layout.gap.column' => 'inner', 'layout.gap.row' => 'inner',
+                        'layout.content_width' => 'inner', 'layout.gutter' => 'inner',
+                    ],
                 ]),
                 'schema' => [
+                    // The root's element: structure, not styling, so it is data and allowlisted.
+                    ['name' => 'element', 'type' => 'enum',
+                        'enum' => ['div', 'section', 'article', 'aside', 'header', 'footer']],
                     // ---- Background ----
                     // Rendered as a positioned <img> layer with srcset and the priority-image
                     // contract, never a background-image style.
@@ -117,27 +134,8 @@ final class StarterBlockTypes
                         'group' => 'Background'],
                     ['name' => 'overlay_opacity', 'type' => 'enum', 'enum' => ['25', '50', '75'],
                         'group' => 'Background'],
-                    // ---- Layout (width/height, alignment, flex) ----
-                    ['name' => 'width', 'type' => 'enum', 'enum' => ['full', 'contained', 'narrow'],
-                        'group' => 'Layout'],
-                    ['name' => 'min_height', 'type' => 'enum', 'enum' => ['auto', 'half', 'screen'],
-                        'group' => 'Layout'],
-                    // Vertical placement of the content within the container (needs a
-                    // min_height to be visible). Enables the centered-hero / Cover look.
-                    ['name' => 'content_align', 'type' => 'enum', 'enum' => ['top', 'center', 'bottom'],
-                        'group' => 'Layout'],
-                    // Flex layout (opt-in): 'flex' lays the child content out as flex items;
-                    // 'block' (default) keeps normal flow. The rest apply only in flex mode.
-                    ['name' => 'layout', 'type' => 'enum', 'enum' => ['block', 'flex'], 'group' => 'Layout'],
-                    ['name' => 'flex_direction', 'type' => 'enum',
-                        'enum' => ['row', 'column', 'row-reverse', 'column-reverse'], 'group' => 'Layout'],
-                    ['name' => 'justify', 'type' => 'enum',
-                        'enum' => ['start', 'center', 'end', 'between', 'around', 'evenly'], 'group' => 'Layout'],
-                    ['name' => 'align_items', 'type' => 'enum',
-                        'enum' => ['start', 'center', 'end', 'stretch'], 'group' => 'Layout'],
-                    // The flex gap is a spacing token (spec §1.7): block semantics in data.
-                    ['name' => 'gap', 'type' => 'token', 'domain' => 'spacing', 'group' => 'Layout'],
-                    ['name' => 'flex_wrap', 'type' => 'enum', 'enum' => ['nowrap', 'wrap'], 'group' => 'Layout'],
+                    // Width, height, alignment and the flex fields are gone: they are layout
+                    // settings now (container-layout spec §4), responsive and resettable.
                     // Ungrouped → always-visible nested region.
                     ['name' => 'content', 'type' => 'blocks'],
                 ]],
