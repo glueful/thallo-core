@@ -1,0 +1,1 @@
+import{t as e}from"./ohash.D__AXeF1-Bg1VnB0V.js";import{U as t}from"./index-CKRT4s_i.js";function n(n,r){return t(n)?!1:Array.isArray(n)?n.some(t=>e(t,r)):e(n,r)}export{n as t};
