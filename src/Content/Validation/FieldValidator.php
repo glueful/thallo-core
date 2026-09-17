@@ -15,6 +15,7 @@ use Glueful\Database\Connection;
 use Glueful\Helpers\Utils;
 use Thallo\Contracts\Content\Block;
 use Thallo\Contracts\Style\BlockStyleRegistry;
+use Thallo\Contracts\Style\PageStyleCapabilities;
 use Thallo\Contracts\Style\StyleCapabilities;
 use Thallo\Contracts\Style\Vocabulary;
 use Thallo\Core\Content\Style\EngineBlockStyleRegistry;
@@ -143,7 +144,9 @@ final class FieldValidator
     /**
      * The fixed _presentation vocabulary: show_title (bool), layout
      * ('full'|'centered'), header/footer ('default'|'hidden' — global-regions
-     * spec §7; 'variant:{slug}' is future vocabulary, rejected today).
+     * spec §7; 'variant:{slug}' is future vocabulary, rejected today), and style —
+     * the page's own style frame (padding, margin, background), validated exactly
+     * like a block's settings.style against the page's capabilities.
      * Anything else fails loudly — presentation is a system contract, not a
      * free-form bag. An empty array is allowed and normalized away (treated
      * as "no override").
@@ -173,6 +176,21 @@ final class FieldValidator
                     throw new ValidationException(["_presentation.{$key}" => "must be 'default' or 'hidden'"]);
                 }
                 $clean[$key] = $subValue;
+            } elseif ($key === 'style') {
+                [$settings, $styleErrors] = $this->settingsValidator->validate(
+                    ['style' => $subValue],
+                    PageStyleCapabilities::capabilities(),
+                );
+                if ($styleErrors !== []) {
+                    $prefixed = [];
+                    foreach ($styleErrors as $stylePath => $message) {
+                        $prefixed["_presentation.{$stylePath}"] = $message;
+                    }
+                    throw new ValidationException($prefixed);
+                }
+                if (isset($settings['style']) && $settings['style'] !== []) {
+                    $clean['style'] = $settings['style'];
+                }
             } else {
                 throw new ValidationException(['_presentation' => "unknown setting '{$key}'"]);
             }
