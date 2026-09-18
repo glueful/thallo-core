@@ -39,7 +39,9 @@ final class ReseedBlockTypesForThemeRewrite implements MigrationInterface
 
     /** Surviving slugs whose schema drifted (fields/enums changed) — refreshed. */
     private const DRIFTED = [
-        'section', 'container', 'grid', 'button',
+        // `section` and `grid` were retired with the container cutover, so a drifted row of either
+        // is simply gone rather than re-created.
+        'container', 'button',
     ];
 
     public function up(SchemaBuilderInterface $schema): void

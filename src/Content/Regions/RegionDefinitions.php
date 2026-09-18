@@ -21,11 +21,11 @@ final class RegionDefinitions
         // renders through the missing-template fallback while the capability is off — the
         // palette entries themselves are inert without their owning pack.
         'header' => [
-            'logo', 'navigation', 'button', 'color_mode', 'social_links', 'container', 'columns', 'rich_text',
+            'logo', 'navigation', 'button', 'color_mode', 'social_links', 'container', 'rich_text',
             'mini-cart', 'wishlist-link', 'auth-state',
         ],
         'footer' => [
-            'logo', 'navigation', 'button', 'social_links', 'container', 'columns', 'rich_text',
+            'logo', 'navigation', 'button', 'social_links', 'container', 'rich_text',
             'separator', 'spacer', 'icon', 'image', 'shortcode', 'html',
             'footer', 'links',
             'mini-cart', 'wishlist-link', 'auth-state',

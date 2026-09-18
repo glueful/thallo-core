@@ -36,36 +36,6 @@ final class StarterBlockTypes
     {
         return [
             // ---- Layout -----------------------------------------------------
-            ['slug' => 'section', 'label' => 'Section', 'icon' => 'i-lucide-rows-3',
-                'category' => 'Layout', 'description' => 'A titled band of content with a background style.',
-                'flags' => [],
-                'starter_content' => ['content' => []],
-                'style_capabilities' => [
-                    'spacing', 'width', 'visibility', 'colors.surface', 'colors.text', 'radius', 'shadow',
-                    'layout.item',
-                ],
-                'style_targets' => StyleTargets::root('box', [
-                    'spacing', 'width', 'visibility', 'colors.surface', 'colors.text', 'radius', 'shadow',
-                    'layout.item',
-                ]),
-                'schema' => [
-                    ['name' => 'headline', 'type' => 'string'],
-                    ['name' => 'title', 'type' => 'string'],
-                    ['name' => 'description', 'type' => 'text'],
-                    ['name' => 'background', 'type' => 'enum', 'enum' => ['none', 'muted', 'subtle', 'inverted']],
-                    ['name' => 'orientation', 'type' => 'enum', 'enum' => ['vertical', 'horizontal']],
-                    // Per-part header alignment (logical: end = right in LTR). Unset keeps the
-                    // orientation's default (vertical centres, horizontal leads).
-                    ['name' => 'headline_align', 'type' => 'enum', 'enum' => ['start', 'center', 'end'],
-                        'group' => 'Alignment'],
-                    ['name' => 'title_align', 'type' => 'enum', 'enum' => ['start', 'center', 'end'],
-                        'group' => 'Alignment'],
-                    ['name' => 'description_align', 'type' => 'enum', 'enum' => ['start', 'center', 'end'],
-                        'group' => 'Alignment'],
-                    ['name' => 'reverse', 'type' => 'boolean'],
-                    ['name' => 'links', 'type' => 'blocks', 'block_types' => ['button']],
-                    ['name' => 'content', 'type' => 'blocks'],
-                ]],
             ['slug' => 'style', 'label' => 'Style', 'icon' => 'i-lucide-palette',
                 'category' => 'Layout',
                 'description' => 'Re-skin a group of blocks with a chosen accent/neutral.',
@@ -138,38 +108,6 @@ final class StarterBlockTypes
                     // settings now (container-layout spec §4), responsive and resettable.
                     // Ungrouped → always-visible nested region.
                     ['name' => 'content', 'type' => 'blocks'],
-                ]],
-            ['slug' => 'grid', 'label' => 'Grid', 'icon' => 'i-lucide-layout-grid',
-                'category' => 'Layout',
-                'description' => 'A responsive wrapping grid (or masonry flow) of blocks.',
-                'flags' => [],
-                'style_capabilities' => ['spacing', 'visibility', 'layout.item'],
-                'style_targets' => StyleTargets::root('box', ['spacing', 'visibility', 'layout.item']),
-                'schema' => [
-                    ['name' => 'columns', 'type' => 'enum', 'enum' => ['1', '2', '3', '4']],
-                    ['name' => 'flow', 'type' => 'enum', 'enum' => ['grid', 'masonry']],
-                    ['name' => 'gap', 'type' => 'enum', 'enum' => ['small', 'medium', 'large']],
-                    ['name' => 'items', 'type' => 'blocks'],
-                ]],
-            ['slug' => 'columns', 'label' => 'Columns', 'icon' => 'i-lucide-columns-3',
-                'category' => 'Layout', 'description' => 'Two or three columns of blocks.',
-                'flags' => [],
-                'starter_content' => ['layout' => '2'],
-                'style_capabilities' => ['spacing', 'width', 'visibility', 'layout.item'],
-                'style_targets' => StyleTargets::root('box', ['spacing', 'width', 'visibility', 'layout.item']),
-                'schema' => [
-                    ['name' => 'layout', 'type' => 'enum', 'enum' => ['2', '3']],
-                    // Ratio presets (columns-sizing spec): one flat enum for both
-                    // layouts; a preset that doesn't match `layout` renders as
-                    // equal columns (template allowlist guard), never an error.
-                    ['name' => 'widths', 'type' => 'enum', 'enum' => [
-                        '50-50', '33-67', '67-33', '25-75', '75-25',
-                        '33-33-33', '25-50-25', '50-25-25', '25-25-50',
-                    ]],
-                    ['name' => 'align', 'type' => 'enum', 'enum' => ['stretch', 'top', 'center', 'bottom']],
-                    ['name' => 'col_1', 'type' => 'blocks'],
-                    ['name' => 'col_2', 'type' => 'blocks'],
-                    ['name' => 'col_3', 'type' => 'blocks'],
                 ]],
             ['slug' => 'navigation', 'label' => 'Navigation', 'icon' => 'i-lucide-menu',
                 'category' => 'Layout',
