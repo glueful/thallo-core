@@ -463,6 +463,18 @@ final class EnginePublicRouteResolver implements PublicRouteResolver
         $selector = FieldSelector::fromRequest(Request::create('/'));
         $shaped = $this->shaper->shape([$row], $schema, $selector, $read['locale'], $typeUuid, null);
         $content = $this->shaper->item($shaped[0]);
+        // A blocks field that has never held a block is absent from the fields (or null), and a
+        // theme renders a blocks field's element only when the value is a list — so a new page
+        // gave the design stage no slot: nothing to show "Drag a block here" in, and nothing a
+        // dragged block could be released over. A preview reads it as the empty list it is; the
+        // schema decides which fields those are, so a scalar `body` is never made a slot.
+        if (isset($content['fields']) && is_array($content['fields'])) {
+            foreach ($schema->fields() as $field) {
+                if ($field->type === 'blocks' && !is_array($content['fields'][$field->name] ?? null)) {
+                    $content['fields'][$field->name] = [];
+                }
+            }
+        }
 
         return [
             'kind' => 'content', 'locale' => $read['locale'], 'type' => $typeSlug,
