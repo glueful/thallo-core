@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Thallo\Core\Http\Controllers;
 
+use Thallo\Contracts\Style\RegionStyle;
 use Thallo\Core\Content\Regions\RegionDefinitions;
 use Thallo\Core\Content\Regions\RegionRepository;
 use Thallo\Core\Content\Regions\RegionValidator;
@@ -58,6 +59,7 @@ final class RegionAdminController
                 'settings' => $row['settings'] ?? (object) [],
                 'palette' => RegionDefinitions::PALETTES[$slug],
                 'settings_keys' => RegionDefinitions::SETTINGS_KEYS[$slug],
+                'style_capabilities' => RegionStyle::CAPABILITIES,
             ];
         }
         return Response::success(['regions' => $out], 'Regions retrieved.');
@@ -106,6 +108,7 @@ final class RegionAdminController
                 'settings' => $clean['settings'] === [] ? (object) [] : $clean['settings'],
                 'palette' => RegionDefinitions::PALETTES[$slug],
                 'settings_keys' => RegionDefinitions::SETTINGS_KEYS[$slug],
+                'style_capabilities' => RegionStyle::CAPABILITIES,
             ],
         ], 'Region saved.');
     }

@@ -32,10 +32,15 @@ final class RegionDefinitions
         ],
     ];
 
-    /** @var array<string, list<string>> region slug → allowed settings keys */
+    /**
+     * Region slug → allowed settings keys. `style` is the region's own Style tab: the same record
+     * a block keeps in `settings.style`, validated against RegionStyle's capabilities.
+     *
+     * @var array<string, list<string>>
+     */
     public const SETTINGS_KEYS = [
-        'header' => ['sticky', 'width'],
-        'footer' => ['width'],
+        'header' => ['sticky', 'width', 'style'],
+        'footer' => ['width', 'style'],
     ];
 
     /** @return list<string> */

@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Thallo\Core\Content\Regions;
 
+use Thallo\Contracts\Style\RegionStyle;
 use Thallo\Core\Content\Schema\ContentTypeSchema;
+use Thallo\Core\Content\Style\SettingsValidator;
 use Thallo\Core\Content\Validation\FieldValidator;
 use Thallo\Core\Content\Validation\ValidationException;
 
@@ -20,8 +22,10 @@ use Thallo\Core\Content\Validation\ValidationException;
  */
 final class RegionValidator
 {
-    public function __construct(private readonly FieldValidator $fields)
-    {
+    public function __construct(
+        private readonly FieldValidator $fields,
+        private readonly SettingsValidator $settingsValidator = new SettingsValidator(),
+    ) {
     }
 
     /**
@@ -81,6 +85,20 @@ final class RegionValidator
                     throw new ValidationException(['settings.width' => "must be 'contained' or 'full'"]);
                 }
                 $clean['width'] = $value;
+            }
+            // The region's Style tab: the block style record, held to what a region may be
+            // styled with. The style validator's errors are already `settings.style…` paths.
+            if ($key === 'style') {
+                [$styled, $errors] = $this->settingsValidator->validate(
+                    ['style' => $value],
+                    RegionStyle::capabilities(),
+                );
+                if ($errors !== []) {
+                    throw new ValidationException($errors);
+                }
+                if (isset($styled['style'])) {
+                    $clean['style'] = $styled['style'];
+                }
             }
         }
         return $clean;
