@@ -62,14 +62,14 @@ final class StarterBlockTypes
                 'flags' => [],
                 'style_capabilities' => [
                     'spacing', 'width', 'alignment.self', 'visibility', 'colors', 'radius', 'border',
-                    'shadow', 'layout.min_height', 'layout.overflow', 'layout.item',
+                    'shadow', 'backdrop', 'layout.min_height', 'layout.overflow', 'layout.item',
                     'layout.display', 'layout.direction', 'layout.wrap', 'alignment.content',
                     'layout.align_items', 'layout.columns', 'layout.gap.column', 'layout.gap.row',
                     'layout.content_width', 'layout.gutter',
                 ],
                 'style_targets' => StyleTargets::root('box', [
                     'spacing', 'width', 'alignment.self', 'visibility', 'colors', 'radius', 'border',
-                    'shadow', 'layout.min_height', 'layout.overflow', 'layout.item',
+                    'shadow', 'backdrop', 'layout.min_height', 'layout.overflow', 'layout.item',
                 ], [
                     'targets' => ['inner' => ['kind' => 'stack']],
                     'map' => [
