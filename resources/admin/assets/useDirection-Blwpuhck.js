@@ -1,1 +1,0 @@
-import{_t as e,m as t}from"./vue.runtime.esm-bundler-DHLDW_US.js";import{H as n}from"./index-weamb37d.js";function r(r){let i=n({dir:e(`ltr`)});return t(()=>r?.value||i.dir?.value||`ltr`)}export{r as t};
