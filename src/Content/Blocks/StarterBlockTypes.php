@@ -716,8 +716,21 @@ final class StarterBlockTypes
                 'category' => 'Advanced',
                 'description' => 'Renders shortcodes/{name}.twig from the theme (or a DB template).',
                 'flags' => [],
-                'style_capabilities' => ['spacing', 'visibility', 'layout.item'],
-                'style_targets' => StyleTargets::root('box', ['spacing', 'visibility', 'layout.item']),
+                // Two elements: the root is a layout-neutral wrapper held to the page measure, so
+                // what gives the shortcode its LOOK — colours, border, radius, shadow — lands on
+                // `content`, the element the included template renders. A background on the root
+                // would paint a bar across the page. Optional: the block template hands the
+                // target down, and a shortcode that ignores it is simply not styleable.
+                'style_capabilities' => [
+                    'spacing', 'visibility', 'layout.item', 'colors', 'border', 'radius', 'shadow',
+                ],
+                'style_targets' => StyleTargets::root('box', ['spacing', 'visibility', 'layout.item'], [
+                    'targets' => ['content' => ['kind' => 'box', 'optional' => true]],
+                    'map' => [
+                        'colors' => 'content', 'border' => 'content',
+                        'radius' => 'content', 'shadow' => 'content',
+                    ],
+                ]),
                 'schema' => [
                     ['name' => 'name', 'type' => 'string', 'required' => true,
                         'pattern' => '[a-z][a-z0-9_-]*'],
