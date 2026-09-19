@@ -741,15 +741,22 @@ final class StarterBlockTypes
             ['slug' => 'feature', 'label' => 'Feature', 'icon' => 'i-lucide-check',
                 'category' => 'Items', 'description' => 'One feature: icon or number, title, description, link.',
                 'flags' => [],
+                // `radius` and `shadow` are the card's, on the root; the marker — the icon chip or
+                // number badge — has its own corners and shadow (`marker.*`), on its own target.
+                // Optional, like the title: a feature with no marker renders no element.
                 'style_capabilities' => [
                     'spacing', 'radius', 'colors', 'border', 'shadow', 'visibility', 'typography', 'layout.item',
+                    'marker',
                 ],
                 'style_targets' => StyleTargets::root('box', [
                     'spacing', 'radius', 'colors', 'border', 'shadow', 'visibility',
                     'layout.item',
                 ], [
-                    'targets' => ['title' => ['kind' => 'text', 'optional' => true]],
-                    'map' => ['typography' => 'title'],
+                    'targets' => [
+                        'title' => ['kind' => 'text', 'optional' => true],
+                        'marker' => ['kind' => 'box', 'optional' => true],
+                    ],
+                    'map' => ['typography' => 'title', 'marker' => 'marker'],
                 ]),
                 'schema' => [
                     ['name' => 'icon', 'type' => 'string', 'pattern' => '[a-z0-9]+(-[a-z0-9]+)*', 'format' => 'icon'],
