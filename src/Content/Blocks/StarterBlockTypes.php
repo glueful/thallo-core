@@ -218,6 +218,13 @@ final class StarterBlockTypes
                     ['name' => 'reverse', 'type' => 'boolean'],
                     // Background is a choice; gradient reproduces the original look.
                     ['name' => 'background', 'type' => 'enum', 'enum' => ['gradient', 'none', 'muted', 'inverted']],
+                    // The gradient's own colour and strength. `accent` and `subtle` are the hero
+                    // it always was — the site accent, faint; the families are the site accent's
+                    // (ThemeColors), so a hero's emerald is the emerald a site would be, in both modes.
+                    ['name' => 'gradient_color', 'type' => 'enum',
+                        'enum' => array_merge(['accent'], ThemeColors::ACCENTS),
+                        'enum_labels' => ['accent' => 'Theme accent']],
+                    ['name' => 'gradient_strength', 'type' => 'enum', 'enum' => ['subtle', 'medium', 'strong']],
                     // Heading level (modern-blocks spec §4): lets a hero render as h1
                     // when it's the page's primary heading, or step down when it isn't.
                     ['name' => 'heading_level', 'type' => 'enum', 'enum' => ['h1', 'h2', 'h3']],
