@@ -403,13 +403,23 @@ final class StarterBlockTypes
                 'category' => 'Content', 'description' => 'Tabbed panels of blocks.',
                 'flags' => ['renders_children_inline' => true],
                 // The Style tab's colours, radius, border and shadow land on the ONE panels area
-                // (whichever tab is shown); the tab strip is configured from the Block tab below.
+                // (whichever tab is shown). The strip has corners of its own (`tabs.*`): the bar's on
+                // the list, the tab's on every label — the active one is whichever radio is checked,
+                // so the pill it shows is any label's. Optional: a tabs block with no tabs has no
+                // label. The strip's variant and colours are the Block tab's fields below.
                 'style_capabilities' => [
-                    'spacing', 'visibility', 'colors', 'radius', 'border', 'shadow', 'layout.item',
+                    'spacing', 'visibility', 'colors', 'radius', 'border', 'shadow', 'layout.item', 'tabs',
                 ],
                 'style_targets' => StyleTargets::root('box', ['spacing', 'visibility', 'layout.item'], [
-                    'targets' => ['panels' => ['kind' => 'box']],
-                    'map' => ['colors' => 'panels', 'radius' => 'panels', 'border' => 'panels', 'shadow' => 'panels'],
+                    'targets' => [
+                        'panels' => ['kind' => 'box'],
+                        'bar' => ['kind' => 'box'],
+                        'tab' => ['kind' => 'box', 'optional' => true],
+                    ],
+                    'map' => [
+                        'colors' => 'panels', 'radius' => 'panels', 'border' => 'panels', 'shadow' => 'panels',
+                        'tabs.bar_radius' => 'bar', 'tabs.tab_radius' => 'tab',
+                    ],
                 ]),
                 'schema' => [
                     ['name' => 'items', 'type' => 'blocks', 'block_types' => ['tab']],
