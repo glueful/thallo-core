@@ -19,6 +19,7 @@ use Glueful\Http\Response;
 use Thallo\Contracts\Capability\CapabilityRegistry;
 use Thallo\Contracts\Delivery\PreviewThemeValidator;
 use Thallo\Render\Theme\ThemeColors;
+use Thallo\Render\Theme\ThemeDesign;
 use Glueful\Routing\Attributes\ApiOperation;
 use Glueful\Routing\Attributes\ApiResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -102,9 +103,35 @@ final class PreviewController
             return Response::validation(['neutral' => 'unknown neutral color']);
         }
 
+        // Pending design settings, the same way: each a closed enum, any subset.
+        $design = [];
+        $enums = [
+            'radius' => ThemeDesign::normalizeRadius(...),
+            'font' => ThemeDesign::normalizeFont(...),
+            'background' => ThemeDesign::normalizeBackground(...),
+        ];
+        foreach ($enums as $name => $normalize) {
+            $value = $input->{$name};
+            if ($value === null || $value === '') {
+                continue;
+            }
+            if ($normalize($value) === null) {
+                return Response::validation([$name => "unknown {$name}"]);
+            }
+            $design[$name] = $value;
+        }
+
         // version_uuid is optional: absent means "mint from the current draft". Existence /
         // ownership of a pinned version is validated by the reader at read time (domain rule).
-        $token = $this->minter->mint($uuid, $locale, $input->version_uuid, $theme, $accent, $neutral);
+        $token = $this->minter->mint(
+            $uuid,
+            $locale,
+            $input->version_uuid,
+            $theme,
+            $accent,
+            $neutral,
+            $design === [] ? null : $design,
+        );
         $ttl = $this->minter->ttlSeconds();
         $exp = time() + $ttl;
 

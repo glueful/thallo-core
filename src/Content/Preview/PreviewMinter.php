@@ -37,6 +37,7 @@ final class PreviewMinter
         ?string $theme = null,
         ?string $accent = null,
         ?string $neutral = null,
+        ?array $design = null,
     ): string {
         return PreviewToken::mint(
             $entryUuid,
@@ -47,6 +48,7 @@ final class PreviewMinter
             $theme,
             $accent,
             $neutral,
+            $design,
         );
     }
 

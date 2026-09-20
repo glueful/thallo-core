@@ -34,6 +34,16 @@ final class MintPreviewData implements RequestData
         /** @var string|null Per-preview neutral family; enum-validated. */
         #[Rule('string')]
         public readonly ?string $neutral = null,
+        /**
+         * @var string|null Per-preview design settings (the Appearance page's pending Corners,
+         *      Typefaces and Page ground); enum-validated, signed into the token, never saved.
+         */
+        #[Rule('string')]
+        public readonly ?string $radius = null,
+        #[Rule('string')]
+        public readonly ?string $font = null,
+        #[Rule('string')]
+        public readonly ?string $background = null,
     ) {
     }
 }

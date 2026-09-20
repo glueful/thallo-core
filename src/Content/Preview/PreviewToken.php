@@ -28,6 +28,13 @@ final class PreviewToken
         public readonly ?string $theme = null,
         public readonly ?string $accent = null,
         public readonly ?string $neutral = null,
+        /**
+         * Pending design settings (radius, font, background), any subset; null = none. Like the
+         * colours, previewed from the token and never written anywhere.
+         *
+         * @var array<string,string>|null
+         */
+        public readonly ?array $design = null,
     ) {
     }
 
@@ -51,8 +58,9 @@ final class PreviewToken
         ?string $theme = null,
         ?string $accent = null,
         ?string $neutral = null,
+        ?array $design = null,
     ): string {
-        $payload = self::b64(json_encode([
+        $claims = [
             'e' => $entryUuid,
             'l' => $locale,
             'v' => $versionUuid,
@@ -62,7 +70,13 @@ final class PreviewToken
             't' => $theme,
             'a' => $accent,
             'n' => $neutral,
-        ], JSON_THROW_ON_ERROR));
+        ];
+        // The design claim is WRITTEN only when there is one: a token without pending design
+        // settings is byte-for-byte what it always was.
+        if ($design !== null && $design !== []) {
+            $claims['d'] = $design;
+        }
+        $payload = self::b64(json_encode($claims, JSON_THROW_ON_ERROR));
 
         $sig = self::b64(hash_hmac('sha256', $payload, $key, true));
 
@@ -101,7 +115,27 @@ final class PreviewToken
             isset($data['t']) && is_string($data['t']) ? $data['t'] : null,
             isset($data['a']) && is_string($data['a']) ? $data['a'] : null,
             isset($data['n']) && is_string($data['n']) ? $data['n'] : null,
+            self::designClaim($data['d'] ?? null),
         );
+    }
+
+    /**
+     * A claim is read defensively even though it is signed: anything that is not a non-empty map
+     * of name => string is no design at all.
+     *
+     * @return array<string,string>|null
+     */
+    private static function designClaim(mixed $claim): ?array
+    {
+        if (!is_array($claim) || $claim === []) {
+            return null;
+        }
+        foreach ($claim as $name => $value) {
+            if (!is_string($name) || !is_string($value)) {
+                return null;
+            }
+        }
+        return $claim;
     }
 
     private static function b64(string $raw): string

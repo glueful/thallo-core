@@ -38,6 +38,7 @@ final class EnginePreviewSessionVerifier implements PreviewSessionVerifier
             $payload->accent,
             $payload->neutral,
             $payload->expiresAt,
+            $payload->design,
         );
     }
 }
