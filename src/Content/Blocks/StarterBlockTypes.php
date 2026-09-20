@@ -612,7 +612,7 @@ final class StarterBlockTypes
                 ]],
             ['slug' => 'logo', 'label' => 'Logo', 'icon' => 'i-lucide-badge-check',
                 'category' => 'Media',
-                'description' => 'The site logo (Settings → General); falls back to the site name.',
+                'description' => 'The site logo (Site › Appearance); falls back to the site name.',
                 'flags' => [],
                 'style_capabilities' => ['spacing', 'visibility', 'layout.item'],
                 'style_targets' => StyleTargets::root('box', ['spacing', 'visibility', 'layout.item']),
