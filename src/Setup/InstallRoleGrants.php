@@ -19,18 +19,25 @@ use Glueful\Permissions\Catalog\PermissionRegistry;
  * migration and Thallo's core catalog is declared through the provider — and nothing granted
  * any of it to a role, so the first admin could not manage content models, read the audit
  * log or see analytics. apply() persists the declared catalog into the RBAC provider (the same
- * mechanics as `permissions:sync`) and then grants every permission row to `superuser`, and
- * every row but `system.config` to `administrator`. Additive and idempotent: web setup and
- * `thallo:create-admin` run it once at install, `thallo:provision` re-runs it so a pack added
- * on upgrade reaches the install roles too. Operator revocations are not re-applied blindly —
- * only rows a role has never held are granted.
+ * mechanics as `permissions:sync`) and then grants every permission row to `superuser`, and to
+ * `administrator` every row not WITHHELD from it (ROLE_EXCLUSIONS). Additive and idempotent: web
+ * setup and `thallo:create-admin` run it once at install, `thallo:provision` re-runs it so a pack
+ * added on upgrade reaches the install roles too.
+ *
+ * It grants whatever a role does not currently hold — it keeps no memory of what was revoked. So
+ * a permission that must stay off a role has to be withheld HERE: a revocation made anywhere else,
+ * by a migration or by an operator, is undone by the next provision.
  */
 final class InstallRoleGrants
 {
     /** @var array<string, list<string>> role slug => permission slugs withheld from that role */
     public const ROLE_EXCLUSIONS = [
         'superuser' => [],
-        'administrator' => ['system.config'],
+        // An administrator runs ONE site: not the system's configuration, and not authority ACROSS
+        // workspaces. The authority migration (013) takes both tenancy permissions from this role
+        // and gives them to `workspace_manager`; withheld here too, or every provision — every
+        // upgrade — handed them back, and an administrator could enter any workspace.
+        'administrator' => ['system.config', 'tenancy.access_any', 'tenancy.manage'],
     ];
 
     public function __construct(
