@@ -96,19 +96,23 @@ final class PreviewController
         // into the token. Token-only — never writes GeneralSettings; Save does that.
         $accent = $input->accent !== null && $input->accent !== '' ? $input->accent : null;
         $neutral = $input->neutral !== null && $input->neutral !== '' ? $input->neutral : null;
-        if ($accent !== null && ThemeColors::normalizeAccent($accent) === null) {
+        if ($accent !== null && ($accent = ThemeColors::normalizeSiteAccent($accent)) === null) {
             return Response::validation(['accent' => 'unknown accent color']);
         }
         if ($neutral !== null && ThemeColors::normalizeNeutral($neutral) === null) {
             return Response::validation(['neutral' => 'unknown neutral color']);
         }
 
-        // Pending design settings, the same way: each a closed enum, any subset.
+        // Pending design settings, the same way: each a closed enum, any subset. A pending face
+        // is a media library uuid, or `none` for a saved face taken off but not yet saved.
         $design = [];
+        $face = static fn (string $v): ?string => $v === 'none' ? $v : ThemeDesign::normalizeFace($v);
         $enums = [
             'radius' => ThemeDesign::normalizeRadius(...),
             'font' => ThemeDesign::normalizeFont(...),
             'background' => ThemeDesign::normalizeBackground(...),
+            'font_body' => $face,
+            'font_display' => $face,
         ];
         foreach ($enums as $name => $normalize) {
             $value = $input->{$name};

@@ -419,10 +419,11 @@ final class MediaAdminController
     private function applyTypeFilter(object $query, string $type, string $column = 'mime_type'): void
     {
         match ($type) {
-            'image', 'video', 'audio' => $query->where($column, 'LIKE', $type . '/%'),
+            // `font`: a site's own typefaces (Site › Appearance), a type of their own.
+            'image', 'video', 'audio', 'font' => $query->where($column, 'LIKE', $type . '/%'),
             'doc' => $query->whereRaw(
                 "{$column} NOT LIKE 'image/%' AND {$column} NOT LIKE 'video/%' "
-                . "AND {$column} NOT LIKE 'audio/%'"
+                . "AND {$column} NOT LIKE 'audio/%' AND {$column} NOT LIKE 'font/%'"
             ),
             default => null,
         };

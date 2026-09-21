@@ -49,6 +49,9 @@ final class GeneralSettings
         // Design settings (website plan phase 1b): closed enums, defaults are today's look.
         'theme_radius'      => ['thallo.theme.radius', 'string', 'round'],
         'theme_font'        => ['thallo.theme.font', 'string', 'sans'],
+        // The site's own typefaces (the `custom` pairing): media library uuids of woff2 files.
+        'theme_font_body'    => ['thallo.theme.font_body', 'string', ''],
+        'theme_font_display' => ['thallo.theme.font_display', 'string', ''],
         'theme_background'  => ['thallo.theme.background', 'string', 'plain'],
         // Admin SPA base URL — powers the preview bar's Edit/Design deep links.
         // Auto-populated at web setup (the SPA sends its own origin).
@@ -125,6 +128,18 @@ final class GeneralSettings
     public function themeFont(): string
     {
         return (string) $this->value('theme_font');
+    }
+
+    /** Media library uuid of the text face (`custom` pairing); '' when none. */
+    public function themeFontBody(): string
+    {
+        return (string) $this->value('theme_font_body');
+    }
+
+    /** Media library uuid of the headings face (`custom` pairing); '' when none. */
+    public function themeFontDisplay(): string
+    {
+        return (string) $this->value('theme_font_display');
     }
 
     public function themeBackground(): string

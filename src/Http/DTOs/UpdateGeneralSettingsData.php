@@ -49,7 +49,7 @@ final class UpdateGeneralSettingsData implements RequestData
         /** @var string|null Live theme name; '' clears to the env/config default. */
         #[Rule('string')]
         public readonly ?string $theme = null,
-        /** @var string|null Accent Tailwind family (theme-color-config spec §2); enum-validated in the controller. */
+        /** @var string|null Accent: a colour family, or the brand colour as a hex; validated in the controller. */
         #[Rule('string')]
         public readonly ?string $theme_accent = null,
         /** @var string|null Neutral Tailwind family; enum-validated in the controller. */
@@ -58,9 +58,15 @@ final class UpdateGeneralSettingsData implements RequestData
         /** @var string|null Corner radius scale: sharp | soft | round; enum-validated in the controller. */
         #[Rule('string')]
         public readonly ?string $theme_radius = null,
-        /** @var string|null Typeface pairing: sans | editorial | serif; enum-validated in the controller. */
+        /** @var string|null Typeface pairing, or `custom`; enum-validated in the controller. */
         #[Rule('string')]
         public readonly ?string $theme_font = null,
+        /** @var string|null Media library uuid of the site's own text face (woff2); '' clears. */
+        #[Rule('string')]
+        public readonly ?string $theme_font_body = null,
+        /** @var string|null Media library uuid of the site's own headings face (woff2); '' clears. */
+        #[Rule('string')]
+        public readonly ?string $theme_font_display = null,
         /** @var string|null Page ground: plain | tinted; enum-validated in the controller. */
         #[Rule('string')]
         public readonly ?string $theme_background = null,

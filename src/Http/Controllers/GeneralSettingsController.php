@@ -102,10 +102,15 @@ final class GeneralSettingsController
 
         $this->settings->save([
             'theme' => $input->theme,
-            'theme_accent' => $input->theme_accent,
+            // The one spelling the stylesheet writes (#ABC → #aabbcc); validated above.
+            'theme_accent' => $input->theme_accent === null
+                ? null
+                : ThemeColors::normalizeSiteAccent($input->theme_accent),
             'theme_neutral' => $input->theme_neutral,
             'theme_radius' => $input->theme_radius,
             'theme_font' => $input->theme_font,
+            'theme_font_body' => $input->theme_font_body,
+            'theme_font_display' => $input->theme_font_display,
             'theme_background' => $input->theme_background,
             'site_name' => $input->site_name,
             'site_preview_url' => $input->site_preview_url,
@@ -222,8 +227,10 @@ final class GeneralSettingsController
 
         // Theme appearance (theme-color-config spec §2): closed enums; null =
         // unchanged. An out-of-enum value can never be stored.
-        if ($input->theme_accent !== null && ThemeColors::normalizeAccent($input->theme_accent) === null) {
-            $errors['theme_accent'] = 'unknown accent color';
+        // The accent is a family or the site's own brand colour as a hex; the neutral stays a
+        // family — a whole grey scale cannot be derived from one colour.
+        if ($input->theme_accent !== null && ThemeColors::normalizeSiteAccent($input->theme_accent) === null) {
+            $errors['theme_accent'] = 'unknown accent color (a colour family, or a hex like #0a7c66)';
         }
         if ($input->theme_neutral !== null && ThemeColors::normalizeNeutral($input->theme_neutral) === null) {
             $errors['theme_neutral'] = 'unknown neutral color';
@@ -234,6 +241,14 @@ final class GeneralSettingsController
         }
         if ($input->theme_font !== null && ThemeDesign::normalizeFont($input->theme_font) === null) {
             $errors['theme_font'] = 'unknown typeface pairing';
+        }
+        // The site's own faces are media library files, named by uuid ('' clears). The page
+        // declares them by the URL the library serves, so only the uuid's shape is held here.
+        foreach (['theme_font_body', 'theme_font_display'] as $face) {
+            $uuid = $input->{$face};
+            if ($uuid !== null && $uuid !== '' && ThemeDesign::normalizeFace($uuid) === null) {
+                $errors[$face] = 'not a media library file';
+            }
         }
         if ($input->theme_background !== null && ThemeDesign::normalizeBackground($input->theme_background) === null) {
             $errors['theme_background'] = 'unknown page background';

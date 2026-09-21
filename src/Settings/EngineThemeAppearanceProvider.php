@@ -38,6 +38,14 @@ final class EngineThemeAppearanceProvider implements ThemeAppearanceProvider
         return $this->settings->themeFont();
     }
 
+    public function fontFaces(): array
+    {
+        return array_filter([
+            'body' => $this->settings->themeFontBody(),
+            'display' => $this->settings->themeFontDisplay(),
+        ], static fn (string $uuid): bool => $uuid !== '');
+    }
+
     public function background(): string
     {
         return $this->settings->themeBackground();

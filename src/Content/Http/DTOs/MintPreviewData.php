@@ -44,6 +44,14 @@ final class MintPreviewData implements RequestData
         public readonly ?string $font = null,
         #[Rule('string')]
         public readonly ?string $background = null,
+        /**
+         * @var string|null The site's own faces, pending (the `custom` pairing): a media library
+         *      uuid, or `none` for a saved face taken off but not yet saved.
+         */
+        #[Rule('string')]
+        public readonly ?string $font_body = null,
+        #[Rule('string')]
+        public readonly ?string $font_display = null,
     ) {
     }
 }
