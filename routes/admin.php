@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Thallo\Core\Content\Http\Controllers\BlockMigrationController;
 use Thallo\Core\Content\Http\Controllers\BlockTypeController;
+use Thallo\Core\Content\Http\Controllers\PatternController;
 use Thallo\Core\Content\Http\Controllers\StyleClassController;
 use Thallo\Core\Content\Http\Controllers\ContentTypeController;
 use Thallo\Core\Content\Http\Controllers\EntryController;
@@ -118,6 +119,11 @@ $router->group(['prefix' => '/v1/admin'], function (Router $router): void {
 
     // The server block factory (visual builder spec §5.5): a fresh block's canonical structure
     // and starter content, for anyone who may edit content.
+        // The section and page library (the designer's Blocks tab): read with the right to see
+        // content; inserting a pattern is an ordinary page edit.
+        $router->get('/patterns', [PatternController::class, 'index'])
+        ->middleware('content_permission:content.view');
+
         $router->post('/block-types/{slug}/instance', [BlockTypeController::class, 'instance'])
         ->middleware('content_permission:content.edit');
 

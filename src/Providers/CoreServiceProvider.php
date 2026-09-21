@@ -580,6 +580,11 @@ final class CoreServiceProvider extends ServiceProvider
                 'shared' => true,
                 'autowire' => true,
             ],
+            \Thallo\Core\Content\Patterns\PatternLibrary::class => [
+                'class' => \Thallo\Core\Content\Patterns\PatternLibrary::class,
+                'shared' => true,
+                'autowire' => true,
+            ],
             ContentTypeRepository::class => [
                 'class' => ContentTypeRepository::class,
                 'shared' => true,
@@ -1525,6 +1530,11 @@ final class CoreServiceProvider extends ServiceProvider
     private static function contentControllerServices(): array
     {
         return [
+            \Thallo\Core\Content\Http\Controllers\PatternController::class => [
+                'class' => \Thallo\Core\Content\Http\Controllers\PatternController::class,
+                'shared' => true,
+                'autowire' => true,
+            ],
             BlockTypeController::class => [
                 'class' => BlockTypeController::class,
                 'shared' => true,
