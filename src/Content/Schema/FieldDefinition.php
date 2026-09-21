@@ -95,6 +95,12 @@ final class FieldDefinition implements FieldDescriptor
         return $this->referenceType;
     }
 
+    /** @return list<string> */
+    public function enumValues(): array
+    {
+        return array_values(array_map('strval', $this->enumValues));
+    }
+
     public function referenceSlugField(): ?string
     {
         return $this->referenceSlugField;
