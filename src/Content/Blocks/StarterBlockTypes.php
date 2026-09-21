@@ -34,6 +34,59 @@ final class StarterBlockTypes
      */
     public static function definitions(): array
     {
+        return array_map(self::withMotion(...), self::library());
+    }
+
+    /**
+     * Blocks a visitor does not see ARRIVE, so an entrance means nothing on them: a tab's and an
+     * accordion item's panels are hidden until opened, a spacer is nothing to see, and animated
+     * text has an animation of its own.
+     */
+    public const NO_ENTRANCE = ['tab', 'accordion_item', 'spacer', 'animated_text'];
+
+    /**
+     * Where Ken Burns lands, per block that has a picture in a frame: the target whose DIRECT
+     * child is the picture — the container's background image under its root, the hero's under
+     * its media box. The Image block is not one: its figure also holds the gutters and the
+     * caption, which a drifting picture would cover. A picture that should drift is a container's
+     * background.
+     */
+    private const KEN_BURNS_FRAMES = ['container' => 'root', 'hero' => 'media'];
+
+    /**
+     * Motion is declared HERE, once, for the whole library rather than block by block: an
+     * entrance (`motion`) on every block's outermost element, stagger (`motion.children`) on the
+     * container's content area, where its children are, and Ken Burns (`motion.media`) on the
+     * frames above.
+     *
+     * @param array<string,mixed> $definition
+     * @return array<string,mixed>
+     */
+    private static function withMotion(array $definition): array
+    {
+        $slug = (string) $definition['slug'];
+        $add = [];
+        if (!in_array($slug, self::NO_ENTRANCE, true)) {
+            $add['motion'] = 'root';
+        }
+        if ($slug === 'container') {
+            $add['motion.children'] = 'inner';
+        }
+        if (isset(self::KEN_BURNS_FRAMES[$slug])) {
+            $add['motion.media'] = self::KEN_BURNS_FRAMES[$slug];
+        }
+        foreach ($add as $capability => $target) {
+            $definition['style_capabilities'][] = $capability;
+            $definition['style_targets']['map'][$capability] = $target;
+        }
+        return $definition;
+    }
+
+    /**
+     * @return list<array<string,mixed>>
+     */
+    private static function library(): array
+    {
         return [
             // ---- Layout -----------------------------------------------------
             ['slug' => 'style', 'label' => 'Style', 'icon' => 'i-lucide-palette',

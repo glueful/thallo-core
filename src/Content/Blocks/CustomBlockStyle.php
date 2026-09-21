@@ -22,7 +22,7 @@ final class CustomBlockStyle
     /** @var list<string> setting groups a custom block may declare, in the Style tab's order */
     public const GROUPS = [
         'spacing', 'width', 'alignment.self', 'typography', 'colors', 'backdrop', 'radius', 'border',
-        'shadow', 'visibility', 'layout.min_height', 'layout.overflow', 'layout.item',
+        'shadow', 'visibility', 'layout.min_height', 'layout.overflow', 'layout.item', 'motion',
     ];
 
     /**
