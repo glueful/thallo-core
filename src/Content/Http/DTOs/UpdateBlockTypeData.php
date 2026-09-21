@@ -29,6 +29,13 @@ final class UpdateBlockTypeData implements RequestData
         #[ArrayOf(FieldDefinitionData::class)]
         #[Rule('array')]
         public readonly array $schema = [],
+        /**
+         * @var list<string>|null The setting groups the block supports (its Style and Layout tabs),
+         *      from the list the block types index offers; the block has ONE style target, `root`.
+         *      Null leaves the declaration as it is; an empty list clears it.
+         */
+        #[Rule('array')]
+        public readonly ?array $style_capabilities = null,
     ) {
     }
 }

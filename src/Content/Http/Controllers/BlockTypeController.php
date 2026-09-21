@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 namespace Thallo\Core\Content\Http\Controllers;
 
+use Thallo\Contracts\Style\BlockTemplateTargetCheck;
+use Thallo\Contracts\Style\StyleTargets;
 use Thallo\Core\Content\Blocks\BlockFactory;
 use Thallo\Core\Content\Blocks\BlockTypeRepository;
+use Thallo\Core\Content\Blocks\CustomBlockStyle;
 use Thallo\Core\Content\Blocks\BlockUsageScanner;
 use Thallo\Core\Content\Blocks\Migration\BlockMigrationRepository;
 use Thallo\Core\Content\Http\DTOs\BlockTypeData;
@@ -37,7 +40,74 @@ final class BlockTypeController
         private readonly BlockMigrationRepository $blockMigrations,
         private readonly BlockTypeKind $starters,
         private readonly BlockFactory $factory,
+        /** The renderer's word on a block's template; null when nothing renders (no render pack). */
+        private readonly ?BlockTemplateTargetCheck $templateCheck = null,
     ) {
+    }
+
+    /**
+     * Why a block type may NOT be given these setting groups, or null. A code-declared type's
+     * declaration is not the admin's to change (provision re-syncs it from code on every upgrade,
+     * so a change would be silently overwritten). And settings are never switched on over a
+     * template that does not emit them: that template would refuse to load, and the block would
+     * break on every page that uses it.
+     *
+     * @param list<mixed> $capabilities
+     */
+    private function styleRefusal(string $slug, array $capabilities): ?string
+    {
+        if ($this->isCodeDeclared($slug)) {
+            return "'{$slug}' is declared by Thallo: its style settings are set in code and "
+                . 're-synced on every upgrade, so they cannot be changed here.';
+        }
+        $problem = CustomBlockStyle::problem($capabilities);
+        if ($problem !== null || $capabilities === []) {
+            return $problem;
+        }
+        /** @var list<string> $capabilities */
+        $targets = StyleTargets::fromDeclaration(CustomBlockStyle::targets(array_values($capabilities)));
+        $problems = $this->templateCheck?->problems($slug, $targets) ?? [];
+        if ($problems === []) {
+            return null;
+        }
+        return "blocks/{$slug}.twig does not emit these settings yet, and would stop rendering: "
+            . implode(' ', $problems)
+            . " Put {{ style_classes('root') }} inside the class attribute of the block's outermost"
+            . " element and {{ style_attrs('root') }} on its tag, then save this again.";
+    }
+
+    /**
+     * Store the (already accepted) setting groups: one `root` target carrying them all, or no
+     * declaration for an empty list. The type's flags and starter content are left as they are.
+     *
+     * @param list<string> $capabilities
+     */
+    private function applyStyle(string $uuid, array $capabilities): void
+    {
+        $row = $this->blockTypes->findByUuid($uuid);
+        $flags = is_array($row['flags'] ?? null) ? $row['flags'] : null;
+        $starter = is_array($row['starter_content'] ?? null) ? $row['starter_content'] : null;
+        $this->blockTypes->updateStyle(
+            $uuid,
+            $capabilities === [] ? null : $capabilities,
+            $capabilities === [] ? null : CustomBlockStyle::targets($capabilities),
+            $flags,
+            $starter,
+        );
+    }
+
+    /** @var array<string, true>|null slugs whose declaration is code's, resolved once per request */
+    private ?array $codeDeclared = null;
+
+    private function isCodeDeclared(string $slug): bool
+    {
+        if ($this->codeDeclared === null) {
+            $this->codeDeclared = array_fill_keys($this->starters->hiddenSlugs(), true);
+            foreach ($this->starters->definitions() as $definition) {
+                $this->codeDeclared[$definition->definitionKey] = true;
+            }
+        }
+        return isset($this->codeDeclared[$slug]);
     }
 
     #[ApiOperation(
@@ -57,7 +127,16 @@ final class BlockTypeController
                 static fn (array $row): bool => !in_array((string) $row['slug'], $hidden, true),
             ));
 
-        return Response::success(['block_types' => $listed], 'Block types retrieved.');
+        return Response::success([
+            'block_types' => $listed,
+            // The setting groups a block type made here may be given: the picker is this list.
+            'style_capability_options' => CustomBlockStyle::GROUPS,
+            // Types whose declaration is code's (theirs is shown read-only, never offered for edit).
+            'code_declared_slugs' => array_values(array_filter(
+                array_map(static fn (array $row): string => (string) $row['slug'], $listed),
+                fn (string $slug): bool => $this->isCodeDeclared($slug),
+            )),
+        ], 'Block types retrieved.');
     }
 
     #[ApiOperation(
@@ -78,6 +157,11 @@ final class BlockTypeController
         if ($this->blockTypes->findBySlug($input->slug) !== null) {
             return Response::validation(['slug' => "block type '{$input->slug}' already exists"]);
         }
+        $capabilities = array_values($input->style_capabilities ?? []);
+        $refusal = $capabilities === [] ? null : $this->styleRefusal($input->slug, $capabilities);
+        if ($refusal !== null) {
+            return Response::validation(['style_capabilities' => $refusal]);
+        }
         try {
             $uuid = $this->blockTypes->create([
                 'slug' => $input->slug,
@@ -92,6 +176,9 @@ final class BlockTypeController
             ]);
         } catch (SchemaParseException $e) {
             return Response::validation(['schema' => $e->getMessage()]);
+        }
+        if ($capabilities !== []) {
+            $this->applyStyle($uuid, $capabilities);
         }
         return Response::created(
             ['block_type' => $this->blockTypes->findByUuid($uuid)],
@@ -152,6 +239,14 @@ final class BlockTypeController
         if ($row === null) {
             return Response::error('Unknown block type.', 404);
         }
+        // Judged before anything is written: a refusal leaves the fields unchanged too.
+        $capabilities = $input->style_capabilities === null ? null : array_values($input->style_capabilities);
+        if ($capabilities !== null) {
+            $refusal = $this->styleRefusal($slug, $capabilities);
+            if ($refusal !== null) {
+                return Response::validation(['style_capabilities' => $refusal]);
+            }
+        }
         try {
             $this->blockTypes->updateSchema(
                 (string) $row['uuid'],
@@ -163,6 +258,9 @@ final class BlockTypeController
             );
         } catch (SchemaParseException $e) {
             return Response::validation(['schema' => $e->getMessage()]);
+        }
+        if ($capabilities !== null) {
+            $this->applyStyle((string) $row['uuid'], $capabilities);
         }
         return Response::success(
             ['block_type' => $this->blockTypes->findBySlug($slug)],
