@@ -23,7 +23,7 @@ final class SetupData implements RequestData
         public readonly string $admin_password,
         #[Rule('required|string|max:20')]
         public readonly string $locale = 'en',
-        /** @var string|null The admin SPA's own origin — sent by the web setup form. */
+        /** @var string|null Where the admin is: its origin and base path. Sent by the web setup form. */
         #[Rule('string|max:300')]
         public readonly ?string $admin_url = null,
     ) {

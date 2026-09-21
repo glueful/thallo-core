@@ -70,7 +70,7 @@ final class UpdateGeneralSettingsData implements RequestData
         /** @var string|null Page ground: plain | tinted; enum-validated in the controller. */
         #[Rule('string')]
         public readonly ?string $theme_background = null,
-        /** @var string|null Admin SPA base URL for preview-bar deep links; '' clears. */
+        /** @var string|null Where the admin is, when hosted elsewhere; '' means this site's own, at /admin. */
         #[Rule('string')]
         public readonly ?string $admin_url = null,
         /**
