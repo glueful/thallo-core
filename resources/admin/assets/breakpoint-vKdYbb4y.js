@@ -1,0 +1,1 @@
+import{_t as e}from"./vue.runtime.esm-bundler-DHLDW_US.js";var t={desktop:`lg`,tablet:`md`,mobile:`base`},n={lg:`desktop`,md:`tablet`,base:`mobile`},r={desktop:`100%`,tablet:`768px`,mobile:`390px`},i=`rounded ring ring-default bg-white`,a={base:`Base`,md:`Tablet`,lg:`Desktop`},o=e(`lg`);function s(e){o.value=e}export{n as a,r as i,t as n,o,i as r,s,a as t};

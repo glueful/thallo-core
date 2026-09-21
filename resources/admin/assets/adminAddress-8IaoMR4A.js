@@ -1,0 +1,1 @@
+function e(e,t){return(e+t).replace(/\/+$/,``)}function t(){return e(window.location.origin,`/admin/`)}export{t};
