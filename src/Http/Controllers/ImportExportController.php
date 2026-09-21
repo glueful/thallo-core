@@ -34,7 +34,18 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 final class ImportExportController
 {
     private const UPLOAD_DIR = 'import-export';
-    private const ALLOWED_EXTENSIONS = ['ndjson', 'jsonl', 'json'];
+    /**
+     * What an import may be, and the extension it is stored under. Every importer decides whether
+     * a file is its own by that extension, so it is kept — as one of THESE, never as the
+     * visitor's string. A `.json` bundle is NDJSON by another name.
+     */
+    private const STORED_AS = [
+        'ndjson' => 'ndjson', 'jsonl' => 'jsonl', 'json' => 'ndjson',
+        'csv' => 'csv',
+        'md' => 'md', 'mdx' => 'mdx', 'markdown' => 'markdown',
+        'xml' => 'xml', 'wxr' => 'wxr',
+        'zip' => 'zip',
+    ];
 
     public function __construct(
         private readonly ApplicationContext $context,
@@ -103,7 +114,8 @@ final class ImportExportController
     /** POST /v1/admin/import-export/upload */
     #[ApiOperation(
         summary: 'Upload an import file',
-        description: 'Stores an NDJSON import source file on the uploads disk and returns its '
+        description: 'Stores an import source file on the uploads disk — an NDJSON bundle, a CSV, a '
+            . 'Markdown file, a WordPress export or a .zip of Markdown files — and returns its '
             . '{disk, path} for POST /import-export/imports. Requires `content.manage`.',
         tags: ['Import Export'],
     )]
@@ -117,8 +129,11 @@ final class ImportExportController
         }
 
         $ext = strtolower($file->getClientOriginalExtension());
-        if (!in_array($ext, self::ALLOWED_EXTENSIONS, true)) {
-            return Response::validation(['file' => 'Only .ndjson, .jsonl, or .json files are accepted.']);
+        if (!isset(self::STORED_AS[$ext])) {
+            return Response::validation([
+                'file' => 'An import is an NDJSON bundle, a CSV, a Markdown file, a WordPress export '
+                    . '(.xml, .wxr) or a .zip of Markdown files.',
+            ]);
         }
 
         $maxSize = (int) config($this->context, 'import_export.max_file_size', 52428800);
@@ -127,7 +142,7 @@ final class ImportExportController
             return Response::validation(['file' => 'The file exceeds the maximum allowed size.']);
         }
 
-        $path = self::UPLOAD_DIR . '/' . Utils::generateNanoID(16) . '.ndjson';
+        $path = self::UPLOAD_DIR . '/' . Utils::generateNanoID(16) . '.' . self::STORED_AS[$ext];
         $stream = fopen($file->getPathname(), 'rb');
         if ($stream === false) {
             return Response::error('Could not read the uploaded file.', Response::HTTP_BAD_REQUEST);

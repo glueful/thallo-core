@@ -1540,6 +1540,11 @@ final class CoreServiceProvider extends ServiceProvider
     private static function contentControllerServices(): array
     {
         return [
+            \Thallo\Core\Content\Http\Controllers\DocsSetupController::class => [
+                'class' => \Thallo\Core\Content\Http\Controllers\DocsSetupController::class,
+                'shared' => true,
+                'autowire' => true,
+            ],
             \Thallo\Core\Content\Http\Controllers\PatternController::class => [
                 'class' => \Thallo\Core\Content\Http\Controllers\PatternController::class,
                 'shared' => true,

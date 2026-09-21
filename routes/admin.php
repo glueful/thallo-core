@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Thallo\Core\Content\Http\Controllers\BlockMigrationController;
 use Thallo\Core\Content\Http\Controllers\BlockTypeController;
+use Thallo\Core\Content\Http\Controllers\DocsSetupController;
 use Thallo\Core\Content\Http\Controllers\PatternController;
 use Thallo\Core\Content\Http\Controllers\StyleClassController;
 use Thallo\Core\Content\Http\Controllers\ContentTypeController;
@@ -123,6 +124,11 @@ $router->group(['prefix' => '/v1/admin'], function (Router $router): void {
         // content; inserting a pattern is an ordinary page edit.
         $router->get('/patterns', [PatternController::class, 'index'])
         ->middleware('content_permission:content.view');
+
+        // "Set up documentation" (Settings › Import / Export): makes a content type and changes a
+        // site setting, so it asks for what both of those ask for.
+        $router->post('/docs/setup', [DocsSetupController::class, 'store'])
+        ->middleware('content_permission:content.manage');
 
         $router->post('/block-types/{slug}/instance', [BlockTypeController::class, 'instance'])
         ->middleware('content_permission:content.edit');
