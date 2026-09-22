@@ -2294,6 +2294,19 @@ final class CoreServiceProvider extends ServiceProvider
             $this->mergeConfig($name, $defaults);
         }
 
+        // Export results are recorded on the `local` disk (import_export.result_disk) and read
+        // back through it, but no storage config defined one, so every Download failed. A site's
+        // own `local` disk, or another result_disk, still wins: defaults merge under its config.
+        $this->mergeConfig('storage', [
+            'disks' => [
+                'local' => [
+                    'driver' => 'local',
+                    'root' => rtrim($context->getBasePath(), '/') . '/storage',
+                    'visibility' => 'private',
+                ],
+            ],
+        ]);
+
         // DI bindings are contributed declaratively via services(). The first-run commands
         // register HERE, not in boot(): boot() needs a reachable database, and in production a
         // provider boot failure is logged and skipped — commands registered there vanish exactly

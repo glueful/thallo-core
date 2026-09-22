@@ -16,6 +16,9 @@ use Glueful\Extensions\ImportExport\Support\ExportBatchResult;
 use Glueful\Extensions\ImportExport\Support\ExportContext;
 use Glueful\Extensions\ImportExport\Support\ExportOptions;
 use Glueful\Extensions\ImportExport\Support\ExportPlan;
+use Glueful\Storage\StorageManager;
+
+use function config;
 
 final class ContentExporter implements ExporterInterface
 {
@@ -32,6 +35,7 @@ final class ContentExporter implements ExporterInterface
     public function __construct(
         private readonly ApplicationContext $context,
         private readonly Connection $db,
+        private readonly StorageManager $storage,
     ) {
     }
 
@@ -70,13 +74,28 @@ final class ContentExporter implements ExporterInterface
     {
         $records = $this->windowedRecords($batch->offset, $batch->limit);
         $path = $this->resultPath($context->jobUuid, $batch->sequence);
-        $absolute = $this->context->getBasePath() . '/storage/' . $path;
-        $directory = dirname($absolute);
-        if (!is_dir($directory) && !mkdir($directory, 0770, true) && !is_dir($directory)) {
-            throw new \RuntimeException(sprintf('Unable to create export directory "%s".', $directory));
+        // The job records its result on import_export.result_disk, and Download reads it back
+        // through that disk, so the file is written there too.
+        $tmp = tempnam(sys_get_temp_dir(), 'thallo-export-');
+        if ($tmp === false) {
+            throw new \RuntimeException('Unable to create a temporary export file.');
         }
-
-        (new NdjsonWriter())->write($absolute, $records);
+        try {
+            (new NdjsonWriter())->write($tmp, $records);
+            $stream = fopen($tmp, 'rb');
+            if ($stream === false) {
+                throw new \RuntimeException('Unable to read the temporary export file.');
+            }
+            try {
+                $this->storage->putStream($path, $stream, $this->resultDisk());
+            } finally {
+                if (is_resource($stream)) {
+                    fclose($stream);
+                }
+            }
+        } finally {
+            @unlink($tmp);
+        }
 
         return new ExportBatchResult(
             processedRecords: count($records),
@@ -261,6 +280,11 @@ final class ContentExporter implements ExporterInterface
         // UNIQUE and rows outlive the job, so a deterministic uuid made the SECOND snapshot
         // export collide on its first batch.
         return Utils::generateNanoID(12);
+    }
+
+    private function resultDisk(): string
+    {
+        return (string) config($this->context, 'import_export.result_disk', 'local');
     }
 
     private function resultPath(string $jobUuid, int $sequence): string
