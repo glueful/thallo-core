@@ -375,7 +375,28 @@ final class CoreServiceProvider extends ServiceProvider
                 $bind(\Thallo\Core\Account\AppStorefrontAccountRecovery::class),
             \Thallo\Contracts\Account\AccountNavigationRegistry::class =>
                 $bind(\Thallo\Core\Account\InMemoryAccountNavigationRegistry::class),
+            \Thallo\Contracts\Account\StorefrontTwoFactor::class => [
+                'factory' => [self::class, 'makeStorefrontTwoFactor'],
+                'shared' => true,
+            ],
         ];
+    }
+
+    /**
+     * The storefront's second sign-in step over the users extension's two-factor service, which
+     * is registered only while that extension is enabled; without it nothing can be verified.
+     */
+    public static function makeStorefrontTwoFactor(
+        ContainerInterface $container,
+    ): \Thallo\Core\Account\AppStorefrontTwoFactor {
+        $service = 'Glueful\\Extensions\\Users\\TwoFactor\\TwoFactorService';
+        if (!$container->has($service)) {
+            return new \Thallo\Core\Account\AppStorefrontTwoFactor(null);
+        }
+
+        return new \Thallo\Core\Account\AppStorefrontTwoFactor(
+            static fn (string $token, string $code): array => $container->get($service)->verify($token, $code)
+        );
     }
 
     /** @return array<string, array<string, mixed>> */
