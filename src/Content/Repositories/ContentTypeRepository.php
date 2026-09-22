@@ -46,16 +46,17 @@ final class ContentTypeRepository
         if ($current === null) {
             throw new SchemaParseException("content type {$uuid} not found");
         }
-        // V1 content models are field-append-only: deleting or retyping a field is rejected
-        // here (renames surface as a delete + add). Migrating existing draft/published content
-        // across such a change is a backfill feature planned for V1.x/V2; until then the safe
-        // workaround is to add a new field and leave the old one in place. See V1_DESIGN §1.
+        // This save is additive: deleting or retyping a field is refused here (a rename
+        // arrives as a delete + add). Deletes and renames go through a schema migration
+        // (MigrationService), which flips the schema and backfills stored content; a
+        // retype has no migration op, so the way through is a new field.
         $destructive = $this->destructiveChanges((array) $current['schema'], $parsed->toArray());
         if ($destructive !== []) {
             throw new SchemaParseException(
-                'destructive schema changes (delete/retype a field) are not supported in V1 — '
-                . 'add a new field instead; migrating existing content is planned for a later '
-                . 'release. Offending field(s): ' . implode(', ', $destructive)
+                'This save only adds fields. Delete or rename a field with a schema migration '
+                . '(POST /content-types/{slug}/migrations), which also moves the stored content; '
+                . 'a field cannot be retyped, so add a new one instead. Offending field(s): '
+                . implode(', ', $destructive)
             );
         }
         $this->db->table('content_types')->where('uuid', '=', $uuid)->update([
