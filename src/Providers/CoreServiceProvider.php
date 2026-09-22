@@ -2222,6 +2222,25 @@ final class CoreServiceProvider extends ServiceProvider
     /** Config files that ship as core/config DEFAULTS (merged below; the root config/ overrides). */
     private const CORE_CONFIG = ['thallo', 'forms', 'signup', 'theme', 'import_export'];
 
+    /**
+     * The admin's import upload writes to the `uploads` storage disk, and an import job reads its
+     * file back through `import_export.source_roots.uploads`. The core config file cannot name that
+     * root — it lives under vendor/ on an install, and a path built from it pointed there, so every
+     * admin-started import failed to find its file — but the disk's own root is known here. A site
+     * that sets the root itself still wins: defaults merge under the site's config.
+     *
+     * @param array<string,mixed> $defaults
+     * @return array<string,mixed>
+     */
+    private static function withUploadsRoot(array $defaults, ApplicationContext $context): array
+    {
+        $root = config($context, 'storage.disks.uploads.root');
+        if (is_string($root) && $root !== '') {
+            $defaults['source_roots'] = ['uploads' => rtrim($root, '/')] + (array) ($defaults['source_roots'] ?? []);
+        }
+        return $defaults;
+    }
+
     public function register(ApplicationContext $context): void
     {
         // Thallo's configuration ships as DEFAULTS from core/config: the operator's config/
@@ -2232,6 +2251,9 @@ final class CoreServiceProvider extends ServiceProvider
         foreach (self::CORE_CONFIG as $name) {
             /** @var array<string,mixed> $defaults */
             $defaults = require self::corePath("config/{$name}.php");
+            if ($name === 'import_export') {
+                $defaults = self::withUploadsRoot($defaults, $context);
+            }
             $this->mergeConfig($name, $defaults);
         }
 

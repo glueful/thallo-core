@@ -4,12 +4,11 @@
  * Import/Export defaults (shadows glueful/import-export's own config so a new key in a new
  * release reaches every install).
  *
- * `source_roots` is deliberately EMPTY here. The admin's import upload writes to the site's
- * storage/uploads, and the import service takes a root as an absolute path — which only a file
- * that lives in the site can compute. This file ships inside the thallo-core package, at
- * vendor/glueful/thallo-core/config/ on an install: a path built from __DIR__ here pointed into
- * vendor/, and every admin-started import failed to find its file. The site's own
- * config/import_export.php (shipped by the skeleton) sets the root; it wins key by key.
+ * `source_roots` is deliberately EMPTY here: this file ships inside the thallo-core package, at
+ * vendor/glueful/thallo-core/config/ on an install, and cannot know where the site is. A path built
+ * from __DIR__ here pointed into vendor/, and every admin-started import failed to find its file.
+ * CoreServiceProvider fills the `uploads` root from the uploads disk's own root when it merges
+ * these defaults; a site that sets it in its config/import_export.php still wins.
  */
 
 declare(strict_types=1);
