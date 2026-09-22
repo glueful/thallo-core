@@ -17,4 +17,5 @@ enum FieldType: string
     case Json = 'json';
     case Blocks = 'blocks';
     case Token = 'token';
+    case Box = 'box';
 }
