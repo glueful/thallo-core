@@ -9,6 +9,7 @@ use Thallo\Core\Content\Http\DTOs\ScheduleData;
 use Thallo\Core\Content\Localization\ContentLocaleService;
 use Thallo\Core\Content\Repositories\EntryRepository;
 use Thallo\Core\Content\Repositories\ScheduleRepository;
+use Thallo\Core\Content\Scheduling\SchedulerHeartbeat;
 use Thallo\Core\Http\DTOs\ErrorResponse;
 use Thallo\Core\Support\ActorHelper;
 use Glueful\Http\Response;
@@ -22,6 +23,7 @@ final class ScheduleController
         private readonly ScheduleRepository $schedules,
         private readonly EntryRepository $entries,
         private readonly ContentLocaleService $locales,
+        private readonly SchedulerHeartbeat $heartbeat,
     ) {
     }
 
@@ -65,7 +67,15 @@ final class ScheduleController
     #[ApiResponse(200, description: 'Schedules retrieved.')]
     public function index(Request $request, string $uuid): Response
     {
-        return Response::success(['schedules' => $this->schedules->forEntry($uuid)], 'Schedules retrieved.');
+        // `scheduler.ticking` lets the editor warn that a pending schedule cannot run: every
+        // schedule waits on the cron tick, and a missing cron entry is otherwise invisible here.
+        return Response::success([
+            'schedules' => $this->schedules->forEntry($uuid),
+            'scheduler' => [
+                'ticking' => $this->heartbeat->check()['status'] === 'ok',
+                'last_tick' => $this->heartbeat->lastTick(),
+            ],
+        ], 'Schedules retrieved.');
     }
 
     #[ApiOperation(summary: 'Cancel a pending schedule', tags: ['Thallo Admin'])]
