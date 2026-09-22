@@ -2231,7 +2231,7 @@ final class CoreServiceProvider extends ServiceProvider
     }
 
     /** Config files that ship as core/config DEFAULTS (merged below; the root config/ overrides). */
-    private const CORE_CONFIG = ['thallo', 'forms', 'signup', 'theme', 'import_export'];
+    private const CORE_CONFIG = ['thallo', 'forms', 'signup', 'theme', 'import_export', 'permissions'];
 
     /**
      * The admin's import upload writes to the `uploads` storage disk, and an import job reads its
