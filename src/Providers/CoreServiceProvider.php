@@ -1213,6 +1213,11 @@ final class CoreServiceProvider extends ServiceProvider
                 'shared' => true,
                 'autowire' => true,
             ],
+            \Thallo\Contracts\Search\BlockTextExtractor::class => [
+                'class' => \Thallo\Core\Content\Blocks\EngineBlockTextExtractor::class,
+                'shared' => true,
+                'autowire' => true,
+            ],
             \Thallo\Contracts\Settings\SiteNameProvider::class => [
                 'class'    => \Thallo\Core\Settings\EngineSiteNameProvider::class,
                 'shared'   => true,
