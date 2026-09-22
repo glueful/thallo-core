@@ -69,6 +69,48 @@ final class FormSubmissionRepository
         $this->db->table(self::TABLE)->where('uuid', '=', $uuid)->delete();
     }
 
+    /**
+     * Delete the named submissions; unknown uuids are ignored.
+     *
+     * @param list<string> $uuids
+     * @return int how many were deleted
+     */
+    public function deleteMany(array $uuids): int
+    {
+        if ($uuids === []) {
+            return 0;
+        }
+        return (int) $this->db->table(self::TABLE)->whereIn('uuid', $uuids)->delete();
+    }
+
+    /** Retention: delete every submission received before `$cutoff` (UTC). */
+    public function deleteOlderThan(string $cutoff): int
+    {
+        return (int) $this->db->table(self::TABLE)->where('submitted_at', '<', $cutoff)->delete();
+    }
+
+    /**
+     * Each form that has submissions, with its latest name and how many it holds.
+     *
+     * @return list<array{form_key: string, form_name: string, count: int}>
+     */
+    public function forms(): array
+    {
+        $rows = $this->db->table(self::TABLE)
+            ->select(['form_key', 'form_name', 'submitted_at'])
+            ->orderBy('submitted_at', 'DESC')
+            ->get();
+        $forms = [];
+        foreach ($rows as $row) {
+            $key = (string) $row['form_key'];
+            $forms[$key] ??= ['form_key' => $key, 'form_name' => (string) $row['form_name'], 'count' => 0];
+            $forms[$key]['count']++;
+        }
+        ksort($forms);
+
+        return array_values($forms);
+    }
+
     public function unreadCount(): int
     {
         return (int) $this->db->table(self::TABLE)->where('status', '=', 'unread')->count();

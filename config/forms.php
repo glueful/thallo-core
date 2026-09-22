@@ -13,4 +13,7 @@ return [
     // Fallback recipient when a block leaves recipient empty. Empty => forms with
     // no block recipient are un-routable (sealer refuses).
     'default_recipient'  => (string) env('FORMS_DEFAULT_RECIPIENT', ''),
+    // Days a submission is kept before the scheduler's form_submissions_prune job deletes it.
+    // 0 keeps them for good.
+    'retention_days'     => (int) env('FORMS_RETENTION_DAYS', 0),
 ];

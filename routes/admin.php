@@ -297,6 +297,12 @@ $router->group(['prefix' => '/v1/admin'], function (Router $router): void {
         $router->get('/form-submissions/export.csv', [FormSubmissionsController::class, 'export'])
         ->middleware('content_permission:content.manage');
 
+        $router->get('/form-submissions/forms', [FormSubmissionsController::class, 'forms'])
+        ->middleware('content_permission:content.manage');
+
+        $router->post('/form-submissions/delete', [FormSubmissionsController::class, 'destroyMany'])
+        ->middleware('content_permission:content.manage');
+
         $router->get('/form-submissions/{uuid}', [FormSubmissionsController::class, 'show'])
         ->middleware('content_permission:content.manage');
 

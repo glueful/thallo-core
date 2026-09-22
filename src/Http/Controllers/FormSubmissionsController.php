@@ -107,6 +107,44 @@ final class FormSubmissionsController
         return Response::success(['uuid' => $uuid], 'Submission deleted.');
     }
 
+    /** Bulk delete refuses more than this many at once. */
+    private const BULK_LIMIT = 500;
+
+    /** POST /v1/admin/form-submissions/delete {uuids: [...]} */
+    #[ApiOperation(
+        summary: 'Delete several submissions',
+        description: 'Permanently removes the named submissions (up to 500); unknown uuids are '
+            . 'ignored. Requires `content.manage`.',
+        tags: ['Thallo Forms'],
+    )]
+    #[ApiResponse(200, description: 'Deleted; `deleted` is how many.')]
+    #[ApiResponse(422, description: 'No list of uuids, or more than 500.')]
+    public function destroyMany(Request $request): Response
+    {
+        $body = json_decode((string) $request->getContent(), true);
+        $uuids = is_array($body) && is_array($body['uuids'] ?? null)
+            ? array_values(array_unique(array_filter($body['uuids'], 'is_string')))
+            : [];
+        if ($uuids === [] || count($uuids) > self::BULK_LIMIT) {
+            return Response::validation(['uuids' => 'Name between 1 and ' . self::BULK_LIMIT . ' submissions.']);
+        }
+
+        return Response::success(['deleted' => $this->repository->deleteMany($uuids)], 'Submissions deleted.');
+    }
+
+    /** GET /v1/admin/form-submissions/forms */
+    #[ApiOperation(
+        summary: 'Forms with submissions',
+        description: 'Each form that has submissions: its key, latest name and count, for the '
+            . 'per-form filter. Requires `content.manage`.',
+        tags: ['Thallo Forms'],
+    )]
+    #[ApiResponse(200, description: 'The forms.')]
+    public function forms(): Response
+    {
+        return Response::success(['forms' => $this->repository->forms()], 'Forms retrieved.');
+    }
+
     /** GET /v1/admin/form-submissions/unread-count */
     #[ApiOperation(
         summary: 'Unread submission count',
