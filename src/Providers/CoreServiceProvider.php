@@ -2509,6 +2509,7 @@ final class CoreServiceProvider extends ServiceProvider
         // commands() is a console-only no-op in the HTTP phase (runningInConsole() guards it).
         $this->commands([
             ResyncCommand::class,
+            \Thallo\Core\Content\Console\MediaUsageRebuildCommand::class,
             PruneVersionsCommand::class,
             \Thallo\Core\Content\Console\DocsSetupCommand::class,
             PolicyManifestCommand::class,

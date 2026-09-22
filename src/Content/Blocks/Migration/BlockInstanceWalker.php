@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Thallo\Core\Content\Blocks\Migration;
 
+use Thallo\Core\Content\Repositories\ReferenceProjectionRepository;
 use Thallo\Core\Content\Blocks\BlockDepth;
 use Thallo\Core\Content\Blocks\BlockTypeRepository;
 use Thallo\Core\Content\Schema\ContentTypeSchema;
@@ -40,6 +41,38 @@ final class BlockInstanceWalker
             $this->collectSlugs($fields[$name] ?? null, 1, $found);
         }
         return array_keys($found);
+    }
+
+    /**
+     * The blob uuids in the asset fields of every block instance (nested, capped), read the way
+     * the reference projection reads a top-level asset field.
+     *
+     * @param array<string,mixed> $fields
+     * @return list<string>
+     */
+    public function assetsIn(array $fields, ContentTypeSchema $entrySchema): array
+    {
+        $found = [];
+        foreach ($this->blocksFieldNames($entrySchema) as $name) {
+            $this->collectAssets($fields[$name] ?? null, 1, $found);
+        }
+        return array_keys($found);
+    }
+
+    /** @param array<string,bool> $found */
+    private function collectAssets(mixed $list, int $depth, array &$found): void
+    {
+        foreach ($this->items($list, $depth) as [, $data, $schema]) {
+            foreach ($schema->fields() as $field) {
+                if ($field->type === 'asset') {
+                    foreach (ReferenceProjectionRepository::targets($data[$field->name] ?? null) as $blob) {
+                        $found[$blob] = true;
+                    }
+                } elseif ($field->type === 'blocks') {
+                    $this->collectAssets($data[$field->name] ?? null, $depth + 1, $found);
+                }
+            }
+        }
     }
 
     /**

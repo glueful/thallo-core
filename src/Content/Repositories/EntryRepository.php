@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Thallo\Core\Content\Repositories;
 
+use Thallo\Core\Content\Blocks\Migration\BlockInstanceWalker;
 use Thallo\Core\Content\Events\AssetAttached;
 use Thallo\Core\Content\Events\AssetDetached;
 use Thallo\Core\Content\Events\EntryCreated;
@@ -27,6 +28,8 @@ final class EntryRepository
         private readonly LocaleFieldSeeder $seeder = new LocaleFieldSeeder(),
         /** Style class references a save introduces are checked at the write (spec §4.5); null = unchecked. */
         private readonly ?\Thallo\Core\Content\Style\Classes\StyleClassReferenceGuard $guard = null,
+        /** Finds images placed inside blocks; without it only top-level asset fields count. */
+        private readonly ?BlockInstanceWalker $blocks = null,
     ) {
     }
 
@@ -167,7 +170,8 @@ final class EntryRepository
 
     /**
      * The deduped set of blob uuids referenced by the entry's asset-type fields in the
-     * given draft fields. Asset-type fields are resolved from the content type schema;
+     * given draft fields, and by the asset fields of the blocks inside them. Asset-type
+     * fields are resolved from the content type schema;
      * each value is normalized to a list of uuids via the same logic the reference
      * projection uses, so asset-target parsing stays identical across both.
      *
@@ -192,6 +196,10 @@ final class EntryRepository
             foreach (ReferenceProjectionRepository::targets($fields[$f->name] ?? null) as $blob) {
                 $targets[$blob] = true;
             }
+        }
+        // Images inside blocks, where the Design view puts them, are the entry's too.
+        foreach ($this->blocks?->assetsIn($fields, $schema) ?? [] as $blob) {
+            $targets[$blob] = true;
         }
         return array_keys($targets);
     }
@@ -588,9 +596,12 @@ final class EntryRepository
     }
 
     /**
+     * The blobs an entry's drafts reference, in any language: its asset fields and the asset fields
+     * of the blocks inside them. The "Used in" index is kept to exactly this.
+     *
      * @return list<string>
      */
-    private function draftAssetTargetsForEntry(string $entryUuid): array
+    public function draftAssetTargetsForEntry(string $entryUuid): array
     {
         $rows = $this->db->table('entry_drafts')
             ->where('entry_uuid', '=', $entryUuid)
