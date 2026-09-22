@@ -85,8 +85,6 @@ return [
         'api_base' => env('ADMIN_API_BASE', '/v1/admin'),
         // The frontend preview URL template; the SPA appends/embeds the minted token.
         'site_preview_url' => env('SITE_PREVIEW_URL', ''),
-        // Phase 1 is en-only in the UI; locale stays in the data model.
-        'default_locale' => env('ADMIN_DEFAULT_LOCALE', (string) env('I18N_DEFAULT_LOCALE', 'en')),
         // Whether the default first-party admin SPA is mounted at /admin. The bundled admin is a
         // REPLACEABLE client of the /v1/admin API — set this false to bring your own (point
         // bundle_path at your build, or disable and register a different mount in a provider).

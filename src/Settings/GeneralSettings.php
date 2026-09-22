@@ -20,7 +20,7 @@ final class GeneralSettings
     private const DEFS = [
         'site_name'         => ['thallo.site_name', 'string', 'Thallo'],
         'site_preview_url'  => ['thallo.admin.site_preview_url', 'string', ''],
-        'default_locale'    => ['thallo.admin.default_locale', 'string', 'en'],
+        'default_locale'    => ['i18n.default_locale', 'string', 'en'],
         'default_per_page'  => ['thallo.delivery.default_per_page', 'int', 20],
         'max_per_page'      => ['thallo.delivery.max_per_page', 'int', 100],
         'cache_ttl'         => ['thallo.delivery.cache_ttl', 'int', 60],
@@ -66,6 +66,8 @@ final class GeneralSettings
         private readonly ApplicationContext $context,
         private readonly SettingsStore $store,
         private readonly \Thallo\Core\Capabilities\CapabilityStateStore $capabilityState,
+        /** The default language's home; null without the i18n extension (config applies). */
+        private readonly ?\Glueful\Extensions\I18n\Services\LocaleManager $locales = null,
     ) {
     }
 
@@ -241,6 +243,11 @@ final class GeneralSettings
                     $this->store->forget($key);
                     continue;
                 }
+                // The default locale IS the default language: no copy of it is stored here.
+                if ($key === 'default_locale' && $this->locales !== null) {
+                    $this->makeDefaultLanguage((string) $partial[$key]);
+                    continue;
+                }
                 // The search switch is capability state, not a settings row: it goes through
                 // the switchboard (which also retires the legacy search_enabled system key).
                 if ($key === 'search_enabled') {
@@ -253,9 +260,24 @@ final class GeneralSettings
         $this->store->putMany($pairs);
     }
 
+    /** Makes an enabled language the site's default; any other code is refused. */
+    private function makeDefaultLanguage(string $code): void
+    {
+        $row = $this->locales?->find($code);
+        if (!is_array($row) || !(bool) ($row['enabled'] ?? false)) {
+            throw new \InvalidArgumentException("'{$code}' is not an enabled language, so it cannot be the default.");
+        }
+        $this->locales?->update($code, ['is_default' => true]);
+        $this->store->forget('default_locale');
+    }
+
     private function value(string $key): mixed
     {
         [$cfg, $type, $def] = self::DEFS[$key];
+        // The default locale is the default language (Settings › Languages), not a row of its own.
+        if ($key === 'default_locale' && $this->locales !== null) {
+            return $this->locales->default();
+        }
         // The search switch reads through the one switchboard authority.
         if ($key === 'search_enabled') {
             return $this->capabilityState->requested('thallo.search');

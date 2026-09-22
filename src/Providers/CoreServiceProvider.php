@@ -2479,8 +2479,36 @@ final class CoreServiceProvider extends ServiceProvider
         return $declared;
     }
 
+    /**
+     * The default language as stored (Settings › Languages), or null when none is: config/i18n.php
+     * is only the seed an install starts from. Read at boot so every `i18n.default_locale` reader
+     * agrees with the admin.
+     */
+    public static function storedDefaultLocale(ContainerInterface $container): ?string
+    {
+        $manager = \Glueful\Extensions\I18n\Contracts\LocaleManagerInterface::class;
+        if (!$container->has($manager)) {
+            return null;
+        }
+        foreach ($container->get($manager)->all() as $row) {
+            if (is_array($row) && (bool) ($row['is_default'] ?? false) && is_string($row['code'] ?? null)) {
+                return $row['code'];
+            }
+        }
+        return null;
+    }
+
     public function boot(ApplicationContext $context): void
     {
+        try {
+            $stored = self::storedDefaultLocale($context->getContainer());
+            if ($stored !== null && $stored !== config($context, 'i18n.default_locale')) {
+                $context->overrideConfig('i18n.default_locale', $stored);
+            }
+        } catch (\Throwable) {
+            // No database yet (first run, provisioning): the config seed stands.
+        }
+
         // Thallo's own migrations are declared by core/composer.json's manifest (two lanes,
         // `glueful/thallo-core` and `glueful/thallo-core:dependent`, each naming the source every
         // earlier database recorded its files under as previous_sources), so provision sees them

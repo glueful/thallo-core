@@ -116,6 +116,16 @@ final class GeneralSettingsController
         $identityBefore = $this->identity();
         $searchBefore = $this->settings->searchEnabled();
 
+        if ($input->default_locale !== null && $input->default_locale !== $this->settings->defaultLocale()) {
+            // Saved separately so a language that cannot be the default is refused before anything
+            // else is written.
+            try {
+                $this->settings->save(['default_locale' => $input->default_locale]);
+            } catch (\InvalidArgumentException $e) {
+                return Response::validation(['default_locale' => $e->getMessage()]);
+            }
+        }
+
         $this->settings->save([
             'theme' => $input->theme,
             // The one spelling the stylesheet writes (#ABC → #aabbcc); validated above.
@@ -130,7 +140,6 @@ final class GeneralSettingsController
             'theme_background' => $input->theme_background,
             'site_name' => $input->site_name,
             'site_preview_url' => $input->site_preview_url,
-            'default_locale' => $input->default_locale,
             'default_per_page' => $input->default_per_page,
             'max_per_page' => $input->max_per_page,
             'cache_ttl' => $input->cache_ttl,
