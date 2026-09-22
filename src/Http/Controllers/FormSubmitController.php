@@ -72,8 +72,12 @@ final class FormSubmitController
         $sourceUrl = $this->safeReturn($request->request->get('_return'))
             ?? (is_string($request->headers->get('Referer')) ? $request->headers->get('Referer') : null);
 
-        // Delivery mode is sealed (server-side only): email_only skips storage entirely.
-        if ($descriptor->shouldStore()) {
+        // Delivery mode is sealed (server-side only). "Email only" means the notification is the
+        // one copy: so it is sent first, and a submission whose mail did not go is stored after
+        // all — kept in the admin rather than lost without a trace.
+        $emailOnly = !$descriptor->shouldStore();
+        $mailed = $emailOnly ? $this->notifier->notify($descriptor, $values, $sourceUrl) : false;
+        if (!$emailOnly || !$mailed) {
             $this->submissions->store(new FormSubmission(
                 uuid: '',
                 formKey: $descriptor->formKey,
@@ -88,10 +92,10 @@ final class FormSubmitController
                 submittedAt: gmdate('Y-m-d H:i:s'),
             ));
         }
-
-        // Best-effort email (spec §10): never fatal. For email_only this is the only sink,
-        // so it still runs even though nothing was stored.
-        $this->notifier->notify($descriptor, $values, $sourceUrl);
+        if (!$emailOnly) {
+            // Best-effort (spec §10): the submission is stored whatever the mail does.
+            $this->notifier->notify($descriptor, $values, $sourceUrl);
+        }
 
         return $this->respond($request, ok: true, descriptor: $descriptor);
     }

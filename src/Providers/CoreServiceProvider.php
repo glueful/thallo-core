@@ -26,6 +26,8 @@ use Thallo\Core\Content\Forms\DefaultFormSealer;
 use Thallo\Core\Content\Forms\FormFieldDerivation;
 use Thallo\Core\Content\Forms\FormMailSender;
 use Thallo\Core\Content\Forms\FormNotifier;
+use Glueful\Notifications\Services\NotificationService;
+use Thallo\Core\Content\Forms\NotificationFormMailSender;
 use Thallo\Core\Content\Forms\FormSubmissionRepository;
 use Thallo\Core\Content\Forms\Spam\DefaultFormGuard;
 use Thallo\Core\Content\Forms\Spam\FormSubmissionGuard;
@@ -482,8 +484,12 @@ final class CoreServiceProvider extends ServiceProvider
 
     public static function makeFormNotifier(ContainerInterface $container): FormNotifier
     {
-        // FormMailSender is a soft seam: unbound → the notifier no-ops (spec §10).
+        // An app may bind its own FormMailSender; otherwise the notification service's email
+        // channel sends it — the default install used to bind nothing and send nothing.
         $sender = $container->has(FormMailSender::class) ? $container->get(FormMailSender::class) : null;
+        if (!$sender instanceof FormMailSender && $container->has(NotificationService::class)) {
+            $sender = new NotificationFormMailSender($container->get(NotificationService::class));
+        }
         return new FormNotifier(
             $sender instanceof FormMailSender ? $sender : null,
             $container->get(LoggerInterface::class),

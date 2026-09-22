@@ -8,10 +8,9 @@ use Psr\Log\LoggerInterface;
 use Throwable;
 
 /**
- * Best-effort email notification for a stored submission (form-block spec §10). Every
- * failure mode is non-fatal: no bound sender → no-op; an invalid recipient → skip; a
- * throwing sender → logged and swallowed. The submission is already persisted by the
- * time this runs, so a mail outage never loses data.
+ * Best-effort email notification for a submission (form-block spec §10). Every failure mode is
+ * non-fatal: no bound sender, an invalid recipient or a throwing sender only return false. The
+ * result is what the caller needs: an "email only" form keeps the submission when nothing went.
  */
 final class FormNotifier
 {
@@ -23,28 +22,31 @@ final class FormNotifier
 
     /**
      * @param array<string,mixed> $values normalized submitted values keyed by field key
+     * @return bool whether the notification was handed off to the mail transport
      */
-    public function notify(FormDescriptor $descriptor, array $values, ?string $sourceUrl): void
+    public function notify(FormDescriptor $descriptor, array $values, ?string $sourceUrl): bool
     {
         if ($this->sender === null) {
-            return; // no email capability bound — storage is the source of truth
+            return false;
         }
         // Re-validate at send time (defense in depth; the seal already validated it).
         if (filter_var($descriptor->recipient, FILTER_VALIDATE_EMAIL) === false) {
             $this->logger->warning('form notification skipped: invalid recipient', [
                 'form_key' => $descriptor->formKey,
             ]);
-            return;
+            return false;
         }
 
         $subject = 'New ' . $descriptor->formName . ' submission';
         try {
             $this->sender->send($descriptor->recipient, $subject, $this->body($descriptor, $values, $sourceUrl));
+            return true;
         } catch (Throwable $e) {
             $this->logger->error('form notification failed', [
                 'form_key' => $descriptor->formKey,
                 'error' => $e->getMessage(),
             ]);
+            return false;
         }
     }
 
