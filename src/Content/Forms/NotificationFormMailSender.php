@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Thallo\Core\Content\Forms;
 
+use Thallo\Core\Support\EmailDelivery;
 use Glueful\Notifications\Contracts\Notifiable;
 use Glueful\Notifications\Services\NotificationService;
 
@@ -62,8 +63,7 @@ final class NotificationFormMailSender implements FormMailSender
             ['template_name' => 'default', 'message' => $body],
             ['channels' => ['email']],
         );
-        $email = is_array($result['channels']['email'] ?? null) ? $result['channels']['email'] : [];
-        if (($email['status'] ?? null) !== 'success') {
+        if (!EmailDelivery::delivered($result)) {
             throw new \RuntimeException('The form notification could not be delivered by email.');
         }
     }
