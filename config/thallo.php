@@ -1,7 +1,8 @@
 <?php
 
 return [
-    // Instance display name. Editable from Settings › General (writes SITE_NAME to .env).
+    // Instance display name, the seed for a fresh install. Settings › General › Site name stores its
+    // own value in the settings table, which wins once saved; SITE_NAME is only the fallback.
     'site_name' => env('SITE_NAME', 'Thallo'),
 
     // Glueful storage disk that backs media blob references (see docs/internal/V1_DESIGN.md §8).

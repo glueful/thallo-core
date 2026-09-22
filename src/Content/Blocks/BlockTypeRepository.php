@@ -14,11 +14,11 @@ use Glueful\Helpers\Utils;
 /**
  * The global block-type registry (block-builder spec §1–§2). Block types are reusable
  * mini-schemas: their `schema` is the same field-definition JSON content types use,
- * parsed through ContentTypeSchema with three EXTRA rules (assertBlockSchema): no
- * `blocks` fields (no nesting in v1), no `localized` fields (localization belongs to
- * the outer blocks field), no `filterable` fields (block data is never a filter
- * surface). Slugs are immutable after create — they are the blocks/{slug}.twig
- * template contract. Removal is DEACTIVATION only.
+ * parsed through ContentTypeSchema with two EXTRA rules (assertBlockSchema): no
+ * `localized` fields (localization belongs to the outer blocks field) and no
+ * `filterable` fields (block data is never a filter surface). A `blocks` field is
+ * allowed; nesting is capped on the data by BlockDepth::MAX. Slugs are immutable after
+ * create — they are the blocks/{slug}.twig template contract. Removal is DEACTIVATION only.
  */
 final class BlockTypeRepository
 {

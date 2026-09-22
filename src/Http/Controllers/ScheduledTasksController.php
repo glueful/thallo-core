@@ -75,9 +75,8 @@ final class ScheduledTasksController
         $params = isset($job['parameters']) && is_array($job['parameters']) ? $job['parameters'] : [];
         $queue = isset($job['queue']) && is_string($job['queue']) ? $job['queue'] : null;
 
-        // Enqueue (async) rather than run inline. QueueManager isn't container-registered; build it via
-        // the framework's factory. The default queue is `database`, so the job runs when a worker picks
-        // it up (it's queued immediately either way).
+        // Enqueue (async) rather than run inline, on the framework's default connection (`database`
+        // unless QUEUE_CONNECTION says otherwise), so the job runs when a worker picks it up.
         try {
             QueueManager::setContext($this->context);
             $jobId = QueueManager::createDefault()->push($handler, $params, $queue);

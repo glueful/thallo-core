@@ -5,8 +5,9 @@ declare(strict_types=1);
 namespace Thallo\Core\Content\Delivery;
 
 /**
- * Timestamp normalization shared by the delivery readers, so the delivery API's
- * `published_at` and search's `lastmod` always format DB timestamps identically.
+ * Timestamp normalization for the engine's content readers: the `lastmod` that search and the
+ * sitemap receive. The delivery API's `published_at` does not pass through here yet and is
+ * emitted as the database wrote it.
  */
 final class Timestamps
 {
