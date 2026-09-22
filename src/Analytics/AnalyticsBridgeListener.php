@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Thallo\Core\Analytics;
 
+use Thallo\Core\Capabilities\CapabilityStateStore;
 use Thallo\Core\Content\Events\BaseEntryEvent;
 use Thallo\Core\Content\Events\EntryCreated;
 use Thallo\Core\Content\Events\EntryDeleted;
@@ -24,15 +25,25 @@ use Thallo\Collections\Events\CollectionUpdated;
  * Bridges pack/content lifecycle events into analytics facts — the App-side seam so the pack stays
  * dependency-pure (it cannot reference thallo-collections or App content events). Mirrors
  * CollectionAuditListener.
+ *
+ * Wired at every boot and gated HERE, per event, on the live switchboard answer: the admin's
+ * Extensions › Capabilities row, else the config map. A boot-time gate could read only the config
+ * map (the capability is registered after this provider boots), so an admin switch-off never
+ * reached it. Analytics has no engine, so the requested state is the whole answer.
  */
 final class AnalyticsBridgeListener
 {
-    public function __construct(private readonly AnalyticsRecorder $recorder)
-    {
+    public function __construct(
+        private readonly AnalyticsRecorder $recorder,
+        private readonly CapabilityStateStore $capabilities,
+    ) {
     }
 
     public function __invoke(object $event): void
     {
+        if (!$this->capabilities->requested('thallo.analytics')) {
+            return;
+        }
         $ts = $event instanceof BaseEvent ? $event->getTimestamp() : microtime(true);
         $fact = match (true) {
             $event instanceof CollectionCreated =>

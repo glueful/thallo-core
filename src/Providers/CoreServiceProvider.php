@@ -2523,14 +2523,6 @@ final class CoreServiceProvider extends ServiceProvider
 
         $events = app($context, EventService::class);
 
-        // `CoreServiceProvider` (app provider) boots before `AnalyticsServiceProvider`
-        // (pack provider), so CapabilityRegistry::isEnabled() would return false for
-        // 'thallo.analytics' at this point (the capability is only registered during the pack's
-        // own boot()). Read the capabilities override config directly instead — same semantics as
-        // DefaultCapabilityRegistry::isEnabled() but without the "must be registered" prerequisite.
-        $capOverrides = (array) config($context, 'thallo.capabilities', []);
-        $analyticsOn = ($capOverrides['thallo.analytics'] ?? true) === true;
-
         // event class => list of listener service ids (lazy '@' form).
         //
         // PurgeCdnListener and ReindexSearchListener are CAPABILITY-GATED no-ops in a lean
@@ -2607,9 +2599,9 @@ final class CoreServiceProvider extends ServiceProvider
         // (class_exists) so removing the pack drops this wiring cleanly with no dangling reference.
         // CollectionAuditListener is unconditional (installed-gated only): a disabled-but-installed
         // analytics pack must still audit programmatic row mutations. AnalyticsBridgeListener is
-        // ENABLED-gated: disabling thallo.analytics hard-stops collection ingestion, consistent with
-        // the pack's auth listeners and the read API — no content or collection facts are written
-        // while the capability is off (spec §7).
+        // always wired and ENABLED-gated per event (it reads the live switchboard itself): disabling
+        // thallo.analytics, in the admin or the config map, hard-stops collection ingestion,
+        // consistent with the pack's auth listeners and the read API (spec §7).
         if (class_exists(CollectionRowCreated::class)) {
             $listeners[CollectionRowCreated::class] = [CollectionAuditListener::class];
             $listeners[CollectionRowUpdated::class] = [CollectionAuditListener::class];
@@ -2618,27 +2610,22 @@ final class CoreServiceProvider extends ServiceProvider
             $listeners[CollectionUpdated::class] = [CollectionAuditListener::class];
             $listeners[CollectionDropped::class] = [CollectionAuditListener::class];
 
-            if ($analyticsOn) {
-                $listeners[CollectionRowCreated::class][] = AnalyticsBridgeListener::class;
-                $listeners[CollectionRowUpdated::class][] = AnalyticsBridgeListener::class;
-                $listeners[CollectionRowDeleted::class][] = AnalyticsBridgeListener::class;
-                $listeners[CollectionCreated::class][] = AnalyticsBridgeListener::class;
-                $listeners[CollectionUpdated::class][] = AnalyticsBridgeListener::class;
-                $listeners[CollectionDropped::class][] = AnalyticsBridgeListener::class;
-            }
+            $listeners[CollectionRowCreated::class][] = AnalyticsBridgeListener::class;
+            $listeners[CollectionRowUpdated::class][] = AnalyticsBridgeListener::class;
+            $listeners[CollectionRowDeleted::class][] = AnalyticsBridgeListener::class;
+            $listeners[CollectionCreated::class][] = AnalyticsBridgeListener::class;
+            $listeners[CollectionUpdated::class][] = AnalyticsBridgeListener::class;
+            $listeners[CollectionDropped::class][] = AnalyticsBridgeListener::class;
         }
 
-        // Content entry events → analytics facts. The analytics bridge is ENABLED-gated: disabling
-        // thallo.analytics hard-stops content ingestion, consistent with the pack's auth listeners,
-        // the collection block above, and the read API (spec §7). The audit bridge (CollectionAuditListener)
-        // remains unconditional/installed-gated and is unaffected by this gate.
-        if ($analyticsOn) {
-            $listeners[EntryCreated::class][]    = AnalyticsBridgeListener::class;
-            $listeners[EntryUpdated::class][]    = AnalyticsBridgeListener::class;
-            $listeners[EntryDeleted::class][]    = AnalyticsBridgeListener::class;
-            $listeners[EntryPublished::class][]  = AnalyticsBridgeListener::class;
-            $listeners[EntryUnpublished::class][] = AnalyticsBridgeListener::class;
-        }
+        // Content entry events → analytics facts. The bridge gates itself per event on the live
+        // switchboard (see AnalyticsBridgeListener), so an admin switch-off stops content ingestion
+        // on the next event. The audit bridge (CollectionAuditListener) is unaffected.
+        $listeners[EntryCreated::class][]    = AnalyticsBridgeListener::class;
+        $listeners[EntryUpdated::class][]    = AnalyticsBridgeListener::class;
+        $listeners[EntryDeleted::class][]    = AnalyticsBridgeListener::class;
+        $listeners[EntryPublished::class][]  = AnalyticsBridgeListener::class;
+        $listeners[EntryUnpublished::class][] = AnalyticsBridgeListener::class;
 
         $listeners[DomainReverificationFailed::class][] = DomainReverificationAuditListener::class;
         $listeners[DomainRevoked::class][] = DomainReverificationAuditListener::class;
