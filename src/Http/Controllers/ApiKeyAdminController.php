@@ -72,7 +72,7 @@ final class ApiKeyAdminController
 
         $search = trim((string) ($query->q ?? ''));
         if ($search !== '') {
-            $builder->where('name', 'LIKE', '%' . $search . '%');
+            $builder->whereContains('name', $search);
         }
 
         /** @var array{data:array<int,array<string,mixed>>,total:int,current_page:int,per_page:int} $result */

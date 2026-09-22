@@ -57,7 +57,7 @@ final class MediaAdminController
 
         $search = trim((string) $request->query->get('q', ''));
         if ($search !== '') {
-            $query->where('b.name', 'LIKE', '%' . $search . '%');
+            $query->whereContains('b.name', $search);
         }
 
         $query->orderBy('b.created_at', 'desc');
