@@ -375,6 +375,8 @@ final class CoreServiceProvider extends ServiceProvider
             ],
             \Thallo\Contracts\Account\StorefrontAccountRecovery::class =>
                 $bind(\Thallo\Core\Account\AppStorefrontAccountRecovery::class),
+            \Thallo\Contracts\Account\StorefrontAccountProfile::class =>
+                $bind(\Thallo\Core\Account\AppStorefrontAccountProfile::class),
             \Thallo\Contracts\Account\AccountNavigationRegistry::class =>
                 $bind(\Thallo\Core\Account\InMemoryAccountNavigationRegistry::class),
             \Thallo\Contracts\Account\StorefrontTwoFactor::class => [

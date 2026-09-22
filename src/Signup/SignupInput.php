@@ -32,8 +32,8 @@ final class SignupInput
             $errors['email'] = 'Enter a valid email address.';
         }
         $password = is_string($input['password'] ?? null) ? $input['password'] : '';
-        if (strlen($password) < 8) {
-            $errors['password'] = 'Password must contain at least 8 characters.';
+        if (($problem = self::passwordProblem($password)) !== null) {
+            $errors['password'] = $problem;
         }
         // First and last name are separate fields, each run through the same name() helper the
         // member form uses, so one validator owns the shape.
@@ -68,8 +68,8 @@ final class SignupInput
             $errors['username'] = 'Username must contain 3 to 30 characters.';
         }
         $password = is_string($input['password'] ?? null) ? $input['password'] : '';
-        if (strlen($password) < 8) {
-            $errors['password'] = 'Password must contain at least 8 characters.';
+        if (($problem = self::passwordProblem($password)) !== null) {
+            $errors['password'] = $problem;
         }
         $first = self::name($input['first_name'] ?? null, 'first_name', $errors);
         $last = self::name($input['last_name'] ?? null, 'last_name', $errors);
@@ -104,6 +104,30 @@ final class SignupInput
     }
 
     /** @param array<string,string> $errors */
+    /** The one password rule every account form applies; null when the password passes. */
+    public static function passwordProblem(string $password): ?string
+    {
+        return strlen($password) < 8 ? 'Password must contain at least 8 characters.' : null;
+    }
+
+    /**
+     * A customer's first and last name, validated as registration validates them.
+     *
+     * @param array<string,mixed> $input {first_name, last_name}
+     * @return array{first_name:string,last_name:string}
+     */
+    public static function names(array $input): array
+    {
+        $errors = [];
+        $first = self::name($input['first_name'] ?? null, 'first_name', $errors);
+        $last = self::name($input['last_name'] ?? null, 'last_name', $errors);
+        if ($errors !== []) {
+            throw new SignupException('Name is invalid.', 422, $errors);
+        }
+
+        return ['first_name' => $first, 'last_name' => $last];
+    }
+
     private static function name(mixed $value, string $field, array &$errors): string
     {
         $name = trim(is_string($value) ? $value : '');
