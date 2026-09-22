@@ -78,7 +78,14 @@ final class CreateAdminCommand extends BaseCommand
         $setup->install($siteName, $adminEmail, $adminPassword, $locale);
 
         $baseUrl = rtrim((string) config($this->getContext(), 'app.urls.base', 'http://localhost'), '/');
+        $user = $this->getService(\Glueful\Extensions\Users\Repositories\UserRepository::class)
+            ->findByEmail($adminEmail);
+        $uuid = is_array($user) ? (string) ($user['uuid'] ?? '') : '';
         $this->success("Admin {$adminEmail} created. Sign in at {$baseUrl}/admin");
+        if ($uuid !== '') {
+            // The uuid other commands take: thallo:tenancy:enable --owner, thallo:superuser:grant.
+            $this->line("Account uuid: {$uuid}");
+        }
         return self::SUCCESS;
     }
 }
