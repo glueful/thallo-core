@@ -533,6 +533,7 @@ final class EnginePublicRouteResolver implements PublicRouteResolver
         [$listing, $rows] = $result;
         $expanded = new ExpandedTargets();
         $listing['items'] = $this->listItems($rows, $typeRow, $locale, $expanded);
+        $listing['type_name'] = (string) ($typeRow['name'] ?? $typeSlug);
 
         return [
             'kind' => 'listing', 'locale' => $locale, 'type' => $typeSlug,
@@ -607,6 +608,7 @@ final class EnginePublicRouteResolver implements PublicRouteResolver
         // One collector spans the term AND the member items (spec §4).
         $expanded = new ExpandedTargets();
         $listing['items'] = $this->listItems($rows, $typeRow, $locale, $expanded);
+        $listing['type_name'] = (string) ($typeRow['name'] ?? $typeSlug);
 
         return [
             'kind' => 'archive', 'locale' => $locale, 'type' => $typeSlug,
