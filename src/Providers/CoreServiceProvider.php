@@ -2233,6 +2233,16 @@ final class CoreServiceProvider extends ServiceProvider
                 'shared' => true,
                 'autowire' => true,
             ],
+            \Thallo\Core\Content\Console\ListBlockTypesCommand::class => [
+                'class' => \Thallo\Core\Content\Console\ListBlockTypesCommand::class,
+                'shared' => true,
+                'autowire' => true,
+            ],
+            \Thallo\Core\Capabilities\Console\CapabilitiesCommand::class => [
+                'class' => \Thallo\Core\Capabilities\Console\CapabilitiesCommand::class,
+                'shared' => true,
+                'autowire' => true,
+            ],
             PolicyManifestCommand::class => [
                 'class' => PolicyManifestCommand::class,
                 'shared' => true,
@@ -2601,6 +2611,8 @@ final class CoreServiceProvider extends ServiceProvider
             ResyncCommand::class,
             \Thallo\Core\Content\Console\MediaUsageRebuildCommand::class,
             PruneVersionsCommand::class,
+            \Thallo\Core\Content\Console\ListBlockTypesCommand::class,
+            \Thallo\Core\Capabilities\Console\CapabilitiesCommand::class,
             \Thallo\Core\Content\Console\DocsSetupCommand::class,
             PolicyManifestCommand::class,
             SeedBlockTypesCommand::class,
