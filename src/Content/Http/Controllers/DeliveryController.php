@@ -142,7 +142,16 @@ final class DeliveryController
         if ($query->wantsPagination()) {
             [$page, $perPage] = $this->pageParams($query);
             $result = $this->delivery->paginatePublished($typeUuid, $locale, $page, $perPage, $filter, $order);
-            $rows = $this->shape($result['data'], $schema, $selector, $locale, $typeUuid, $scopes, $expanded);
+            $rows = $this->shape(
+                $result['data'],
+                $schema,
+                $selector,
+                $locale,
+                $typeUuid,
+                $scopes,
+                $expanded,
+                self::narrows($request),
+            );
             $response = Response::paginated(
                 array_map(fn(array $r): array => $this->item($r), $rows),
                 $result['total'],
@@ -156,7 +165,16 @@ final class DeliveryController
         $limit = $this->limit($query);
         $cursor = Cursor::decode($query->cursor ?? '');
         $rows = $this->delivery->listPublished($typeUuid, $locale, $limit, $filter, $order, $cursor);
-        $shaped = $this->shape($rows, $schema, $selector, $locale, $typeUuid, $scopes, $expanded);
+        $shaped = $this->shape(
+            $rows,
+            $schema,
+            $selector,
+            $locale,
+            $typeUuid,
+            $scopes,
+            $expanded,
+            self::narrows($request),
+        );
 
         $nextCursor = null;
         if (count($rows) === $limit && $rows !== []) {
@@ -231,6 +249,7 @@ final class DeliveryController
             $typeUuid,
             $this->grantedScopes($request),
             $expanded,
+            self::narrows($request),
         );
         $item = $this->item($shaped[0]);
         $item['seo'] = $this->canonical->project(
@@ -326,8 +345,20 @@ final class DeliveryController
         string $typeUuid,
         ?array $grantedScopes,
         ?ExpandedTargets $expanded = null,
+        bool $narrow = true,
     ): array {
-        return $this->itemShaper()->shape($rows, $schema, $selector, $locale, $typeUuid, $grantedScopes, $expanded);
+        return $this->itemShaper()
+            ->shape($rows, $schema, $selector, $locale, $typeUuid, $grantedScopes, $expanded, $narrow);
+    }
+
+    /**
+     * Whether the response is narrowed to the requested fields: only when `?fields` is given. The
+     * field selector folds `?expand` into the same tree, and an expand-only request must expand
+     * the named references without dropping every other field.
+     */
+    private static function narrows(Request $request): bool
+    {
+        return is_string($request->query->all()['fields'] ?? null);
     }
 
     /**

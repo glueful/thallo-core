@@ -39,6 +39,7 @@ final class DeliveryItemShaper
      * @param list<string>|null $grantedScopes null = anonymous
      * @param ExpandedTargets|null $expanded records expansion targets for the
      *        caller's Cache-Tag/ETag (spec §4); never serialized into the rows
+     * @param bool $narrow project `fields` to the selection (false: expand only)
      * @return list<array<string,mixed>>
      */
     public function shape(
@@ -49,6 +50,7 @@ final class DeliveryItemShaper
         string $typeUuid,
         ?array $grantedScopes,
         ?ExpandedTargets $expanded = null,
+        bool $narrow = true,
     ): array {
         if ($rows === []) {
             return [];
@@ -92,7 +94,9 @@ final class DeliveryItemShaper
             $rows[$i]['fields'] = $fields;
         }
 
-        if ($selector->empty()) {
+        // `$narrow` is false for an expand-only request: the selector (which folds ?expand into the
+        // same tree) still decides which references expand, but no field is projected away.
+        if ($selector->empty() || !$narrow) {
             return $rows;
         }
 
@@ -119,7 +123,8 @@ final class DeliveryItemShaper
             'uuid' => $row['entry_uuid'] ?? null,
             'locale' => $row['locale'] ?? null,
             'version' => $row['version'] ?? null,
-            'published_at' => $row['published_at'] ?? null,
+            // ISO-8601, as docs/openapi.json declares (the column is a timestamp without zone).
+            'published_at' => Timestamps::iso($row['published_at'] ?? null),
             'fields' => $row['fields'] ?? [],
         ];
     }
