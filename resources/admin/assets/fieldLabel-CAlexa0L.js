@@ -1,0 +1,1 @@
+function e(e){let t=e.label?.trim();if(t)return t;let n=e.name.replace(/_/g,` `).trim();return n.charAt(0).toUpperCase()+n.slice(1)}export{e as t};
