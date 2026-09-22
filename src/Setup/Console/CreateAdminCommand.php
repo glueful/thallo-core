@@ -4,13 +4,16 @@ declare(strict_types=1);
 
 namespace Thallo\Core\Setup\Console;
 
+use Thallo\Core\Setup\AdminPasswordPolicy;
 use Thallo\Core\Setup\SetupService;
+use Thallo\Core\Setup\SetupToken;
 use Glueful\Console\BaseCommand;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 
+use function base_path;
 use function config;
 
 #[AsCommand(
@@ -71,11 +74,23 @@ final class CreateAdminCommand extends BaseCommand
         } else {
             $siteName = $this->ask('Site name', (string) $input->getOption('site-name'));
             $adminEmail = $this->ask('First admin email');
-            $adminPassword = $this->secret('First admin password (min 8 chars)');
+            $adminPassword = $this->secret(
+                'First admin password (8+ characters, with a number, a lowercase and an uppercase letter '
+                . 'and a special character)',
+            );
             $locale = $this->ask('Default locale', (string) $input->getOption('locale'));
         }
 
+        // The web setup form's rules, so the CLI cannot seed a weaker first admin.
+        $problems = AdminPasswordPolicy::problems((string) $adminPassword);
+        if ($problems !== []) {
+            $this->error('The admin password is too weak: ' . implode('; ', $problems) . '.');
+            return self::FAILURE;
+        }
+
         $setup->install($siteName, $adminEmail, $adminPassword, $locale);
+        // Setup is locked now, exactly as after the web form, so the setup link's token goes too.
+        SetupToken::clear(base_path($this->getContext(), '.env'));
 
         $baseUrl = rtrim((string) config($this->getContext(), 'app.urls.base', 'http://localhost'), '/');
         $user = $this->getService(\Glueful\Extensions\Users\Repositories\UserRepository::class)

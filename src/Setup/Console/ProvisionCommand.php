@@ -315,6 +315,9 @@ final class ProvisionCommand extends BaseCommand
             $this->line('  ' . $step);
         }
         $this->line('  (The link carries this install\'s SETUP_TOKEN; re-run provision to print it again.)');
+        if (($warning = self::baseUrlWarning($env->get('BASE_URL'))) !== null) {
+            $this->warning($warning);
+        }
         $this->line('');
         return self::SUCCESS;
     }
@@ -357,6 +360,24 @@ final class ProvisionCommand extends BaseCommand
             '1. In your browser (recommended): ' . $link,
             '2. Or from this terminal:          php glueful thallo:create-admin',
         ];
+    }
+
+    /**
+     * The setup link is built from BASE_URL, which on a fresh server is often still the local
+     * default. Said plainly, so the operator does not send a link nobody else can open.
+     */
+    public static function baseUrlWarning(?string $baseUrl): ?string
+    {
+        $host = strtolower((string) parse_url(trim((string) $baseUrl), PHP_URL_HOST));
+        $local = $host === '' || $host === 'localhost' || $host === '0.0.0.0' || $host === '::1'
+            || str_starts_with($host, '127.') || str_ends_with($host, '.localhost') || $host === '[::1]';
+        if (!$local) {
+            return null;
+        }
+
+        return 'BASE_URL is ' . (trim((string) $baseUrl) === '' ? 'not set' : trim((string) $baseUrl))
+            . ', so the link above only opens on this machine. On a server, set BASE_URL in .env to the '
+            . 'site\'s real address and re-run provision to print the link again.';
     }
 
     /** Env-derived config with any explicit --db-* option taking precedence. */

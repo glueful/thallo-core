@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace Thallo\Core\Http\Controllers;
 
+use Thallo\Core\Setup\AdminPasswordPolicy;
 use Thallo\Core\Content\Http\DTOs\Requests\SetupData;
 use Thallo\Core\Setup\SetupService;
+use Thallo\Core\Setup\SetupToken;
 use Glueful\Bootstrap\ApplicationContext;
 use Glueful\Http\Response;
 use Glueful\Installer\EnvWriter;
@@ -66,6 +68,12 @@ final class SetupController
             return $denied;
         }
 
+        // The rules the form shows as you type, held here too: the form is not the only client.
+        $problems = AdminPasswordPolicy::problems($input->admin_password);
+        if ($problems !== []) {
+            return Response::validation(['admin_password' => implode('; ', $problems) . '.']);
+        }
+
         try {
             $this->setup->install(
                 $input->site_name,
@@ -89,21 +97,9 @@ final class SetupController
 
         // The setup link is single-use: the endpoint now locks itself (409), so the token has no
         // further purpose and must not linger in .env.
-        self::clearSetupToken(base_path($this->context, '.env'));
+        SetupToken::clear(base_path($this->context, '.env'));
 
         return Response::success(['installed' => true], 'Setup complete.');
-    }
-
-    /** Blank SETUP_TOKEN after a completed setup; best-effort, never fails the setup itself. */
-    public static function clearSetupToken(string $envPath): void
-    {
-        try {
-            if (is_file($envPath) && ((new EnvWriter($envPath))->get('SETUP_TOKEN') ?? '') !== '') {
-                (new EnvWriter($envPath))->set('SETUP_TOKEN', '');
-            }
-        } catch (\Throwable $e) {
-            error_log('Setup: failed to clear SETUP_TOKEN: ' . $e->getMessage());
-        }
     }
 
     /**
