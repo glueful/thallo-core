@@ -61,7 +61,7 @@ final class DoctorCommand extends BaseCommand
         $this->table(['', 'Check', 'Detail'], $rows);
 
         if ($failed) {
-            $this->error('Some checks failed. Resolve them, then run `thallo setup`.');
+            $this->error('Some checks failed. Resolve them, then run php glueful thallo:provision.');
             return self::FAILURE;
         }
 

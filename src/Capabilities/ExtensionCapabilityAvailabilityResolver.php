@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Thallo\Core\Capabilities;
 
+use Glueful\Extensions\ProtectedProviders;
 use Glueful\Bootstrap\ApplicationContext;
 use Glueful\Extensions\EnabledProviders;
 use Glueful\Extensions\PackageManifest;
@@ -42,9 +43,12 @@ class ExtensionCapabilityAvailabilityResolver implements CapabilityAvailabilityR
                 );
             }
             if (!in_array($candidate->provider, $this->enabledProviders(), true)) {
+                // A protected provider refuses extensions:enable: offer its own way in instead
+                // (the tenancy provider: Settings › Workspaces).
                 return CapabilityAvailability::unavailable(
                     "{$package} is installed but not enabled.",
-                    "php glueful extensions:enable {$package}"
+                    ProtectedProviders::refusalFor($this->context, $candidate->provider)
+                        ?? "php glueful extensions:enable {$package}"
                 );
             }
 
