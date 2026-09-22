@@ -369,8 +369,10 @@ final class CoreServiceProvider extends ServiceProvider
         ];
 
         return [
-            \Thallo\Contracts\Account\StorefrontAccountRegistration::class =>
-                $bind(\Thallo\Core\Account\AppStorefrontAccountRegistration::class),
+            \Thallo\Contracts\Account\StorefrontAccountRegistration::class => [
+                'factory' => [self::class, 'makeStorefrontAccountRegistration'],
+                'shared' => true,
+            ],
             \Thallo\Contracts\Account\StorefrontAccountRecovery::class =>
                 $bind(\Thallo\Core\Account\AppStorefrontAccountRecovery::class),
             \Thallo\Contracts\Account\AccountNavigationRegistry::class =>
@@ -386,6 +388,29 @@ final class CoreServiceProvider extends ServiceProvider
      * The storefront's second sign-in step over the users extension's two-factor service, which
      * is registered only while that extension is enabled; without it nothing can be verified.
      */
+    public static function makeStorefrontAccountRegistration(
+        ContainerInterface $container,
+    ): \Thallo\Core\Account\AppStorefrontAccountRegistration {
+        $users = 'Glueful\\Extensions\\Users\\Repositories\\UserRepository';
+        $sessionFor = !$container->has($users)
+            ? null
+            : static function (string $uuid) use ($container, $users): ?array {
+                $user = $container->get($users)->findByUuid($uuid);
+                if (!is_array($user) || (string) ($user['status'] ?? '') !== 'active') {
+                    return null;
+                }
+                $session = $container->get(\Glueful\Auth\TokenManager::class)->createUserSession($user);
+                return $session === [] ? null : $session;
+            };
+
+        return new \Thallo\Core\Account\AppStorefrontAccountRegistration(
+            $container->get(\Thallo\Core\Signup\CustomerSignupService::class),
+            $container->get(\Thallo\Core\Signup\SignupCoordinator::class),
+            $container->get(\Psr\Log\LoggerInterface::class),
+            $sessionFor,
+        );
+    }
+
     public static function makeStorefrontTwoFactor(
         ContainerInterface $container,
     ): \Thallo\Core\Account\AppStorefrontTwoFactor {

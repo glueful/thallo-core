@@ -20,6 +20,13 @@ final class AppStorefrontAccountRegistration implements StorefrontAccountRegistr
         private readonly CustomerSignupService $customers,
         private readonly SignupCoordinator $coordinator,
         private readonly LoggerInterface $logger,
+        /**
+         * Opens a session for a verified account: fn(string $userUuid): ?array. Null (no users
+         * extension) leaves the customer to sign in.
+         *
+         * @var (\Closure(string): ?array<string,mixed>)|null
+         */
+        private readonly ?\Closure $sessionFor = null,
     ) {
     }
 
@@ -70,6 +77,27 @@ final class AppStorefrontAccountRegistration implements StorefrontAccountRegistr
             pendingVerification: false,
             intentUuid: $intentUuid,
             userUuid: $userUuid,
+            session: $userUuid === null ? null : $this->session($userUuid),
         );
+    }
+
+    /**
+     * The new customer has just proved the address and chosen the password, so they are signed
+     * in; a failure here only sends them to the sign-in page.
+     *
+     * @return array<string,mixed>|null
+     */
+    private function session(string $userUuid): ?array
+    {
+        if ($this->sessionFor === null) {
+            return null;
+        }
+        try {
+            $session = ($this->sessionFor)($userUuid);
+        } catch (\Throwable $e) {
+            $this->logger->warning('A verified customer could not be signed in', ['error' => $e->getMessage()]);
+            return null;
+        }
+        return is_array($session) && $session !== [] ? $session : null;
     }
 }
