@@ -64,6 +64,21 @@ final class GeneralSettingsController
         return Response::success(['settings' => $this->settings->all()], 'General settings retrieved.');
     }
 
+    /**
+     * The site's identity as every rendered page shows it.
+     *
+     * @return list<string>
+     */
+    private function identity(): array
+    {
+        return [
+            $this->settings->siteLogo(),
+            $this->settings->siteLogoDark(),
+            $this->settings->siteFavicon(),
+            $this->settings->siteName(),
+        ];
+    }
+
     /** PUT /v1/admin/settings/general */
     #[ApiOperation(
         summary: 'Update general settings',
@@ -98,6 +113,7 @@ final class GeneralSettingsController
             $this->settings->themeFont(),
             $this->settings->themeBackground(),
         ];
+        $identityBefore = $this->identity();
         $searchBefore = $this->settings->searchEnabled();
 
         $this->settings->save([
@@ -147,6 +163,10 @@ final class GeneralSettingsController
             ($input->theme_accent !== null && $this->settings->themeAccent() !== $accentBefore)
             || ($input->theme_neutral !== null && $this->settings->themeNeutral() !== $neutralBefore)
             || $designAfter !== $designBefore
+            // What every page shows of the site but the cache key does not carry: without this a new
+            // logo, favicon or name was served stale for up to render.cache_ttl. (A custom font file
+            // is in the key already.)
+            || $this->identity() !== $identityBefore
         ) {
             $this->events?->dispatch(new ThemeAppearanceChanged(
                 $this->settings->themeAccent(),
