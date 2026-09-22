@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Thallo\Core\Setup;
 
+use Thallo\Contracts\Settings\SystemChannel;
 use Glueful\Bootstrap\ApplicationContext;
 use Glueful\Extensions\Aegis\Repositories\PermissionRepository;
 use Glueful\Extensions\Aegis\Repositories\RolePermissionRepository;
@@ -24,13 +25,20 @@ use Glueful\Permissions\Catalog\PermissionRegistry;
  * setup and `thallo:create-admin` run it once at install, `thallo:provision` re-runs it so a pack
  * added on upgrade reaches the install roles too.
  *
- * It grants whatever a role does not currently hold — it keeps no memory of what was revoked. So
- * a permission that must stay off a role has to be withheld HERE: a revocation made anywhere else,
- * by a migration or by an operator, is undone by the next provision.
+ * Each permission is offered to a role once. A ledger in the system channel records what each
+ * role has been offered, so a later provision grants only permissions that are new since, and a
+ * revocation made in between — by an operator or a migration — stays revoked. With no ledger yet:
+ * a role that holds nothing (a fresh install) is offered everything; a role that holds grants (a
+ * site upgrading into the ledger) takes every permission that existed before this run's catalog
+ * sync as already offered, and is granted only what the sync added. ROLE_EXCLUSIONS still withhold
+ * a permission from a role outright.
  */
 final class InstallRoleGrants
 {
     /** @var array<string, list<string>> role slug => permission slugs withheld from that role */
+    /** System-channel key: JSON map of role slug => permission slugs already offered to it. */
+    public const LEDGER_KEY = 'install_role_grants.offered';
+
     public const ROLE_EXCLUSIONS = [
         'superuser' => [],
         // An administrator runs ONE site: not the system's configuration, and not authority ACROSS
@@ -48,14 +56,48 @@ final class InstallRoleGrants
 
     public function apply(): InstallRoleGrantsReport
     {
+        $before = $this->permissionSlugs();
         $declared = $this->syncCatalog();
+        $ledger = $this->ledger();
 
         $granted = [];
         foreach (self::ROLE_EXCLUSIONS as $role => $except) {
-            $granted[$role] = $this->grantAll($role, $except);
+            [$granted[$role], $ledger[$role]] = $this->grantNew($role, $except, $ledger[$role] ?? null, $before);
         }
+        $this->channel()->put(self::LEDGER_KEY, (string) json_encode($ledger, JSON_THROW_ON_ERROR));
 
         return new InstallRoleGrantsReport($declared, $granted);
+    }
+
+    /** @return array<string, list<string>> */
+    private function ledger(): array
+    {
+        $raw = $this->channel()->get(self::LEDGER_KEY);
+        $decoded = $raw === null ? null : json_decode($raw, true);
+        if (!is_array($decoded)) {
+            return [];
+        }
+        $ledger = [];
+        foreach ($decoded as $role => $slugs) {
+            if (is_string($role) && is_array($slugs)) {
+                $ledger[$role] = array_values(array_filter($slugs, 'is_string'));
+            }
+        }
+        return $ledger;
+    }
+
+    private function channel(): SystemChannel
+    {
+        return $this->context->getContainer()->get(SystemChannel::class);
+    }
+
+    /** @return list<string> every permission slug in the provider now */
+    private function permissionSlugs(): array
+    {
+        return array_map(
+            static fn ($permission): string => $permission->getSlug(),
+            (new PermissionRepository(null, $this->context))->findAllPermissions(),
+        );
     }
 
     /** Persist every declared permission (framework core, app, extensions) into the provider. */
@@ -115,10 +157,14 @@ final class InstallRoleGrants
     }
 
     /**
+     * Grants the role what it has not been offered yet, and returns the count and the new record.
+     *
      * @param list<string> $except
-     * @return int permissions newly granted
+     * @param list<string>|null $offered the role's ledger entry; null when it has none yet
+     * @param list<string> $before the permission slugs that existed before this run's catalog sync
+     * @return array{0: int, 1: list<string>}
      */
-    private function grantAll(string $roleSlug, array $except): int
+    private function grantNew(string $roleSlug, array $except, ?array $offered, array $before): array
     {
         $roles = new RoleRepository(null, $this->context);
         $permissions = new PermissionRepository(null, $this->context);
@@ -134,14 +180,22 @@ final class InstallRoleGrants
         foreach ($rolePermissions->getRolePermissions($roleUuid) as $rp) {
             $held[$rp->getPermissionUuid()] = true;
         }
+        // No record yet: a role holding nothing is a fresh install and is offered everything; a
+        // role holding grants has, in effect, been offered whatever existed before this run.
+        $offered ??= $held === [] ? [] : $before;
+        $offeredSet = array_fill_keys($offered, true);
 
         $granted = 0;
         foreach ($permissions->findAllPermissions() as $permission) {
-            if (in_array($permission->getSlug(), $except, true) || isset($held[$permission->getUuid()])) {
+            $slug = $permission->getSlug();
+            if (isset($offeredSet[$slug]) || in_array($slug, $except, true)) {
                 continue;
             }
-            $rolePermissions->assignPermissionToRole($roleUuid, $permission->getUuid());
-            $granted++;
+            $offeredSet[$slug] = true;
+            if (!isset($held[$permission->getUuid()])) {
+                $rolePermissions->assignPermissionToRole($roleUuid, $permission->getUuid());
+                $granted++;
+            }
         }
 
         if ($granted > 0) {
@@ -152,6 +206,6 @@ final class InstallRoleGrants
             }
         }
 
-        return $granted;
+        return [$granted, array_keys($offeredSet)];
     }
 }
