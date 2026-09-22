@@ -82,6 +82,19 @@ final class ReferenceResolver
         // 2) Batch-resolve the published versions in ONE query, gated by the caller's scopes.
         $resolved = $this->repo->publishedByEntryUuids($targetUuids, $locale, $grantedScopes);
 
+        // A target is spliced into its parent whole, so its reserved `_` keys
+        // (_presentation) would ride into the public payload. The root strip in
+        // DeliveryItemShaper cannot reach them; they are dropped where targets enter.
+        foreach ($resolved as $uuid => $row) {
+            if (is_array($row['fields'] ?? null)) {
+                $resolved[$uuid]['fields'] = array_filter(
+                    $row['fields'],
+                    static fn(mixed $key): bool => !is_string($key) || !str_starts_with($key, '_'),
+                    ARRAY_FILTER_USE_KEY,
+                );
+            }
+        }
+
         // 3) Recurse: expand references inside the resolved targets (same type/schema in
         //    the self-referential case; for cross-type we still use the source schema's
         //    reference field names, which is correct for the homogeneous v1 model). The
