@@ -1192,6 +1192,11 @@ final class CoreServiceProvider extends ServiceProvider
                 'shared' => true,
                 'autowire' => true,
             ],
+            \Thallo\Contracts\Settings\SiteNameProvider::class => [
+                'class'    => \Thallo\Core\Settings\EngineSiteNameProvider::class,
+                'shared'   => true,
+                'autowire' => true,
+            ],
             SiteLogoProvider::class => [
                 'class'    => EngineSiteLogoProvider::class,
                 'shared'   => true,
