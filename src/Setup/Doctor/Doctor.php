@@ -56,6 +56,7 @@ final class Doctor
 
         $checks[] = $this->envTargetCheck();
         $checks[] = $this->writableStorageCheck();
+        $checks[] = $this->logExposureCheck();
         $checks[] = $this->keysCheck();
         $environment = $this->environmentCheck();
         $assetRouting = $this->assetRoutingCheck();
@@ -118,6 +119,42 @@ final class Doctor
      * (debug output, API docs, no HTTPS enforcement) is the silent mistake this warns about.
      * Local hosts are fine in any mode. Null when there is no .env to read yet.
      */
+    /**
+     * Log files under public/ are served to anyone who asks for them. A relative LOG_FILE_PATH once
+     * put every request's log in public/storage/logs/ (a web request's working directory is
+     * public/); the config now resolves it against the site, but the files it already wrote stay
+     * until someone deletes them. A warning, not a failure: this runs inside provision, and a
+     * failure would stop an upgrade halfway.
+     */
+    private function logExposureCheck(): Check
+    {
+        $public = $this->basePath . '/public';
+        $found = [];
+        if (is_dir($public)) {
+            $files = new \RecursiveIteratorIterator(
+                new \RecursiveDirectoryIterator($public, \FilesystemIterator::SKIP_DOTS),
+            );
+            foreach ($files as $file) {
+                if ($file->isFile() && str_ends_with(strtolower($file->getFilename()), '.log')) {
+                    $found[] = substr($file->getPathname(), strlen($this->basePath) + 1);
+                    if (count($found) === 3) {
+                        break;
+                    }
+                }
+            }
+        }
+        if ($found === []) {
+            return Check::ok('log-exposure', 'No log files under public/.');
+        }
+        sort($found);
+
+        return Check::warn(
+            'log-exposure',
+            'Log files under public/ are served to anyone: ' . implode(', ', $found) . '. Delete them, '
+                . 'and remove a relative LOG_FILE_PATH from .env (logs then go to storage/logs/).',
+        );
+    }
+
     private function environmentCheck(): ?Check
     {
         $env = $this->basePath . '/.env';
