@@ -19,8 +19,9 @@ use Glueful\Support\FieldSelection\FieldSelector;
  * all reference target uuids are collected and resolved with **one** query
  * (per locale set) via {@see DeliveryRepository::publishedByEntryUuids()}, not a
  * per-entry fetch. Circular references (A → A) are bounded by `$depth`; at the limit,
- * the reference value is left as the raw uuid (not expanded further). Asset fields
- * NEVER expand (spec §5): their values are blob uuids, raw at every level.
+ * the reference value is left as the raw uuid (not expanded further). Asset fields are
+ * not this resolver's (spec §5): their values are blob uuids, which {@see AssetExpander}
+ * describes when a caller names them in `?expand`.
  *
  * Field selection: when a non-empty {@see FieldSelector} is provided, only reference
  * fields whose top-level path was requested are expanded. When `$selector` is `null`
@@ -37,12 +38,12 @@ final class ReferenceResolver
     }
 
     /**
-     * Expand the reference/asset fields of each root row in place.
+     * Expand the reference fields of each root row in place.
      *
      * @param list<array<string,mixed>> $rootRows hydrated delivery rows (each has a
      *        decoded `fields` array)
      * @param ContentTypeSchema $schema the schema for the rows in $rootRows (used to
-     *        know which fields are reference/asset)
+     *        know which fields are references)
      * @param FieldSelector|null $selector scopes which reference fields to expand;
      *        null/empty => expand all reference fields
      * @param string $locale resolve targets in this locale
@@ -192,7 +193,7 @@ final class ReferenceResolver
      * The reference field names to expand, honouring the selector. Asset fields are
      * DELIBERATELY absent (spec §5): asset values are blob uuids — resolving them
      * against the published-entry spine is a category error (pre-fix it nulled
-     * them). Assets stay raw at every level; media() consumes them at render.
+     * them). AssetExpander describes the ones a caller names; media() consumes them at render.
      *
      * @return list<string>
      */

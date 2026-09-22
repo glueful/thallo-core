@@ -54,7 +54,7 @@ final class DeliveryController
      * @param ContentTypeRepository $types    resolves the {type} slug to its schema
      * @param FilterCompiler        $filters  compiles `filter[...]` against filterable fields
      * @param SortCompiler          $sorts    compiles `sort` against filterable fields
-     * @param ReferenceResolver     $references batch-expands reference/asset fields (no N+1)
+     * @param ReferenceResolver     $references batch-expands reference fields (no N+1)
      * @param Projector             $projector applies `fields`/`expand` to the `fields` object
      * @param DeliveryEtag          $etags    ETag/Cache-Control/Cache-Tag validators
      */
@@ -154,6 +154,7 @@ final class DeliveryController
                 $scopes,
                 $expanded,
                 self::narrows($request),
+                self::expandedNames($request),
             );
             $response = Response::paginated(
                 array_map(fn(array $r): array => $this->item($r), $rows),
@@ -177,6 +178,7 @@ final class DeliveryController
             $scopes,
             $expanded,
             self::narrows($request),
+            self::expandedNames($request),
         );
 
         $nextCursor = null;
@@ -256,6 +258,7 @@ final class DeliveryController
             $this->grantedScopes($request),
             $expanded,
             self::narrows($request),
+            self::expandedNames($request),
         );
         $item = $this->item($shaped[0]);
         $item['seo'] = $this->canonical->project(
@@ -352,9 +355,51 @@ final class DeliveryController
         ?array $grantedScopes,
         ?ExpandedTargets $expanded = null,
         bool $narrow = true,
+        array $expandAssets = [],
     ): array {
-        return $this->itemShaper()
-            ->shape($rows, $schema, $selector, $locale, $typeUuid, $grantedScopes, $expanded, $narrow);
+        return $this->itemShaper()->shape(
+            $rows,
+            $schema,
+            $selector,
+            $locale,
+            $typeUuid,
+            $grantedScopes,
+            $expanded,
+            $narrow,
+            $expandAssets,
+        );
+    }
+
+    /**
+     * The top-level names in `?expand` (`author(name),cover` → author, cover): asset fields
+     * among them are described rather than left as uuids.
+     *
+     * @return list<string>
+     */
+    private static function expandedNames(Request $request): array
+    {
+        $expand = $request->query->all()['expand'] ?? null;
+        if (!is_string($expand)) {
+            return [];
+        }
+        $names = [];
+        $depth = 0;
+        $current = '';
+        foreach (str_split($expand . ',') as $char) {
+            if ($char === '(' || $char === '{') {
+                $depth++;
+            } elseif ($char === ')' || $char === '}') {
+                $depth = max(0, $depth - 1);
+            } elseif ($char === ',' && $depth === 0) {
+                if (preg_match('/^\s*([A-Za-z0-9_]+)/', $current, $m) === 1) {
+                    $names[] = $m[1];
+                }
+                $current = '';
+                continue;
+            }
+            $current .= $char;
+        }
+        return array_values(array_unique($names));
     }
 
     /**

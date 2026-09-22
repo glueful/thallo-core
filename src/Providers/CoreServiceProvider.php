@@ -754,6 +754,12 @@ final class CoreServiceProvider extends ServiceProvider
                 'shared'   => true,
                 'autowire' => true,
             ],
+            // Describes asset fields a delivery caller names in ?expand.
+            \Thallo\Core\Content\Delivery\AssetExpander::class => [
+                'class'    => \Thallo\Core\Content\Delivery\AssetExpander::class,
+                'shared'   => true,
+                'autowire' => true,
+            ],
             \Thallo\Core\Content\Delivery\DeliveryItemShaper::class => [
                 'class'    => \Thallo\Core\Content\Delivery\DeliveryItemShaper::class,
                 'shared'   => true,

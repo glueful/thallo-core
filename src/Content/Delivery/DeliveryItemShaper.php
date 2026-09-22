@@ -27,6 +27,8 @@ final class DeliveryItemShaper
         private readonly Projector $projector,
         private readonly CanonicalProjector $canonical,
         private readonly ?SchemaProjector $schemaProjector = null,
+        /** null = asset fields never expand (hosts without the media library). */
+        private readonly ?AssetExpander $assets = null,
     ) {
     }
 
@@ -40,6 +42,8 @@ final class DeliveryItemShaper
      * @param ExpandedTargets|null $expanded records expansion targets for the
      *        caller's Cache-Tag/ETag (spec §4); never serialized into the rows
      * @param bool $narrow project `fields` to the selection (false: expand only)
+     * @param list<string> $expandAssets top-level field names from `?expand`; the asset fields
+     *        among them are described instead of left as uuids
      * @return list<array<string,mixed>>
      */
     public function shape(
@@ -51,6 +55,7 @@ final class DeliveryItemShaper
         ?array $grantedScopes,
         ?ExpandedTargets $expanded = null,
         bool $narrow = true,
+        array $expandAssets = [],
     ): array {
         if ($rows === []) {
             return [];
@@ -75,6 +80,9 @@ final class DeliveryItemShaper
             $grantedScopes,
             $expanded,
         );
+        if ($this->assets !== null && $expandAssets !== []) {
+            $rows = $this->assets->expand($rows, $schema, $expandAssets, $expanded);
+        }
 
         // Reserved system keys (modern-default-theme spec §5a): `_`-prefixed
         // fields (_presentation) are draft/version state, NEVER public content.

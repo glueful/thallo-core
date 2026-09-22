@@ -18,12 +18,24 @@ final class ExpandedTargets
     /** @var array<string,string> entry uuid => version uuid (first splice wins) */
     private array $byEntry = [];
 
+    /** @var array<string,string> expanded asset uuid => fingerprint of what was described */
+    private array $byAsset = [];
+
     public function add(string $entryUuid, string $versionUuid): void
     {
         if ($entryUuid === '' || isset($this->byEntry[$entryUuid])) {
             return;
         }
         $this->byEntry[$entryUuid] = $versionUuid;
+    }
+
+    /**
+     * An expanded asset (AssetExpander): its fingerprint feeds the ETag only. Assets get no
+     * Cache-Tag; nothing purges on a media-library edit, so the TTL bounds shared caches.
+     */
+    public function addAsset(string $assetUuid, string $fingerprint): void
+    {
+        $this->byAsset[$assetUuid] ??= $fingerprint;
     }
 
     /** @return list<string> deduped, insertion order */
@@ -38,6 +50,9 @@ final class ExpandedTargets
         $out = [];
         foreach ($this->byEntry as $entry => $version) {
             $out[] = $entry . ':' . $version;
+        }
+        foreach ($this->byAsset as $asset => $fingerprint) {
+            $out[] = 'asset:' . $asset . ':' . $fingerprint;
         }
         sort($out);
         return $out;
