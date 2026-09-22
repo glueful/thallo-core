@@ -388,6 +388,15 @@ final class CoreServiceProvider extends ServiceProvider
      * The storefront's second sign-in step over the users extension's two-factor service, which
      * is registered only while that extension is enabled; without it nothing can be verified.
      */
+    public static function makeMediaTextResolver(
+        ContainerInterface $container,
+    ): \Thallo\Core\Content\Delivery\EngineMediaTextResolver {
+        return new \Thallo\Core\Content\Delivery\EngineMediaTextResolver(
+            $container->get(\Glueful\Database\Connection::class),
+            $container->get(MediaUrlResolver::class),
+        );
+    }
+
     public static function makeStorefrontAccountRegistration(
         ContainerInterface $container,
     ): \Thallo\Core\Account\AppStorefrontAccountRegistration {
@@ -1301,11 +1310,7 @@ final class CoreServiceProvider extends ServiceProvider
             // A file's alt text and caption for rendered pages (the Image block's fallback).
             \Thallo\Contracts\Delivery\MediaTextResolver::class => [
                 'shared' => true,
-                'factory' => static fn (ContainerInterface $c): \Thallo\Core\Content\Delivery\EngineMediaTextResolver
-                    => new \Thallo\Core\Content\Delivery\EngineMediaTextResolver(
-                        $c->get(\Glueful\Database\Connection::class),
-                        $c->get(MediaUrlResolver::class),
-                    ),
+                'factory' => [self::class, 'makeMediaTextResolver'],
             ],
             // One object, two interfaces: the batch seam IS the single-url
             // resolver, so the servability predicate cannot drift between them.
