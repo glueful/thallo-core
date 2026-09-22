@@ -895,6 +895,12 @@ final class CoreServiceProvider extends ServiceProvider
                 'shared' => true,
                 'autowire' => true,
             ],
+            // Where a menu is shown (the navigation pack's delete warning).
+            \Thallo\Contracts\Navigation\MenuUsageReader::class => [
+                'class' => \Thallo\Core\Content\Navigation\EngineMenuUsageReader::class,
+                'shared' => true,
+                'autowire' => true,
+            ],
             \Thallo\Core\Content\Blocks\Sources\BlockDocumentSources::class => [
                 'shared' => true,
                 'factory' => [self::class, 'makeBlockDocumentSources'],
