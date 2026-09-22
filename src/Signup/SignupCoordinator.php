@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Thallo\Core\Signup;
 
+use Thallo\Core\Account\AccountMailTemplateChooser;
 use Glueful\Database\Connection;
 
 final class SignupCoordinator
@@ -17,6 +18,7 @@ final class SignupCoordinator
         private readonly MemberSignupService $members,
         private readonly CustomerSignupService $customers,
         private readonly WorkspaceSignupService $workspaces,
+        private readonly AccountMailTemplateChooser $templates,
     ) {
     }
 
@@ -90,7 +92,9 @@ final class SignupCoordinator
             throw new SignupException('Verification request limit reached.', 429);
         }
         $this->continuations->resetForReverification($intentUuid);
-        $this->verifier->issue($intentUuid, $intent['email']);
+        // A customer's new code goes out through the same template as their first.
+        $template = ($intent['kind'] ?? null) === 'customer' ? $this->templates->verification() : 'verification';
+        $this->verifier->issue($intentUuid, $intent['email'], $template);
         return ['accepted' => true];
     }
 }

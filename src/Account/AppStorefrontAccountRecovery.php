@@ -31,6 +31,7 @@ final class AppStorefrontAccountRecovery implements StorefrontAccountRecovery
         private readonly UserRepository $users,
         private readonly SessionStoreInterface $sessions,
         private readonly LoggerInterface $logger,
+        private readonly AccountMailTemplateChooser $templates,
     ) {
     }
 
@@ -39,7 +40,7 @@ final class AppStorefrontAccountRecovery implements StorefrontAccountRecovery
         try {
             // sendPasswordResetEmail() returns an error ARRAY for unknown/rate-limited/invalid and
             // may throw on transport failure. Neither distinction may reach the caller.
-            EmailVerification::sendPasswordResetEmail($email, $this->context);
+            EmailVerification::sendPasswordResetEmail($email, $this->context, $this->templates->passwordReset());
         } catch (\Throwable $e) {
             $this->logger->warning('Storefront recovery request failed', ['error' => $e->getMessage()]);
         }

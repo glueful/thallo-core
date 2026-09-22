@@ -19,7 +19,8 @@ final class SignupVerifier
     ) {
     }
 
-    public function issue(string $intentUuid, string $email): void
+    /** @param string $template the registered email template the code goes out through */
+    public function issue(string $intentUuid, string $email, string $template = 'verification'): void
     {
         $ttl = max(60, (int) config($this->context, 'signup.otp.ttl_seconds', 900));
         $otp = (new EmailVerification(context: $this->context))->generateOTP();
@@ -45,7 +46,7 @@ final class SignupVerifier
         }
 
         try {
-            $this->mail->sendVerification($intentUuid, $email, $otp, $ttl);
+            $this->mail->sendVerification($intentUuid, $email, $otp, $ttl, $template);
         } catch (\Throwable $exception) {
             $this->connection->table('signup_verifiers')->where('intent_uuid', '=', $intentUuid)->delete();
             throw $exception;

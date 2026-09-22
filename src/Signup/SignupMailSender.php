@@ -13,14 +13,19 @@ final class SignupMailSender
     {
     }
 
-    public function sendVerification(string $intentUuid, string $email, string $otp, int $ttlSeconds): void
-    {
+    public function sendVerification(
+        string $intentUuid,
+        string $email,
+        string $otp,
+        int $ttlSeconds,
+        string $template = 'verification',
+    ): void {
         $result = $this->notifications->send(
             'signup_verification',
             new SignupEmailRecipient($email),
             'Verify your email address',
             [
-                'template_name' => 'verification',
+                'template_name' => $template,
                 'otp' => $otp,
                 'expiry_minutes' => max(1, (int) ceil($ttlSeconds / 60)),
             ],

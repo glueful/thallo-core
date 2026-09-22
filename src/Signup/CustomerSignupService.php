@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Thallo\Core\Signup;
 
+use Thallo\Core\Account\AccountMailTemplateChooser;
 use Glueful\Auth\PasswordHasher;
 use Glueful\Bootstrap\ApplicationContext;
 use Glueful\Database\Connection;
@@ -36,6 +37,7 @@ final class CustomerSignupService
         private readonly SignupMailSender $mail,
         private readonly UserRepository $users,
         private readonly TenancyLifecycleAudit $audit,
+        private readonly AccountMailTemplateChooser $templates,
     ) {
     }
 
@@ -94,7 +96,7 @@ final class CustomerSignupService
         }
 
         try {
-            $this->verifier->issue($intentUuid, $email);
+            $this->verifier->issue($intentUuid, $email, $this->templates->verification());
         } catch (\Throwable $exception) {
             $this->intents->hardDelete($intentUuid);
             throw $exception;

@@ -375,6 +375,10 @@ final class CoreServiceProvider extends ServiceProvider
             ],
             \Thallo\Contracts\Account\StorefrontAccountRecovery::class =>
                 $bind(\Thallo\Core\Account\AppStorefrontAccountRecovery::class),
+            \Thallo\Core\Account\AccountMailTemplateChooser::class => [
+                'factory' => [self::class, 'makeAccountMailTemplateChooser'],
+                'shared' => true,
+            ],
             \Thallo\Contracts\Account\StorefrontAccountProfile::class =>
                 $bind(\Thallo\Core\Account\AppStorefrontAccountProfile::class),
             \Thallo\Contracts\Account\AccountNavigationRegistry::class =>
@@ -396,6 +400,17 @@ final class CoreServiceProvider extends ServiceProvider
         return new \Thallo\Core\Content\Delivery\EngineMediaTextResolver(
             $container->get(\Glueful\Database\Connection::class),
             $container->get(MediaUrlResolver::class),
+        );
+    }
+
+    /** Soft-bound: without the mail extension's registry, customers get the built-in templates. */
+    public static function makeAccountMailTemplateChooser(
+        ContainerInterface $container,
+    ): \Thallo\Core\Account\AccountMailTemplateChooser {
+        $registry = \Glueful\Extensions\Contracts\Email\EmailTemplateRegistry::class;
+
+        return new \Thallo\Core\Account\AccountMailTemplateChooser(
+            $container->has($registry) ? $container->get($registry) : null,
         );
     }
 
