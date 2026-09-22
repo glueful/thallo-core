@@ -6,6 +6,7 @@ namespace Thallo\Core\Setup\Console;
 
 use Thallo\Core\Setup\Doctor\Check;
 use Thallo\Core\Setup\Doctor\Doctor;
+use Thallo\Core\Settings\GeneralSettings;
 use Thallo\Core\Setup\PgsqlDatabaseConfigFactory;
 use Glueful\Console\BaseCommand;
 use Glueful\Installer\ConnectionTester;
@@ -40,13 +41,23 @@ final class DoctorCommand extends BaseCommand
         $basePath = base_path($this->getContext());
         $doctor = new Doctor($basePath, PHP_VERSION, get_loaded_extensions());
 
-        $checks = $doctor->preflight();
-
         // Reachability only when the DB is already configured in .env (best-effort).
+        $reachability = null;
         $state = new InstallState($basePath, $this->getContext());
         if ($state->isDatabaseConfigured()) {
             $config = (new PgsqlDatabaseConfigFactory())->fromEnv(new EnvWriter($basePath . '/.env'));
-            $checks[] = $doctor->reachability($config, new ConnectionTester($this->getContext()));
+            $reachability = $doctor->reachability($config, new ConnectionTester($this->getContext()));
+        }
+
+        // The Appearance page's theme wins over RENDER_THEME at runtime, so check that one when
+        // the database can say what it is.
+        if ($reachability?->status === Check::OK) {
+            $doctor = new Doctor($basePath, PHP_VERSION, get_loaded_extensions(), null, $this->storedTheme());
+        }
+
+        $checks = $doctor->preflight();
+        if ($reachability !== null) {
+            $checks[] = $reachability;
         }
 
         $rows = [];
@@ -67,6 +78,16 @@ final class DoctorCommand extends BaseCommand
 
         $this->success('Environment looks healthy.');
         return self::SUCCESS;
+    }
+
+    /** The raw stored theme row; null before migrations run or when settings cannot be read. */
+    private function storedTheme(): ?string
+    {
+        try {
+            return $this->getService(GeneralSettings::class)->themeOverride();
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     private function badge(string $status): string

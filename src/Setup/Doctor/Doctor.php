@@ -30,12 +30,16 @@ final class Doctor
      * @param list<string> $loadedExtensions
      * @param (\Closure(string): ?int)|null $httpProbe GET a URL, return the final HTTP status or
      *        null when unreachable; defaults to a short-timeout stream request. Injected for tests.
+     * @param ?string $storedTheme the theme chosen on the Appearance page (the raw settings row),
+     *        which wins over RENDER_THEME at runtime; null or empty when none is stored or the
+     *        database cannot be read.
      */
     public function __construct(
         private readonly string $basePath,
         private readonly string $phpVersion,
         private readonly array $loadedExtensions,
         private readonly ?\Closure $httpProbe = null,
+        private readonly ?string $storedTheme = null,
     ) {
     }
 
@@ -249,30 +253,42 @@ final class Doctor
         return Check::ok('api-routing', 'File-shaped API paths reach PHP.');
     }
 
-    /** The public BASE_URL to probe, or null when unset or local (nothing to probe). */
     /**
      * The active theme must map the platform vocabulary and list its stylesheets (visual
      * builder spec §2.2): a theme that fails this cannot load, so say so before activation.
-     * `RENDER_THEME` names an app theme under themes/; absent means the shipped default.
+     * The Appearance page's choice wins, as it does at runtime (ActiveThemeSource); otherwise
+     * `RENDER_THEME` names an app theme under themes/, and absent means the shipped default.
      */
     /** @return array{0: ?ThemeVocabulary, 1: Check} the vocabulary when it loads, and the verdict */
     private function themeVocabularyCheck(): array
     {
         $env = $this->basePath . '/.env';
-        $name = is_file($env) ? (string) ((new EnvWriter($env))->get('RENDER_THEME') ?? 'default') : 'default';
-        $name = $name === '' ? 'default' : $name;
+        $envTheme = is_file($env) ? (string) ((new EnvWriter($env))->get('RENDER_THEME') ?? 'default') : 'default';
+        $envTheme = $envTheme === '' ? 'default' : $envTheme;
+        $stored = $this->storedTheme ?? '';
+        $name = $stored !== '' ? $stored : $envTheme;
+        // A broken stored choice does not break the site: the runtime logs it and serves RENDER_THEME.
+        $source = $stored !== ''
+            ? "the theme chosen on the Appearance page; until it is fixed the site serves RENDER_THEME={$envTheme}"
+            : "RENDER_THEME={$name}";
+        if (preg_match('/\A[a-z0-9][a-z0-9_-]*\z/i', $name) !== 1) {
+            return [null, Check::fail('theme-vocabulary', "\"{$name}\" is not a valid theme name ({$source}).")];
+        }
         $dir = $name === 'default'
             ? dirname((new \ReflectionClass(ThemeLocator::class))->getFileName(), 2) . '/themes/default'
             : $this->basePath . '/themes/' . $name;
         if (!is_file($dir . '/theme.json')) {
             return [null, Check::fail(
                 'theme-vocabulary',
-                "Theme \"{$name}\" has no theme.json at themes/{$name}/theme.json (RENDER_THEME={$name}).",
+                "Theme \"{$name}\" has no theme.json at themes/{$name}/theme.json ({$source}).",
             )];
         }
         $json = json_decode((string) file_get_contents($dir . '/theme.json'), true);
         if (!is_array($json)) {
-            return [null, Check::fail('theme-vocabulary', "Theme \"{$name}\": theme.json is not valid JSON.")];
+            return [null, Check::fail(
+                'theme-vocabulary',
+                "Theme \"{$name}\": theme.json is not valid JSON ({$source}).",
+            )];
         }
         try {
             $vocabulary = ThemeVocabulary::fromThemeJson($json, $dir);
@@ -280,10 +296,14 @@ final class Doctor
             return [null, Check::fail(
                 'theme-vocabulary',
                 $e->getMessage() . " — every theme maps the platform vocabulary and lists its stylesheets "
-                . "(RENDER_THEME={$name}; see packages/thallo-render/docs/THEMING.md).",
+                . "({$source}; see packages/thallo-render/docs/THEMING.md).",
             )];
         }
-        return [$vocabulary, Check::ok('theme-vocabulary', "Theme \"{$name}\" maps the platform vocabulary.")];
+        $from = $stored !== '' ? 'chosen on the Appearance page' : "RENDER_THEME={$name}";
+        return [$vocabulary, Check::ok(
+            'theme-vocabulary',
+            "Theme \"{$name}\" ({$from}) maps the platform vocabulary.",
+        )];
     }
 
     /**
@@ -302,6 +322,7 @@ final class Doctor
             );
     }
 
+    /** The public BASE_URL to probe, or null when unset or local (nothing to probe). */
     private function publicBaseUrl(): ?string
     {
         $env = $this->basePath . '/.env';
