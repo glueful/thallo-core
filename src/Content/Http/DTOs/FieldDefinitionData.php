@@ -65,6 +65,9 @@ final class FieldDefinitionData implements RequestData
         /** @var float|null Inclusive upper bound for a `number` field (ints coerce). */
         #[Rule('numeric')]
         public readonly ?float $max = null,
+        /** @var string|null What the entry form calls the field (80 characters at most). */
+        #[Rule('string|max:80')]
+        public readonly ?string $label = null,
     ) {
     }
 
@@ -93,6 +96,7 @@ final class FieldDefinitionData implements RequestData
             'pattern' => $this->pattern,
             'min' => $this->min,
             'max' => $this->max,
+            'label' => $this->label,
         ];
     }
 }

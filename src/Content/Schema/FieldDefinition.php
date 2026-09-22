@@ -72,6 +72,8 @@ final class FieldDefinition implements FieldDescriptor
         public readonly int|float|null $max = null,
         /** The vocabulary domain a `token` field draws from (visual builder spec §1.7). */
         public readonly ?string $domain = null,
+        /** What the entry form calls the field; null shows the name. Presentation only. */
+        public readonly ?string $label = null,
     ) {
     }
 
@@ -263,6 +265,11 @@ final class FieldDefinition implements FieldDescriptor
             }
         }
 
+        $label = is_string($raw['label'] ?? null) ? trim($raw['label']) : '';
+        if (mb_strlen($label) > 80) {
+            throw new SchemaParseException("field '{$name}' label must not exceed 80 characters");
+        }
+
         return new self(
             name: $name,
             type: $type,
@@ -282,6 +289,7 @@ final class FieldDefinition implements FieldDescriptor
             min: $min,
             max: $max,
             domain: $domain,
+            label: $label === '' ? null : $label,
         );
     }
 }

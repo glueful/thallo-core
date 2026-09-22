@@ -57,6 +57,8 @@ final class FieldSchemaData implements ResponseData
         public readonly ?float $max = null,
         /** The vocabulary domain a `token` field draws from (`color`, `spacing`, …). */
         public readonly ?string $domain = null,
+        /** What the entry form calls the field; absent shows the name. */
+        public readonly ?string $label = null,
     ) {
     }
 }

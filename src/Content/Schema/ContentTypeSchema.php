@@ -46,6 +46,7 @@ final class ContentTypeSchema implements ContentSchemaReader
     {
         return array_map(static fn(FieldDefinition $f): array => array_filter([
             'name' => $f->name,
+            'label' => $f->label,
             'type' => $f->type,
             'required' => $f->required,
             'localized' => $f->localized,
