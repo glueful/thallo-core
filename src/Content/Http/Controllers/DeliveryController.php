@@ -125,6 +125,9 @@ final class DeliveryController
         }
         $schema = ContentTypeSchema::fromArray($typeRow['schema']);
         $typeUuid = (string) $typeRow['uuid'];
+        if (($refusal = $this->localeRefusal($query->locale)) !== null) {
+            return $refusal;
+        }
         $locale = $this->locale($query->locale);
 
         try {
@@ -224,6 +227,9 @@ final class DeliveryController
         }
         $schema = ContentTypeSchema::fromArray($typeRow['schema']);
         $typeUuid = (string) $typeRow['uuid'];
+        if (($refusal = $this->localeRefusal($query->locale)) !== null) {
+            return $refusal;
+        }
         $locales = $this->localeChain($query->locale);
 
         $result = $this->resolver->resolve($typeUuid, $type, $locales, $slugOrUuid);

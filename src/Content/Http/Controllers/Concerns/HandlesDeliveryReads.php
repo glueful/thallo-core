@@ -6,6 +6,7 @@ namespace Thallo\Core\Content\Http\Controllers\Concerns;
 
 use Thallo\Core\Content\Http\DTOs\Requests\Delivery\DeliveryListQuery;
 use Thallo\Core\Settings\GeneralSettings;
+use Glueful\Http\Response;
 use Symfony\Component\HttpFoundation\Request;
 
 use function app;
@@ -100,6 +101,24 @@ trait HandlesDeliveryReads
         }
 
         return app($this->context, GeneralSettings::class)->cacheTtl();
+    }
+
+    /**
+     * A 404 for a requested language that is not enabled, or null to go on. Disabling a language
+     * takes its content off the API; it was served as long as it had published rows.
+     */
+    private function localeRefusal(?string $locale): ?Response
+    {
+        if ($locale === null || $locale === '') {
+            return null;
+        }
+        foreach ($this->locales->enabled() as $row) {
+            $code = is_array($row) ? (string) ($row['code'] ?? '') : (string) $row;
+            if ($code === $locale) {
+                return null;
+            }
+        }
+        return Response::notFound("Language '{$locale}' is not enabled.");
     }
 
     /**

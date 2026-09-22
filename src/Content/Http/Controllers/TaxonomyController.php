@@ -89,6 +89,9 @@ final class TaxonomyController
         }
         $schema = ContentTypeSchema::fromArray($typeRow['schema']);
         $typeUuid = (string) $typeRow['uuid'];
+        if (($refusal = $this->localeRefusal($query->locale)) !== null) {
+            return $refusal;
+        }
         $locale = $this->locale($query->locale);
         $scopes = $this->grantedScopes($request);
 
@@ -179,6 +182,9 @@ final class TaxonomyController
         }
         $schema = ContentTypeSchema::fromArray($typeRow['schema']);
         $typeUuid = (string) $typeRow['uuid'];
+        if (($refusal = $this->localeRefusal($query->locale)) !== null) {
+            return $refusal;
+        }
         $locale = $this->locale($query->locale);
         $scopes = $this->grantedScopes($request);
 
