@@ -52,7 +52,9 @@ final class HealthAdminController
 
         return Response::success([
             'health' => [
-                'status' => (string) ($report['status'] ?? 'unknown'),
+                // Counted over every check, Thallo's included: the framework's own status is taken
+                // before the scheduler check is added.
+                'status' => self::overallStatus($checks),
                 'version' => Version::getFullVersion(),
                 'environment' => (string) ($report['environment'] ?? ''),
                 'timestamp' => (string) ($report['timestamp'] ?? date('c')),
@@ -65,6 +67,20 @@ final class HealthAdminController
                 'checks' => $checks,
             ],
         ], 'Health retrieved.');
+    }
+
+    /**
+     * The page's verdict: error when any check errs, warning when any warns, otherwise ok.
+     *
+     * @param list<array{status:string}> $checks
+     */
+    public static function overallStatus(array $checks): string
+    {
+        $statuses = array_column($checks, 'status');
+        if (in_array('error', $statuses, true)) {
+            return 'error';
+        }
+        return in_array('warning', $statuses, true) ? 'warning' : 'ok';
     }
 
     /**
