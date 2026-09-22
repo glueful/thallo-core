@@ -1273,6 +1273,15 @@ final class CoreServiceProvider extends ServiceProvider
                 'shared' => true,
                 'factory' => [self::class, 'makeMediaUrlResolver'],
             ],
+            // A file's alt text and caption for rendered pages (the Image block's fallback).
+            \Thallo\Contracts\Delivery\MediaTextResolver::class => [
+                'shared' => true,
+                'factory' => static fn (ContainerInterface $c): \Thallo\Core\Content\Delivery\EngineMediaTextResolver
+                    => new \Thallo\Core\Content\Delivery\EngineMediaTextResolver(
+                        $c->get(\Glueful\Database\Connection::class),
+                        $c->get(MediaUrlResolver::class),
+                    ),
+            ],
             // One object, two interfaces: the batch seam IS the single-url
             // resolver, so the servability predicate cannot drift between them.
             MediaUrlBatchResolver::class => [
