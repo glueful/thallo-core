@@ -645,7 +645,12 @@ final class StarterBlockTypes
                     ['name' => 'image', 'type' => 'asset', 'required' => true],
                     ['name' => 'alt', 'type' => 'string'],
                     ['name' => 'caption', 'type' => 'string'],
-                    // Sizing is a `width` token and placement on the root (spec §7.2).
+                    // Sizing is a `width` token and placement on the root (spec §7.2) — and, for an
+                    // exact size, pixels: width alone or height alone keeps the picture's
+                    // proportions, both make a box it fills. `fill` is the column's width.
+                    ['name' => 'width', 'type' => 'number', 'min' => 1, 'max' => 4000],
+                    ['name' => 'height', 'type' => 'number', 'min' => 1, 'max' => 4000],
+                    ['name' => 'fill', 'type' => 'boolean'],
                 ]],
             // Responsive image grid (modern-blocks spec §2): items is hard-enforced
             // (enforce_block_types) to only accept `image` child blocks — unlike the
