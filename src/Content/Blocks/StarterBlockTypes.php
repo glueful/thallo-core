@@ -771,6 +771,10 @@ final class StarterBlockTypes
                     ]],
                     ['name' => 'label', 'type' => 'string'],
                     ['name' => 'copy', 'type' => 'boolean'],
+                    // Dense snippets — an API response, a config excerpt — set smaller and closer.
+                    ['name' => 'size', 'type' => 'enum', 'enum' => ['default', 'compact']],
+                    // Short text on the caption's right ("200 OK", "~/my-site"), beside Copy.
+                    ['name' => 'note', 'type' => 'string'],
                 ]],
             ['slug' => 'html', 'label' => 'HTML', 'icon' => 'i-lucide-code',
                 'category' => 'Advanced',
