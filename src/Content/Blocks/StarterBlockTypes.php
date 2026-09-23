@@ -246,14 +246,14 @@ final class StarterBlockTypes
                 ],
                 'style_capabilities' => [
                     'spacing', 'width', 'visibility', 'colors.surface', 'colors.text', 'typography', 'radius', 'shadow',
-                    'layout.item',
+                    'layout.item', 'aside',
                 ],
                 'style_targets' => StyleTargets::root('box', [
                     'spacing', 'width', 'visibility', 'colors.surface', 'colors.text',
                     'layout.item',
                 ], [
                     'targets' => ['title' => ['kind' => 'text'], 'media' => ['kind' => 'box', 'optional' => true]],
-                    'map' => ['typography' => 'title', 'radius' => 'media', 'shadow' => 'media'],
+                    'map' => ['typography' => 'title', 'radius' => 'media', 'shadow' => 'media', 'aside' => 'media'],
                 ]),
                 'schema' => [
                     ['name' => 'headline', 'type' => 'string'],
