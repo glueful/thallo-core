@@ -1,1 +1,0 @@
-import{X as e,t}from"./vue.runtime.esm-bundler-DHLDW_US.js";import{H as n}from"./index-BiFdwRAE.js";var r=0;function i(i,a=`reka`){if(i)return i;let o,s=n({useId:void 0});return o=s.useId?s.useId():`useId`in t?e?.():`${++r}`,a?`${a}-${o}`:o}export{i as t};
