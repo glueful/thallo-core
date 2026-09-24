@@ -83,6 +83,9 @@ final class SettingsValidator
         $errors = [];
         foreach ($this->flatten($style) as $path => $value) {
             $def = StyleSchema::property($path);
+            if ($def === null && in_array($path, StyleSchema::RETIRED, true)) {
+                continue;
+            }
             if ($def === null) {
                 $errors["settings.style.{$path}"] = 'unknown style property';
                 continue;
