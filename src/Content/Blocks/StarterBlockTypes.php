@@ -370,11 +370,19 @@ final class StarterBlockTypes
                 'category' => 'Content',
                 'description' => 'A vertical list of navigation links with an optional title.',
                 'flags' => [],
-                'style_capabilities' => ['spacing', 'visibility', 'layout.item'],
-                'style_targets' => StyleTargets::root('box', ['spacing', 'visibility', 'layout.item']),
+                // The title — a footer column's heading — has a text style of its own, as a card's does.
+                'style_capabilities' => [
+                    'spacing', 'visibility', 'layout.item', 'typography', 'colors.text', 'alignment.text',
+                ],
+                'style_targets' => StyleTargets::root('box', ['spacing', 'visibility', 'layout.item'], [
+                    'targets' => ['title' => ['kind' => 'text', 'optional' => true]],
+                    'map' => ['typography' => 'title', 'colors.text' => 'title', 'alignment.text' => 'title'],
+                ]),
                 'schema' => [
                     ['name' => 'title', 'type' => 'string'],
-                    ['name' => 'items', 'type' => 'json'],
+                    // JSON underneath ({label, url, icon?, active?} per link); `link-list` has the
+                    // admin edit it as rows of links rather than as JSON text.
+                    ['name' => 'items', 'type' => 'json', 'format' => 'link-list'],
                 ]],
             // PageCTA shape (block-library spec §2b): title/description, the five
             // band variants, orientation/reverse, button links.

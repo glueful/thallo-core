@@ -12,8 +12,9 @@ use Thallo\Core\Content\Starter\Kinds\BlockTypeKind;
  * `thallo:provision` once installed, so an upgrade needs no further command.
  *
  * Fields are additive: the row's order is preserved, a starter field absent from the row is
- * appended, a same-name field the starter now labels receives `enum_labels` when the row has
- * none, and nothing is removed (the migration flow retires fields). The style declaration —
+ * appended, a same-name field the starter now labels receives `enum_labels` — or now formats
+ * receives its `format`, the hint that picks its editor — when the row has none, and nothing is
+ * removed (the migration flow retires fields). The style declaration —
  * `style_capabilities`, `style_targets`, `flags` (visual builder spec §1.7) — is the starter's
  * to own: a row whose declaration differs takes the definition's, so a row seeded before the
  * declarations existed, or synced before a block's conversion, renders its settings after the
@@ -106,13 +107,15 @@ final class StarterBlockTypeSync
                 $added[] = (string) $field['name'];
                 continue;
             }
-            if (!isset($field['enum_labels'])) {
-                continue;
-            }
-            foreach ($row as $i => $rowField) {
-                if (($rowField['name'] ?? null) === $field['name'] && !isset($rowField['enum_labels'])) {
-                    $row[$i]['enum_labels'] = $field['enum_labels'];
-                    $labelled[] = (string) $field['name'];
+            foreach (['enum_labels', 'format'] as $hint) {
+                if (!isset($field[$hint])) {
+                    continue;
+                }
+                foreach ($row as $i => $rowField) {
+                    if (($rowField['name'] ?? null) === $field['name'] && !isset($rowField[$hint])) {
+                        $row[$i][$hint] = $field[$hint];
+                        $labelled[] = (string) $field['name'];
+                    }
                 }
             }
         }

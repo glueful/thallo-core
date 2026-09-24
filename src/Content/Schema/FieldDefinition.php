@@ -25,6 +25,9 @@ final class FieldDefinition implements FieldDescriptor
      */
     public const STRING_FORMATS = ['icon', 'brand-icon', 'color'];
 
+    /** A json field may declare `link-list`: a list of {label, url} links, edited as rows. */
+    public const JSON_FORMATS = ['link-list'];
+
     /** @param list<string> $enumValues */
     public function __construct(
         public readonly string $name,
@@ -148,8 +151,9 @@ final class FieldDefinition implements FieldDescriptor
         // `format` is a presentation hint with a per-type vocabulary: text fields
         // pick their editor (plain textarea vs rich, default 'plain'); string
         // fields may declare an icon picker (icon|brand-icon, default none —
-        // icon-picker spec §2; validation stays with pattern/enum). Unknown
-        // values fail LOUDLY for typed vocabularies; other types ignore format.
+        // icon-picker spec §2; validation stays with pattern/enum); json fields may
+        // declare `link-list`, edited as rows of links. Unknown values fail LOUDLY for
+        // typed vocabularies; other types ignore format.
         $format = null;
         if ($type === 'text') {
             $rawFormat = $raw['format'] ?? null;
@@ -167,6 +171,14 @@ final class FieldDefinition implements FieldDescriptor
                     throw new SchemaParseException(
                         "string field '{$name}' has invalid format (expected icon|brand-icon|color)"
                     );
+                }
+                $format = $rawFormat;
+            }
+        } elseif ($type === 'json') {
+            $rawFormat = $raw['format'] ?? null;
+            if ($rawFormat !== null && $rawFormat !== '') {
+                if (!is_string($rawFormat) || !in_array($rawFormat, self::JSON_FORMATS, true)) {
+                    throw new SchemaParseException("json field '{$name}' has invalid format (expected link-list)");
                 }
                 $format = $rawFormat;
             }
