@@ -2054,6 +2054,11 @@ final class CoreServiceProvider extends ServiceProvider
                 'shared' => true,
                 'autowire' => true,
             ],
+            \Thallo\Core\Http\Controllers\RegionPreviewController::class => [
+                'class' => \Thallo\Core\Http\Controllers\RegionPreviewController::class,
+                'shared' => true,
+                'autowire' => true,
+            ],
             IconInventoryController::class => [
                 'class' => IconInventoryController::class,
                 'shared' => true,
