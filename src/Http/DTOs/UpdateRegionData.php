@@ -21,6 +21,9 @@ final class UpdateRegionData implements RequestData
         /** @var array<string,mixed> Fixed per-region settings vocabulary. */
         #[Rule('array')]
         public readonly array $settings = [],
+        /** @var array<string, ?int> BOTH regions' lock_version as loaded (regions-stage spec §4.5). */
+        #[Rule('array')]
+        public readonly ?array $expected = null,
     ) {
     }
 }

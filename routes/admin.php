@@ -291,6 +291,10 @@ $router->group(['prefix' => '/v1/admin'], function (Router $router): void {
         $router->post('/regions/preview/apply', [RegionPreviewController::class, 'apply'])
         ->middleware('content_permission:content.manage');
 
+        // One batch save for both regions (regions-stage spec §4.5).
+        $router->put('/regions', [RegionAdminController::class, 'saveAll'])
+        ->middleware('content_permission:content.manage');
+
         $router->put('/regions/{slug}', [RegionAdminController::class, 'update'])
         ->middleware('content_permission:content.manage');
 
