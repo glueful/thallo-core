@@ -370,14 +370,18 @@ final class StarterBlockTypes
                 'category' => 'Content',
                 'description' => 'A vertical list of navigation links with an optional title.',
                 'flags' => [],
-                // The title — a footer column's heading — has a text style of its own, as a card's does.
+                // The title — a footer column's heading — has a text style of its own, as a card's does,
+                // and so do the links: the `link` part, each link's text and the room around it.
                 'style_capabilities' => [
                     'spacing', 'visibility', 'layout.item', 'typography', 'colors.text', 'alignment.text',
                 ],
                 'style_targets' => StyleTargets::root('box', ['spacing', 'visibility', 'layout.item'], [
                     'targets' => ['title' => ['kind' => 'text', 'optional' => true]],
                     'map' => ['typography' => 'title', 'colors.text' => 'title', 'alignment.text' => 'title'],
-                ]),
+                ]) + ['parts' => ['link' => ['label' => 'Link', 'capabilities' => [
+                    'typography', 'colors.text',
+                    'spacing.padding.top', 'spacing.padding.right', 'spacing.padding.bottom', 'spacing.padding.left',
+                ]]]],
                 'schema' => [
                     ['name' => 'title', 'type' => 'string'],
                     // JSON underneath ({label, url, icon?, active?} per link); `link-list` has the

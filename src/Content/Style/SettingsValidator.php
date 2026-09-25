@@ -8,6 +8,7 @@ use Thallo\Contracts\Style\PropertyDefinition;
 use Thallo\Contracts\Style\StyleCapabilities;
 use Thallo\Contracts\Style\StyleClassSnapshot;
 use Thallo\Contracts\Style\StyleSchema;
+use Thallo\Contracts\Style\StyleTargets;
 use Thallo\Contracts\Style\ValueKind;
 use Thallo\Contracts\Style\Vocabulary;
 
@@ -28,8 +29,12 @@ final class SettingsValidator
     /**
      * @return array{0: array<string,mixed>, 1: array<string,string>}
      */
-    public function validate(mixed $settings, StyleCapabilities $caps, ?StyleClassSnapshot $classes = null): array
-    {
+    public function validate(
+        mixed $settings,
+        StyleCapabilities $caps,
+        ?StyleClassSnapshot $classes = null,
+        ?StyleTargets $targets = null,
+    ): array {
         if ($settings === null || $settings === []) {
             return [[], []];
         }
@@ -57,6 +62,13 @@ final class SettingsValidator
                         $clean['classes'] = $ids;
                     }
                     break;
+                case 'parts':
+                    [$parts, $partErrors] = $this->validateParts($value, $targets);
+                    $errors += $partErrors;
+                    if ($parts !== []) {
+                        $clean['parts'] = $parts;
+                    }
+                    break;
                 case 'advanced':
                     [$advanced, $advancedErrors] = $this->validateAdvanced($value);
                     $errors += $advancedErrors;
@@ -74,10 +86,14 @@ final class SettingsValidator
     /**
      * @return array{0: array<string,mixed>, 1: array<string,string>}
      */
-    private function validateStyle(mixed $style, StyleCapabilities $caps): array
-    {
+    private function validateStyle(
+        mixed $style,
+        StyleCapabilities $caps,
+        string $at = 'settings.style',
+        string $refusal = 'not styleable on this block',
+    ): array {
         if (!is_array($style) || array_is_list($style)) {
-            return [[], ['settings.style' => 'must be an object']];
+            return [[], [$at => 'must be an object']];
         }
         $clean = [];
         $errors = [];
@@ -87,22 +103,60 @@ final class SettingsValidator
                 continue;
             }
             if ($def === null) {
-                $errors["settings.style.{$path}"] = 'unknown style property';
+                $errors["{$at}.{$path}"] = 'unknown style property';
                 continue;
             }
             if (!$caps->allows($path)) {
-                $errors["settings.style.{$path}"] = 'not styleable on this block';
+                $errors["{$at}.{$path}"] = $refusal;
                 continue;
             }
             [$cleanValue, $error, $breakpoint] = $def->responsive
                 ? $this->validateResponsive($def, $value)
                 : [...$this->validateSingle($def, $value), null];
             if ($error !== null) {
-                $errors['settings.style.' . $path . ($breakpoint === null ? '' : ".{$breakpoint}")] = $error;
+                $errors["{$at}." . $path . ($breakpoint === null ? '' : ".{$breakpoint}")] = $error;
                 continue;
             }
             if ($cleanValue !== null) {
                 $this->set($clean, $path, $cleanValue);
+            }
+        }
+        return [$clean, $errors];
+    }
+
+    /**
+     * A block's parts (a links block's links): each a style record of the part's own, validated
+     * against the part's capabilities (StyleTargets). An emptied part is dropped.
+     *
+     * @return array{0: array<string,mixed>, 1: array<string,string>}
+     */
+    private function validateParts(mixed $value, ?StyleTargets $targets): array
+    {
+        if ($value === null || $value === []) {
+            return [[], []];
+        }
+        if (!is_array($value) || array_is_list($value)) {
+            return [[], ['settings.parts' => 'must be an object']];
+        }
+        $clean = [];
+        $errors = [];
+        foreach ($value as $name => $record) {
+            if (!is_string($name) || $targets === null || !$targets->isPart($name)) {
+                $errors["settings.parts.{$name}"] = 'unknown part';
+                continue;
+            }
+            if ($record === null || $record === []) {
+                continue;
+            }
+            [$style, $styleErrors] = $this->validateStyle(
+                $record,
+                $targets->partCapabilities($name),
+                "settings.parts.{$name}",
+                'not styleable on this part',
+            );
+            $errors += $styleErrors;
+            if ($style !== []) {
+                $clean[$name] = $style;
             }
         }
         return [$clean, $errors];

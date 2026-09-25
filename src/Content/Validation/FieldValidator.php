@@ -593,6 +593,7 @@ final class FieldValidator
                 $block['settings'] ?? null,
                 $registry?->capabilitiesFor($type) ?? StyleCapabilities::none(),
                 $this->styleClasses?->snapshot(),
+                $registry?->targetsFor($type),
             );
             if ($settingsErrors !== []) {
                 foreach ($settingsErrors as $settingsPath => $message) {
