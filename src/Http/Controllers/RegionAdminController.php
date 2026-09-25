@@ -136,7 +136,14 @@ final class RegionAdminController
             if (!in_array($slug, RegionDefinitions::slugs(), true)) {
                 return Response::validation(["regions.{$slug}" => "unknown region '{$slug}'"]);
             }
-            $posted[$slug] = is_array($region) ? $region : [];
+            // A posted region is saved whole: without its blocks it would be emptied, without its
+            // settings they would be reset.
+            if (!is_array($region) || !is_array($region['blocks'] ?? null) || !is_array($region['settings'] ?? null)) {
+                return Response::validation([
+                    "regions.{$slug}" => 'a posted region needs both its blocks and its settings',
+                ]);
+            }
+            $posted[$slug] = $region;
         }
         $committed = $this->runSave($posted, $input->expected);
         if ($committed instanceof Response) {
@@ -202,8 +209,11 @@ final class RegionAdminController
         } catch (\Thallo\Core\Content\Style\Classes\StyleClassArchived $e) {
             return Response::validation(['blocks' => $e->getMessage()]);
         }
-        // Chrome appears on every page: broad-purge the render page cache once (spec §11).
-        app($this->context, EventService::class)->dispatch(new RegionUpdated(implode(',', array_keys($posted))));
+        // Chrome appears on every page: broad-purge the render page cache once (spec §11) — when
+        // anything was written.
+        if ($posted !== []) {
+            app($this->context, EventService::class)->dispatch(new RegionUpdated(implode(',', array_keys($posted))));
+        }
         return $committed;
     }
 
