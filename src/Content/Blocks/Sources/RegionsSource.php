@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Thallo\Core\Content\Blocks\Sources;
 
 use Glueful\Database\Connection;
+use Thallo\Core\Content\Regions\RegionWriteLock;
 use Thallo\Core\Content\Schema\ContentTypeSchema;
 
 /**
@@ -17,8 +18,11 @@ final class RegionsSource implements BlockDocumentSource
 
     private ?ContentTypeSchema $schema = null;
 
-    public function __construct(private readonly Connection $db)
+    private readonly RegionWriteLock $lock;
+
+    public function __construct(private readonly Connection $db, ?RegionWriteLock $lock = null)
     {
+        $this->lock = $lock ?? new RegionWriteLock($db);
     }
 
     public function id(): string
@@ -48,20 +52,23 @@ final class RegionsSource implements BlockDocumentSource
     public function persist(DocumentRef $ref, array $fields, ?string $actor = null): bool
     {
         // Conditional on the lock version each() handed out (spec §4.5): a region saved since
-        // is a refused write the caller records and retries from a fresh read.
+        // is a refused write the caller records and retries from a fresh read. Under the region
+        // lock like every writer (regions-stage spec §4.5), so it queues behind an admin save.
         $expected = (int) $ref->revision;
         $blocks = is_array($fields['blocks'] ?? null) ? array_values($fields['blocks']) : [];
         $stamp = is_array($fields['_schema'] ?? null) ? $fields['_schema'] : null;
-        $affected = $this->db->table('regions')
-            ->where('slug', '=', $ref->sourceId)
-            ->where('lock_version', '=', $expected)
-            ->update([
-                'blocks' => json_encode($blocks, JSON_THROW_ON_ERROR),
-                'schema_stamp' => $stamp === null ? null : json_encode($stamp, JSON_THROW_ON_ERROR),
-                'lock_version' => $expected + 1,
-                'updated_at' => date('Y-m-d H:i:s'),
-            ]);
-        return $affected >= 1;
+        return $this->lock->within(function () use ($ref, $expected, $blocks, $stamp): bool {
+            $affected = $this->db->table('regions')
+                ->where('slug', '=', $ref->sourceId)
+                ->where('lock_version', '=', $expected)
+                ->update([
+                    'blocks' => json_encode($blocks, JSON_THROW_ON_ERROR),
+                    'schema_stamp' => $stamp === null ? null : json_encode($stamp, JSON_THROW_ON_ERROR),
+                    'lock_version' => $expected + 1,
+                    'updated_at' => date('Y-m-d H:i:s'),
+                ]);
+            return $affected >= 1;
+        });
     }
 
     /**

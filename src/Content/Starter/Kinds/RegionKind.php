@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Thallo\Core\Content\Starter\Kinds;
 
 use Thallo\Core\Content\Regions\RegionRepository;
+use Thallo\Core\Content\Regions\RegionWriteLock;
 use Thallo\Core\Content\Starter\AbstractStarterKind;
 use Thallo\Core\Content\Starter\Fingerprint;
 use Thallo\Core\Content\Starter\SeedContext;
@@ -87,10 +88,19 @@ final class RegionKind extends AbstractStarterKind
 
     public function rename(StarterDefinition $definition, string $oldKey): void
     {
-        $this->db->table('regions')->where('slug', '=', $oldKey)->update([
-            'slug' => $definition->definitionKey,
-            'updated_at' => gmdate('Y-m-d H:i:s'),
-        ]);
+        // A writer like any other (regions-stage spec §4.5): under the region lock, and bumping
+        // the version so an editor holding the old one gets a conflict instead of writing past it.
+        (new RegionWriteLock($this->db))->within(function () use ($definition, $oldKey): void {
+            $row = $this->db->table('regions')->where('slug', '=', $oldKey)->first();
+            if ($row === null) {
+                return;
+            }
+            $this->db->table('regions')->where('slug', '=', $oldKey)->update([
+                'slug' => $definition->definitionKey,
+                'lock_version' => (int) ($row['lock_version'] ?? 0) + 1,
+                'updated_at' => gmdate('Y-m-d H:i:s'),
+            ]);
+        });
     }
 
     public function syncable(): bool
