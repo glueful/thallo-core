@@ -1,0 +1,1 @@
+import{t as e}from"./client-BKRJYTQt.js";import{a as t}from"./errors-DOqW0_no.js";import{X as n}from"./index-BUOrGTxB.js";import{n as r}from"./keys-K-Jm8Wu1.js";async function i(){let{data:n,error:r,response:i}=await e.GET(`/render/style-schema`);if(r)throw t(r,i);return n.data}function a(){return n({key:r.styleSchema,query:i,staleTime:5*6e4})}export{a as t};
