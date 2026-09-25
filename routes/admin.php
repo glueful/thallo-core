@@ -280,10 +280,6 @@ $router->group(['prefix' => '/v1/admin'], function (Router $router): void {
         $router->get('/regions', [RegionAdminController::class, 'index'])
             ->middleware('content_permission:content.view');
 
-    // Renders UNSAVED region payloads through the real theme pipeline (never writes).
-        $router->post('/regions/preview', [RegionAdminController::class, 'preview'])
-        ->middleware('content_permission:content.view');
-
     // The header & footer stage (regions-stage spec §4.1, §4.3): a session pins both saved regions;
     // an apply builds that session's own working copy. Neither writes a region.
         $router->post('/regions/preview/session', [RegionPreviewController::class, 'session'])
