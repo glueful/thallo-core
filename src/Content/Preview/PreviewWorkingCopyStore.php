@@ -183,7 +183,7 @@ final class PreviewWorkingCopyStore
     }
 
     /** A ULID: 48-bit millisecond time then 80 random bits, Crockford base32, 26 characters. */
-    private static function ulid(): string
+    public static function ulid(): string
     {
         $alphabet = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
         $out = '';

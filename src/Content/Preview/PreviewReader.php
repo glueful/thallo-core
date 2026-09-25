@@ -59,6 +59,10 @@ final class PreviewReader
      */
     public function readVerified(\Thallo\Contracts\Delivery\PreviewSession $session): array
     {
+        // Only an entry session reads a draft (regions-stage spec §4.7).
+        if (!$session->isEntry()) {
+            throw new \InvalidArgumentException('a regions session has no draft to read');
+        }
         $payload = PreviewToken::fromVerifiedClaims(
             $session->entry,
             $session->locale,

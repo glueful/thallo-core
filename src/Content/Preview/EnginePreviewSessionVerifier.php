@@ -27,7 +27,7 @@ final class EnginePreviewSessionVerifier implements PreviewSessionVerifier
         try {
             $payload = PreviewToken::verify($token, $this->previewKey($this->context), time());
         } catch (PreviewTokenException) {
-            return null;
+            return $this->regions($token);
         }
         return new PreviewSession(
             $token,
@@ -39,6 +39,30 @@ final class EnginePreviewSessionVerifier implements PreviewSessionVerifier
             $payload->neutral,
             $payload->expiresAt,
             $payload->design,
+        );
+    }
+
+    /** A regions-stage token (regions-stage spec §4.1) — a session of the other kind — or null. */
+    private function regions(string $token): ?PreviewSession
+    {
+        try {
+            $claims = RegionPreviewToken::verify($token, $this->previewKey($this->context), time());
+        } catch (PreviewTokenException) {
+            return null;
+        }
+        return new PreviewSession(
+            $token,
+            '',
+            $claims->locale,
+            null,
+            null,
+            null,
+            null,
+            $claims->expiresAt,
+            null,
+            PreviewSession::KIND_REGIONS,
+            $claims->session,
+            $claims->page,
         );
     }
 }

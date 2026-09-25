@@ -201,6 +201,7 @@ final class EnginePublicRouteResolver implements PublicRouteResolver
         // shows its draft at its canonical URL; everything else stays published.
         if (
             $previewSession !== null
+            && $previewSession->isEntry()
             && $previewSession->entry === (string) $row['entry_uuid']
             && $previewSession->locale === (string) $row['locale']
         ) {
@@ -323,6 +324,7 @@ final class EnginePublicRouteResolver implements PublicRouteResolver
         // homepage fully published.
         if (
             $previewSession !== null
+            && $previewSession->isEntry()
             && $previewSession->entry === (string) $row['entry_uuid']
             && $previewSession->locale === (string) $row['locale']
         ) {
