@@ -330,6 +330,14 @@ $router->group(['prefix' => '/v1/admin'], function (Router $router): void {
     });
 
     $router->group(['middleware' => ['tenant_system', 'auth']], function (Router $router): void {
+        // The signed-in user's own account (Profile and Security): only ever the caller's, so being
+        // signed in is the whole gate.
+        $router->get('/account', [\Thallo\Core\Http\Controllers\AccountAdminController::class, 'show']);
+        $router->patch('/account', [\Thallo\Core\Http\Controllers\AccountAdminController::class, 'update']);
+        $router->post('/account/password', [\Thallo\Core\Http\Controllers\AccountAdminController::class, 'password'])
+            ->rateLimit(5, 1)
+            ->middleware('rate_limit');
+
         // Admin user management (app-owned policy over glueful/users' store primitives). The list/read
         // lives in glueful/users (`GET /v1/users`); creating and removing users is product policy.
         $router->get('/users/assignable-roles', [AssignableRolesController::class, 'index'])
