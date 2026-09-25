@@ -21,7 +21,7 @@ use Thallo\Tenancy\Cache\TenantCacheSegment;
  * Every record carries its `exp`; a record read after it is absent, whatever the cache still
  * holds. The clock is injectable so that lifetime can be proven.
  */
-final class RegionPreviewStore
+final class RegionPreviewStore implements \Thallo\Contracts\Delivery\RegionStageSnapshots
 {
     private const LOCK_SPINS = 40;
     private const LOCK_SPIN_US = 5_000;

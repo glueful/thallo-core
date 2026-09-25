@@ -1366,6 +1366,11 @@ final class CoreServiceProvider extends ServiceProvider
                 'shared' => true,
                 'factory' => [self::class, 'makeRegionPreviewStore'],
             ],
+            // The render pack reads a stage session's snapshot through the contract.
+            \Thallo\Contracts\Delivery\RegionStageSnapshots::class => [
+                'shared' => true,
+                'factory' => [self::class, 'makeRegionStageSnapshots'],
+            ],
             // The site style generation (visual builder spec §4.3): the per-site version of the
             // style-class definitions, incremented only by StyleClassRepository::write().
             \Thallo\Core\Content\Style\SiteStyleGeneration::class => [
@@ -1475,6 +1480,12 @@ final class CoreServiceProvider extends ServiceProvider
             $container->get(\Thallo\Tenancy\Cache\TenantCacheSegment::class),
             $container->get(ApplicationContext::class),
         );
+    }
+
+    public static function makeRegionStageSnapshots(
+        ContainerInterface $container,
+    ): \Thallo\Contracts\Delivery\RegionStageSnapshots {
+        return $container->get(\Thallo\Core\Content\Preview\RegionPreviewStore::class);
     }
 
     public static function makeSystemKeyReconciler(ContainerInterface $container): SystemKeyReconcilerContract
