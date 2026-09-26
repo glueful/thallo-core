@@ -224,6 +224,7 @@ final class EnginePublicRouteResolver implements PublicRouteResolver
             'listing' => null, 'term' => null, 'term_type' => null, 'field' => null,
             'preview' => false,
             'presentation' => $this->presentationOf($row),
+            'type_listing' => $this->typeListing($typeSlug, (string) $row['locale']),
             'cache_tags' => $this->expansionTags($expanded),
         ];
     }
@@ -347,6 +348,7 @@ final class EnginePublicRouteResolver implements PublicRouteResolver
             'listing' => null, 'term' => null, 'term_type' => null, 'field' => null,
             'preview' => false,
             'presentation' => $this->presentationOf($row),
+            'type_listing' => $this->typeListing($typeSlug, (string) $row['locale']),
             'cache_tags' => $this->expansionTags($expanded),
         ];
     }
@@ -484,6 +486,7 @@ final class EnginePublicRouteResolver implements PublicRouteResolver
             'listing' => null, 'term' => null, 'term_type' => null, 'field' => null,
             'preview' => true,
             'presentation' => $this->presentationOf($read),
+            'type_listing' => $this->typeListing($typeSlug, (string) $read['locale']),
             'preview_revision' => $read['preview_revision'] ?? null,
         ];
     }
@@ -701,6 +704,43 @@ final class EnginePublicRouteResolver implements PublicRouteResolver
             static fn(string $uuid): string => 'thallo:entry:' . $uuid,
             $expanded->entryUuids(),
         );
+    }
+
+    /**
+     * Where an entry's type is browsed, for its template to link to (a post's "All posts" and its
+     * category archives): the listing's path, and each archive field's path with the field its
+     * terms are named by. Null unless the type is listed — the same gates the listing and archive
+     * routes apply, so a template given a path never links to a page that 404s. A term with no
+     * slug still resolves by its uuid.
+     *
+     * @return array{path: string, archives: array<string, array{path: string, slug_field: ?string}>}|null
+     */
+    private function typeListing(string $typeSlug, string $locale): ?array
+    {
+        if ($typeSlug === '' || !in_array($typeSlug, $this->listingTypes(), true)) {
+            return null;
+        }
+        $typeRow = $this->types->findBySlug($typeSlug);
+        if ($typeRow === null || !$this->isPubliclyDeliverable($typeRow)) {
+            return null;
+        }
+        $prefix = $locale === $this->locales->default() ? '' : '/' . rawurlencode($locale);
+        $path = $prefix . '/' . rawurlencode($typeSlug);
+        $archives = [];
+        foreach (ContentTypeSchema::fromArray((array) ($typeRow['schema'] ?? []))->fields() as $field) {
+            if ($field->type !== 'reference' || !$field->filterable) {
+                continue;
+            }
+            $target = $this->types->findBySlug((string) ($field->referenceType ?? ''));
+            if ($target === null || !$this->isPubliclyDeliverable($target)) {
+                continue;
+            }
+            $archives[$field->name] = [
+                'path' => $path . '/' . rawurlencode($field->name),
+                'slug_field' => $field->referenceSlugField,
+            ];
+        }
+        return ['path' => $path, 'archives' => $archives];
     }
 
     /**
