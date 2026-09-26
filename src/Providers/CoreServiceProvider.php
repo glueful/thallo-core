@@ -1692,6 +1692,16 @@ final class CoreServiceProvider extends ServiceProvider
                 'shared' => true,
                 'autowire' => true,
             ],
+            \Thallo\Core\Content\Layouts\LayoutWriteLock::class => [
+                'class' => \Thallo\Core\Content\Layouts\LayoutWriteLock::class,
+                'shared' => true,
+                'autowire' => true,
+            ],
+            \Thallo\Core\Content\Layouts\LayoutRepository::class => [
+                'class' => \Thallo\Core\Content\Layouts\LayoutRepository::class,
+                'shared' => true,
+                'autowire' => true,
+            ],
             \Thallo\Core\Content\Patterns\SavedSectionRepository::class => [
                 'class' => \Thallo\Core\Content\Patterns\SavedSectionRepository::class,
                 'shared' => true,

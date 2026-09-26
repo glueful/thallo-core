@@ -50,6 +50,9 @@ final class RawPdoWriteAudit implements StaticWriteAudit
         // The region write lock: pg_advisory_xact_lock and a pg_locks read only (regions-stage
         // spec §4.5); region rows are written through the builder under it.
         'core/src/Content/Regions/RegionWriteLock.php',
+        // The layout write locks: the same shape (type layouts spec §5.5); layout rows are written
+        // through the builder under them.
+        'core/src/Content/Layouts/LayoutWriteLock.php',
         // Storefront-rendering slice 2, Tasks 8/10: PackSlugLifecycleAuthority/
         // PackCheckoutAttemptAuthority's getPDO() is pg_advisory_xact_lock only (slug/checkout-
         // attempt reservation locking); every owned-row read/write (thallo_commerce_product_slugs,
