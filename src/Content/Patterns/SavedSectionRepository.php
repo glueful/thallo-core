@@ -17,11 +17,14 @@ final class SavedSectionRepository
     {
     }
 
-    /** @return list<array{id: string, name: string, category: string, description: ?string, scope: string, region: ?string, block: array<string,mixed>}> */
+    /**
+     * @return list<array{id: string, name: string, category: string, description: ?string, scope: string,
+     *     region: ?string, block: array<string,mixed>, lock_version: int}>
+     */
     public function all(): array
     {
         $rows = $this->db->table('saved_sections')
-            ->select(['id', 'name', 'category', 'description', 'scope', 'region', 'block'])
+            ->select(['id', 'name', 'category', 'description', 'scope', 'region', 'block', 'lock_version'])
             ->orderBy('created_at', 'ASC')
             ->get();
         $out = [];
@@ -38,6 +41,7 @@ final class SavedSectionRepository
                 'scope' => ($row['scope'] ?? 'page') === 'region' ? 'region' : 'page',
                 'region' => isset($row['region']) ? (string) $row['region'] : null,
                 'block' => $block,
+                'lock_version' => (int) ($row['lock_version'] ?? 0),
             ];
         }
         return $out;
@@ -77,15 +81,43 @@ final class SavedSectionRepository
         return $id;
     }
 
-    /** @param array{name?: string, category?: string, description?: ?string} $changes */
+    /**
+     * Rename, recategorise or describe. Bumps the version, so a block walker holding the old one
+     * is refused and re-reads.
+     *
+     * @param array{name?: string, category?: string, description?: ?string} $changes
+     */
     public function update(string $id, array $changes): void
     {
         if ($changes === []) {
             return;
         }
-        $this->db->table('saved_sections')->where('id', $id)->update(
-            $changes + ['updated_at' => gmdate('Y-m-d H:i:s')],
-        );
+        $row = $this->db->table('saved_sections')->select(['lock_version'])->where('id', $id)->first();
+        if ($row === null) {
+            return;
+        }
+        $this->db->table('saved_sections')->where('id', $id)->update($changes + [
+            'lock_version' => (int) ($row['lock_version'] ?? 0) + 1,
+            'updated_at' => gmdate('Y-m-d H:i:s'),
+        ]);
+    }
+
+    /**
+     * Replace the block, only while the section is still at `$expected` — the version a block
+     * walker read it at. False when it moved on: nothing written.
+     *
+     * @param array<string,mixed> $block
+     */
+    public function replaceBlock(string $id, int $expected, array $block): bool
+    {
+        return $this->db->table('saved_sections')
+            ->where('id', $id)
+            ->where('lock_version', '=', $expected)
+            ->update([
+                'block' => json_encode($block, JSON_THROW_ON_ERROR),
+                'lock_version' => $expected + 1,
+                'updated_at' => gmdate('Y-m-d H:i:s'),
+            ]) >= 1;
     }
 
     public function delete(string $id): bool

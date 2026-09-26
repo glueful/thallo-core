@@ -14,6 +14,9 @@ use Thallo\Core\Content\Patterns\PatternLibrary;
 use Thallo\Core\Content\Patterns\SavedSectionRepository;
 use Thallo\Core\Content\Regions\RegionDefinitions;
 use Thallo\Core\Content\Schema\ContentTypeSchema;
+use Thallo\Core\Content\Style\Classes\StyleClassArchived;
+use Thallo\Core\Content\Style\Classes\StyleClassLocked;
+use Thallo\Core\Content\Style\Classes\StyleClassReferenceGuard;
 use Thallo\Core\Content\Validation\FieldValidator;
 use Thallo\Core\Content\Validation\ValidationException;
 use Thallo\Core\Support\ActorHelper;
@@ -35,6 +38,7 @@ final class SavedSectionController
         private readonly SavedSectionRepository $sections,
         private readonly PatternLibrary $library,
         private readonly FieldValidator $validator,
+        private readonly ?StyleClassReferenceGuard $classGuard = null,
     ) {
     }
 
@@ -76,6 +80,18 @@ final class SavedSectionController
             return Response::validation($errors);
         }
         $block = self::withoutIds($clean['blocks'][0] ?? []);
+        // As a page save: no class that is archived, or held by a job rewriting every document.
+        try {
+            $this->classGuard?->assertBlocksWritable([], [$block]);
+        } catch (StyleClassLocked $e) {
+            return Response::error('A job holds a style class this section applies.', Response::HTTP_CONFLICT, [
+                'code' => 'STYLE_CLASS_LOCKED',
+                'job' => $e->job,
+                'style_class' => $e->id,
+            ]);
+        } catch (StyleClassArchived $e) {
+            return Response::validation(['block' => $e->getMessage()]);
+        }
         $id = $this->sections->create(
             (string) $labels['name'],
             $labels['category'] ?? self::DEFAULT_CATEGORY,

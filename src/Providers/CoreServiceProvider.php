@@ -885,6 +885,11 @@ final class CoreServiceProvider extends ServiceProvider
                 'shared' => true,
                 'autowire' => true,
             ],
+            \Thallo\Core\Content\Blocks\Sources\SavedSectionsSource::class => [
+                'class' => \Thallo\Core\Content\Blocks\Sources\SavedSectionsSource::class,
+                'shared' => true,
+                'autowire' => true,
+            ],
             \Thallo\Core\Content\Blocks\Sources\RegionsSource::class => [
                 'class' => \Thallo\Core\Content\Blocks\Sources\RegionsSource::class,
                 'shared' => true,
@@ -1445,6 +1450,7 @@ final class CoreServiceProvider extends ServiceProvider
             $container->get(\Thallo\Core\Content\Blocks\Sources\PublishedEntriesSource::class),
             $container->get(\Thallo\Core\Content\Blocks\Sources\EntryVersionsSource::class),
             $container->get(\Thallo\Core\Content\Blocks\Sources\RegionsSource::class),
+            $container->get(\Thallo\Core\Content\Blocks\Sources\SavedSectionsSource::class),
         );
     }
 

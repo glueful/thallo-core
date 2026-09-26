@@ -16,7 +16,8 @@ use Glueful\Http\Contracts\ResponseData;
 final class StyleClassUsageData implements ResponseData
 {
     /**
-     * @param array{entry_drafts: int, entry_published: int, entry_versions: int, regions: int} $by_source
+     * @param array{entry_drafts: int, entry_published: int, entry_versions: int, regions: int,
+     *     saved_sections: int} $by_source
      * @param array<string, array{active: int, dormant: int}> $properties
      */
     public function __construct(
