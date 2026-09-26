@@ -23,20 +23,25 @@ final class PatternLibrary
     /** @var array<string,array<string,mixed>|false> the factory's canonical data per type; false when unusable */
     private array $made = [];
 
-    public function __construct(private readonly BlockFactory $factory)
-    {
+    public function __construct(
+        private readonly BlockFactory $factory,
+        /** The site's own sections, saved from the stage: listed after the shipped ones. */
+        private readonly ?SavedSectionRepository $saved = null,
+    ) {
     }
 
     /**
-     * Sections first, in their categories' order, then pages.
+     * Sections first — a page body's, then the header's and footer's — then pages and the regions'
+     * templates, then the site's saved sections. Every entry says where it belongs: `scope` `page`,
+     * or `region` with its `region`.
      *
-     * @return list<array{slug:string,kind:string,label:string,category:string,description:string,blocks:list<array<string,mixed>>}>
+     * @return list<array{slug:string,kind:string,label:string,category:string,description:string,blocks:list<array<string,mixed>>,scope:string,region:?string,saved:bool,id:?string}>
      */
     public function all(): array
     {
         $this->made = []; // the site's block types can change between two askings
         $sections = [];
-        foreach (StarterPatterns::sections() as $section) {
+        foreach ([...StarterPatterns::sections(), ...StarterPatterns::regionSections()] as $section) {
             $block = $this->resolve($section['block']);
             if ($block !== null) {
                 $sections[$section['slug']] = [
@@ -46,11 +51,12 @@ final class PatternLibrary
                     'category' => $section['category'],
                     'description' => $section['description'],
                     'blocks' => [$block],
+                    ...self::place($section['region'] ?? null),
                 ];
             }
         }
         $pages = [];
-        foreach (StarterPatterns::pages() as $page) {
+        foreach ([...StarterPatterns::pages(), ...StarterPatterns::regionTemplates()] as $page) {
             $blocks = [];
             foreach ($page['sections'] as $slug) {
                 if (!isset($sections[$slug])) {
@@ -62,12 +68,49 @@ final class PatternLibrary
                 'slug' => $page['slug'],
                 'kind' => 'page',
                 'label' => $page['label'],
-                'category' => 'Pages',
+                'category' => $page['category'] ?? 'Pages',
                 'description' => $page['description'],
                 'blocks' => $blocks,
+                ...self::place($page['region'] ?? null),
             ];
         }
-        return [...array_values($sections), ...$pages];
+        return [...array_values($sections), ...$pages, ...$this->savedSections()];
+    }
+
+    /** @return array{scope: string, region: ?string, saved: false, id: null} a shipped pattern's place */
+    private static function place(?string $region): array
+    {
+        return ['scope' => $region === null ? 'page' : 'region', 'region' => $region, 'saved' => false, 'id' => null];
+    }
+
+    /**
+     * The site's saved sections, as sections: `saved` true, `id` for renaming and deleting them.
+     * One whose block type can no longer be used is left out, as a shipped section would be.
+     *
+     * @return list<array<string,mixed>>
+     */
+    private function savedSections(): array
+    {
+        $out = [];
+        foreach ($this->saved?->all() ?? [] as $row) {
+            $block = $this->resolve($row['block']);
+            if ($block === null) {
+                continue;
+            }
+            $out[] = [
+                'slug' => 'saved-' . $row['id'],
+                'kind' => 'section',
+                'label' => $row['name'],
+                'category' => $row['category'],
+                'description' => $row['description'] ?? '',
+                'blocks' => [$block],
+                'scope' => $row['scope'],
+                'region' => $row['region'],
+                'saved' => true,
+                'id' => $row['id'],
+            ];
+        }
+        return $out;
     }
 
     /**

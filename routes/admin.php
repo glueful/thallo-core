@@ -126,6 +126,14 @@ $router->group(['prefix' => '/v1/admin'], function (Router $router): void {
         $router->get('/patterns', [PatternController::class, 'index'])
         ->middleware('content_permission:content.view');
 
+        // Saved sections: a block saved from the stage into that library, reused as a copy.
+        $router->post('/saved-sections', [\Thallo\Core\Content\Http\Controllers\SavedSectionController::class, 'store'])
+            ->middleware('content_permission:content.manage');
+        $router->patch('/saved-sections/{id}', [\Thallo\Core\Content\Http\Controllers\SavedSectionController::class, 'update'])
+            ->middleware('content_permission:content.manage');
+        $router->delete('/saved-sections/{id}', [\Thallo\Core\Content\Http\Controllers\SavedSectionController::class, 'destroy'])
+            ->middleware('content_permission:content.manage');
+
         // "Set up documentation" (Settings › Import / Export): makes a content type and changes a
         // site setting, so it asks for what both of those ask for.
         $router->post('/docs/setup', [DocsSetupController::class, 'store'])

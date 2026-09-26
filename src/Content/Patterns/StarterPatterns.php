@@ -422,6 +422,150 @@ final class StarterPatterns
         ];
     }
 
+    /**
+     * The header's and footer's own sections. A region lays its blocks out in one wrapping row, so
+     * each of these is ONE block that takes the whole of it — a region's row holds a section as a
+     * page body holds a band.
+     *
+     * @return list<array{slug:string,label:string,category:string,description:string,block:array<string,mixed>,region:string}>
+     */
+    public static function regionSections(): array
+    {
+        $tagline = '<p>One line on what this site is for.</p>';
+        return [
+            self::regionSection(
+                'header',
+                'header-logo-menu-button',
+                'Logo, menu and button',
+                'The logo on one side; the main menu and a button on the other.',
+                self::row([
+                    self::logo(),
+                    self::row([self::menu(), self::regionButton('Get started')], 'end', fill: false),
+                ]),
+            ),
+            self::regionSection(
+                'header',
+                'header-announcement',
+                'Announcement bar',
+                'One short line above the header, on the accent colour.',
+                self::block('container', ['element' => 'div', 'content' => [
+                    self::text('<p><strong>New:</strong> a short announcement for every page.</p>', 'center'),
+                ]], [
+                    'spacing' => ['padding' => [
+                        'top' => ['base' => self::token('spacing.xs')],
+                        'bottom' => ['base' => self::token('spacing.xs')],
+                    ]],
+                    'colors' => [
+                        'surface' => self::token('color.accent'),
+                        'text' => self::token('color.accent-contrast'),
+                    ],
+                    'radius' => self::token('radius.md'),
+                    'layout' => ['basis' => ['base' => self::choice('full')]],
+                ]),
+            ),
+            self::regionSection(
+                'header',
+                'header-centred',
+                'Centred logo and menu',
+                'The logo above the main menu, both centred.',
+                self::column([self::logo(), self::menu()]),
+            ),
+            self::regionSection(
+                'footer',
+                'footer-link-columns',
+                'Link columns',
+                'The logo and a line about the site, then three columns of links.',
+                self::block('container', ['element' => 'div', 'content' => [
+                    self::stack([self::logo(), self::text($tagline, 'start')]),
+                    self::links('Product', ['Features', 'Pricing', 'Changelog']),
+                    self::links('Company', ['About', 'Blog', 'Contact']),
+                    self::links('Resources', ['Help', 'Privacy', 'Terms']),
+                ]], ['layout' => [
+                    'display' => ['base' => self::choice('grid')],
+                    'columns' => ['base' => self::choice('1'), 'md' => self::choice('2'), 'lg' => self::choice('4')],
+                    'gap' => [
+                        'row' => ['base' => self::token('spacing.xl')],
+                        'column' => ['base' => self::token('spacing.xl')],
+                    ],
+                    'basis' => ['base' => self::choice('full')],
+                ]]),
+            ),
+            self::regionSection(
+                'footer',
+                'footer-copyright-social',
+                'Copyright and social links',
+                'The copyright line, this year’s, on one side; social links on the other.',
+                self::row([self::copyright(), self::social()]),
+            ),
+            self::regionSection(
+                'footer',
+                'footer-tagline-social',
+                'Tagline and social links',
+                'The logo, a line about the site and social links, centred.',
+                self::column([self::logo(), self::text($tagline, 'center'), self::social()]),
+            ),
+            self::regionSection(
+                'footer',
+                'footer-copyright',
+                'Copyright line',
+                'The copyright line alone, centred; the year keeps itself current.',
+                self::column([self::copyright()]),
+            ),
+        ];
+    }
+
+    /**
+     * Whole headers and footers: a region's sections, in order. Inserted, a template replaces the
+     * region's blocks — after the editor asks, and one undo puts them back.
+     *
+     * @return list<array{slug:string,label:string,category:string,description:string,sections:list<string>,region:string}>
+     */
+    public static function regionTemplates(): array
+    {
+        return [
+            [
+                'slug' => 'header-classic',
+                'label' => 'Classic header',
+                'category' => 'Header',
+                'description' => 'An announcement bar over the logo, the main menu and a button.',
+                'sections' => ['header-announcement', 'header-logo-menu-button'],
+                'region' => 'header',
+            ],
+            [
+                'slug' => 'header-simple',
+                'label' => 'Simple header',
+                'category' => 'Header',
+                'description' => 'The logo, the main menu and a button, in one row.',
+                'sections' => ['header-logo-menu-button'],
+                'region' => 'header',
+            ],
+            [
+                'slug' => 'header-centred-stack',
+                'label' => 'Centred header',
+                'category' => 'Header',
+                'description' => 'The logo above the main menu, both centred.',
+                'sections' => ['header-centred'],
+                'region' => 'header',
+            ],
+            [
+                'slug' => 'footer-columns',
+                'label' => 'Four-column footer',
+                'category' => 'Footer',
+                'description' => 'The logo and three columns of links over the copyright and social links.',
+                'sections' => ['footer-link-columns', 'footer-copyright-social'],
+                'region' => 'footer',
+            ],
+            [
+                'slug' => 'footer-simple',
+                'label' => 'Simple footer',
+                'category' => 'Footer',
+                'description' => 'The logo, a line about the site and social links over the copyright line.',
+                'sections' => ['footer-tagline-social', 'footer-copyright'],
+                'region' => 'footer',
+            ],
+        ];
+    }
+
     // ── Construction ────────────────────────────────────────────────────────────────────────────
 
     /**
@@ -436,6 +580,119 @@ final class StarterPatterns
         array $block,
     ): array {
         return compact('slug', 'label', 'category', 'description', 'block');
+    }
+
+    /**
+     * @param array<string,mixed> $block
+     * @return array{slug:string,label:string,category:string,description:string,block:array<string,mixed>,region:string}
+     */
+    private static function regionSection(
+        string $region,
+        string $slug,
+        string $label,
+        string $description,
+        array $block,
+    ): array {
+        return [...self::section($slug, $label, ucfirst($region), $description, $block), 'region' => $region];
+    }
+
+    /**
+     * A region's row: its blocks side by side, spread apart and wrapping on a phone. `$fill` has it
+     * take the whole of the region's row (a section); off, it sits inside another row.
+     *
+     * @param list<array<string,mixed>> $content
+     * @return array<string,mixed>
+     */
+    private static function row(array $content, string $justify = 'between', bool $fill = true): array
+    {
+        $layout = [
+            'display' => ['base' => self::choice('flex')],
+            'direction' => ['base' => self::choice('row')],
+            'wrap' => ['base' => self::choice('wrap')],
+            'align_items' => ['base' => self::choice('center')],
+            'gap' => [
+                'row' => ['base' => self::token('spacing.sm')],
+                'column' => ['base' => self::token('spacing.lg')],
+            ],
+        ];
+        if ($fill) {
+            $layout['basis'] = ['base' => self::choice('full')];
+        }
+        return self::block('container', ['element' => 'div', 'content' => $content], [
+            'layout' => $layout,
+            'alignment' => ['content' => ['base' => self::choice($justify)]],
+        ]);
+    }
+
+    /**
+     * A region's centred column, taking the whole of its row.
+     *
+     * @param list<array<string,mixed>> $content
+     * @return array<string,mixed>
+     */
+    private static function column(array $content): array
+    {
+        return self::block('container', ['element' => 'div', 'content' => $content], ['layout' => [
+            'display' => ['base' => self::choice('flex')],
+            'direction' => ['base' => self::choice('column')],
+            'align_items' => ['base' => self::choice('center')],
+            'gap' => ['row' => ['base' => self::token('spacing.sm')]],
+            'basis' => ['base' => self::choice('full')],
+        ]]);
+    }
+
+    /** @return array<string,mixed> */
+    private static function logo(): array
+    {
+        return self::block('logo', ['size' => 'medium', 'link_home' => true]);
+    }
+
+    /** The main menu — the one a fresh site is seeded with. */
+    /** @return array<string,mixed> */
+    private static function menu(): array
+    {
+        return self::block('navigation', ['menu' => 'main']);
+    }
+
+    /** @return array<string,mixed> */
+    private static function regionButton(string $label): array
+    {
+        return self::block(
+            'button',
+            ['label' => $label, 'url' => '#', 'variant' => 'solid', 'color' => 'primary', 'size' => 'md'],
+        );
+    }
+
+    /**
+     * @param list<string> $labels
+     * @return array<string,mixed>
+     */
+    private static function links(string $title, array $labels): array
+    {
+        return self::block('links', [
+            'title' => $title,
+            'items' => array_map(static fn (string $label): array => ['label' => $label, 'url' => '#'], $labels),
+        ]);
+    }
+
+    /** The theme's copyright line: the year is rendered, so it rolls over by itself. */
+    /** @return array<string,mixed> */
+    private static function copyright(): array
+    {
+        return self::block('shortcode', ['name' => 'copyright', 'params' => []]);
+    }
+
+    /** @return array<string,mixed> */
+    private static function social(): array
+    {
+        $link = static fn (string $brand, string $label, string $url): array
+            => self::block('social_link', ['icon' => 'brand:' . $brand, 'url' => $url, 'label' => $label]);
+        return self::block('social_links', ['items' => [
+            $link('x', 'X', 'https://x.com'),
+            $link('instagram', 'Instagram', 'https://instagram.com'),
+            $link('github', 'GitHub', 'https://github.com'),
+            $link('youtube', 'YouTube', 'https://youtube.com'),
+        ]]);
     }
 
     /**

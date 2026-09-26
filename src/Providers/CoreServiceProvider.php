@@ -1681,6 +1681,16 @@ final class CoreServiceProvider extends ServiceProvider
                 'shared' => true,
                 'autowire' => true,
             ],
+            \Thallo\Core\Content\Http\Controllers\SavedSectionController::class => [
+                'class' => \Thallo\Core\Content\Http\Controllers\SavedSectionController::class,
+                'shared' => true,
+                'autowire' => true,
+            ],
+            \Thallo\Core\Content\Patterns\SavedSectionRepository::class => [
+                'class' => \Thallo\Core\Content\Patterns\SavedSectionRepository::class,
+                'shared' => true,
+                'autowire' => true,
+            ],
             BlockTypeController::class => [
                 'class' => BlockTypeController::class,
                 'shared' => true,
