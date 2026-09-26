@@ -747,6 +747,32 @@ final class StarterBlockTypes
                     ['name' => 'caption', 'type' => 'string'],
                     ['name' => 'width', 'type' => 'enum', 'enum' => ['normal', 'wide', 'full']],
                 ]],
+            // A Google map of a place, with no API key (Google's own embed): built from the place,
+            // zoom and view, or taken from Google's "Embed a map" link once it proves to be one.
+            ['slug' => 'map', 'label' => 'Map', 'icon' => 'i-lucide-map-pin',
+                'category' => 'Media',
+                'description' => 'A Google map of your address, with directions.',
+                'flags' => [],
+                'starter_content' => [
+                    'place' => 'Accra Mall, Accra', 'zoom' => 15, 'view' => 'map', 'height' => 'medium',
+                    'directions' => true,
+                ],
+                'style_capabilities' => ['spacing', 'width', 'radius', 'shadow', 'border', 'visibility', 'layout.item'],
+                // The frame (the map, or the click-to-load placeholder) takes corners, border and shadow.
+                'style_targets' => StyleTargets::root('box', ['spacing', 'width', 'visibility', 'layout.item'], [
+                    'targets' => ['frame' => ['kind' => 'box', 'optional' => true]],
+                    'map' => ['radius' => 'frame', 'shadow' => 'frame', 'border' => 'frame'],
+                ]),
+                'schema' => [
+                    ['name' => 'place', 'type' => 'string', 'label' => 'Address or place'],
+                    ['name' => 'embed_url', 'type' => 'string', 'label' => 'Google Maps embed link (optional)'],
+                    ['name' => 'zoom', 'type' => 'number', 'min' => 1, 'max' => 21],
+                    ['name' => 'view', 'type' => 'enum', 'enum' => ['map', 'satellite']],
+                    ['name' => 'height', 'type' => 'enum', 'enum' => ['small', 'medium', 'large']],
+                    ['name' => 'directions', 'type' => 'boolean', 'label' => 'Show a Get directions link'],
+                    ['name' => 'click_to_load', 'type' => 'boolean', 'label' => 'Load the map only when clicked'],
+                    ['name' => 'caption', 'type' => 'string'],
+                ]],
             ['slug' => 'audio', 'label' => 'Audio', 'icon' => 'i-lucide-audio-lines',
                 'category' => 'Media', 'description' => 'An uploaded audio file with native controls.',
                 'flags' => [],

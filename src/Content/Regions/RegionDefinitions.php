@@ -27,7 +27,7 @@ final class RegionDefinitions
         'footer' => [
             'logo', 'navigation', 'button', 'social_links', 'container', 'rich_text',
             'separator', 'spacer', 'icon', 'image', 'shortcode', 'html',
-            'footer', 'links',
+            'footer', 'links', 'map',
             'mini-cart', 'wishlist-link', 'auth-state',
         ],
     ];
