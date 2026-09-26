@@ -1427,6 +1427,7 @@ final class CoreServiceProvider extends ServiceProvider
                 ? $container->get(PreviewThemeValidator::class)
                 : null,
             $container->get(PreviewWorkingCopyStore::class),
+            $container->get(\Thallo\Core\Content\Layouts\EntryLayoutStatus::class),
         );
     }
 
@@ -1735,6 +1736,11 @@ final class CoreServiceProvider extends ServiceProvider
             \Thallo\Contracts\Layouts\LayoutSurfaceRegistry::class => [
                 'shared' => true,
                 'factory' => [self::class, 'makeLayoutSurfaceRegistry'],
+            ],
+            \Thallo\Core\Content\Layouts\EntryLayoutStatus::class => [
+                'class' => \Thallo\Core\Content\Layouts\EntryLayoutStatus::class,
+                'shared' => true,
+                'autowire' => true,
             ],
             \Thallo\Core\Content\Layouts\LayoutValidator::class => [
                 'class' => \Thallo\Core\Content\Layouts\LayoutValidator::class,

@@ -27,6 +27,13 @@ final class PreviewMintData implements ResponseData
         /** The accepted working-copy pair, so a second editor initialises from accepted state. */
         public readonly ?string $epoch = null,
         public readonly ?int $revision = null,
+        /**
+         * The layout the entry renders through, `{surface, target, label}`, or null: none, or the
+         * page opts out (type layouts spec §6.3). The entry preview apply answers it too.
+         *
+         * @var array{surface: string, target: string, label: string}|null
+         */
+        public readonly ?array $layout = null,
     ) {
     }
 }

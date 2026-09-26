@@ -59,6 +59,8 @@ final class PreviewController
         private readonly ?PreviewThemeValidator $themeValidator = null,
         /** The working copy (visual builder spec §3.5): the mint names the accepted pair. */
         private readonly ?PreviewWorkingCopyStore $workingCopies = null,
+        /** Whether the entry renders through its type's layout (type layouts spec §6.3). */
+        private readonly ?\Thallo\Core\Content\Layouts\EntryLayoutStatus $layouts = null,
     ) {
     }
 
@@ -155,6 +157,9 @@ final class PreviewController
             'theme_url' => $renderEnabled ? '/_preview/' . $token : null,
             'epoch' => $current['epoch'] ?? null,
             'revision' => $current['revision'] ?? null,
+            // The effective layout for the document the stage opens on: the accepted working copy
+            // when there is one, the stored draft otherwise.
+            'layout' => $this->layouts?->forEntry($uuid, $locale, $this->workingCopies?->fields($uuid, $locale)),
         ], 'Preview token minted.');
     }
 

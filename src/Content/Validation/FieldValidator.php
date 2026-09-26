@@ -163,7 +163,7 @@ final class FieldValidator
     }
 
     /**
-     * The fixed _presentation vocabulary: show_title (bool), layout
+     * The fixed _presentation vocabulary: show_title (bool), use_layout (bool — type layouts), layout
      * ('full'|'centered'), header/footer ('default'|'hidden' — global-regions
      * spec §7; 'variant:{slug}' is future vocabulary, rejected today), and style —
      * the page's own style frame (padding, margin, background), validated exactly
@@ -192,6 +192,12 @@ final class FieldValidator
                     throw new ValidationException(['_presentation.layout' => "must be 'full' or 'centered'"]);
                 }
                 $clean['layout'] = $subValue;
+            } elseif ($key === 'use_layout') {
+                // Type layouts spec §6.5: false renders the theme's template, as if the type had none.
+                if (!is_bool($subValue)) {
+                    throw new ValidationException(['_presentation.use_layout' => 'must be a boolean']);
+                }
+                $clean['use_layout'] = $subValue;
             } elseif ($key === 'header' || $key === 'footer') {
                 if (!in_array($subValue, ['default', 'hidden'], true)) {
                     throw new ValidationException(["_presentation.{$key}" => "must be 'default' or 'hidden'"]);

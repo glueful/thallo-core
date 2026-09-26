@@ -80,6 +80,8 @@ final class EntryController
         private readonly ?PreviewFragmentRenderer $fragments = null,
         /** The site's style classes (spec §4.3): refreshed first, so a request works from one snapshot. */
         private readonly ?StyleClassProvider $styleClasses = null,
+        /** Whether the entry renders through its type's layout (type layouts spec §6.3). */
+        private readonly ?\Thallo\Core\Content\Layouts\EntryLayoutStatus $layouts = null,
     ) {
     }
 
@@ -474,6 +476,8 @@ final class EntryController
             'style_generation' => $this->styleClasses?->snapshot()->generation ?? 0,
             'applied_at' => $result['accepted_at'],
             'fragments' => $fragments,
+            // The effective layout for the document just accepted (an opt-out or back in follows it).
+            'layout' => $this->layouts?->forEntry($uuid, $locale, $clean),
         ], 'Preview applied.');
     }
 

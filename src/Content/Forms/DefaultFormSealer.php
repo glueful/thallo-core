@@ -23,8 +23,13 @@ final class DefaultFormSealer implements FormSealer
     ) {
     }
 
-    public function describe(array $block, ?array $entry, ?string $currentPath, ?string $regionSlug): ?SealedForm
-    {
+    public function describe(
+        array $block,
+        ?array $entry,
+        ?string $currentPath,
+        ?string $regionSlug,
+        ?string $layoutSource = null,
+    ): ?SealedForm {
         $data = is_array($block['data'] ?? null) ? $block['data'] : [];
         $recipient = $this->resolveRecipient($data);
         if ($recipient === null) {
@@ -36,7 +41,7 @@ final class DefaultFormSealer implements FormSealer
         }
         $redirect = $this->safeRedirect(is_string($data['redirect_url'] ?? null) ? $data['redirect_url'] : null);
         $blockId = is_string($block['id'] ?? null) ? $block['id'] : 'anon';
-        $source = FormSourceIdentity::resolve($entry, $regionSlug, $currentPath);
+        $source = FormSourceIdentity::resolve($entry, $regionSlug, $currentPath, $layoutSource);
         $issued = time();
 
         $descriptor = new FormDescriptor(
