@@ -1448,6 +1448,22 @@ final class CoreServiceProvider extends ServiceProvider
         return $container->get(\Thallo\Core\Content\Layouts\LayoutResolver::class);
     }
 
+    public static function makeLayoutPreviewStore(
+        ContainerInterface $container,
+    ): \Thallo\Core\Content\Preview\LayoutPreviewStore {
+        return new \Thallo\Core\Content\Preview\LayoutPreviewStore(
+            $container->get(CacheStore::class),
+            $container->get(\Thallo\Tenancy\Cache\TenantCacheSegment::class),
+            $container->get(ApplicationContext::class),
+        );
+    }
+
+    public static function makeLayoutStageSnapshots(
+        ContainerInterface $container,
+    ): \Thallo\Contracts\Layouts\LayoutStageSnapshots {
+        return $container->get(\Thallo\Core\Content\Preview\LayoutPreviewStore::class);
+    }
+
     public static function makeLayoutSurfaceRegistry(
         ContainerInterface $container,
     ): \Thallo\Contracts\Layouts\LayoutSurfaceRegistry {
@@ -1736,6 +1752,19 @@ final class CoreServiceProvider extends ServiceProvider
             \Thallo\Contracts\Layouts\LayoutSurfaceRegistry::class => [
                 'shared' => true,
                 'factory' => [self::class, 'makeLayoutSurfaceRegistry'],
+            ],
+            \Thallo\Core\Content\Preview\LayoutPreviewStore::class => [
+                'shared' => true,
+                'factory' => [self::class, 'makeLayoutPreviewStore'],
+            ],
+            \Thallo\Contracts\Layouts\LayoutStageSnapshots::class => [
+                'shared' => true,
+                'factory' => [self::class, 'makeLayoutStageSnapshots'],
+            ],
+            \Thallo\Core\Http\Controllers\LayoutPreviewController::class => [
+                'class' => \Thallo\Core\Http\Controllers\LayoutPreviewController::class,
+                'shared' => true,
+                'autowire' => true,
             ],
             \Thallo\Core\Content\Layouts\EntryLayoutStatus::class => [
                 'class' => \Thallo\Core\Content\Layouts\EntryLayoutStatus::class,

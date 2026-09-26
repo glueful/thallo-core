@@ -48,7 +48,7 @@ final class EnginePreviewSessionVerifier implements PreviewSessionVerifier
         try {
             $claims = RegionPreviewToken::verify($token, $this->previewKey($this->context), time());
         } catch (PreviewTokenException) {
-            return null;
+            return $this->layout($token);
         }
         return new PreviewSession(
             $token,
@@ -63,6 +63,33 @@ final class EnginePreviewSessionVerifier implements PreviewSessionVerifier
             PreviewSession::KIND_REGIONS,
             $claims->session,
             $claims->page,
+        );
+    }
+
+    /** A layout-stage token (type layouts spec §5.2) — the third kind — or null. */
+    private function layout(string $token): ?PreviewSession
+    {
+        try {
+            $claims = LayoutPreviewToken::verify($token, $this->previewKey($this->context), time());
+        } catch (PreviewTokenException) {
+            return null;
+        }
+        return new PreviewSession(
+            $token,
+            '',
+            $claims->locale,
+            null,
+            null,
+            null,
+            null,
+            $claims->expiresAt,
+            null,
+            PreviewSession::KIND_LAYOUT,
+            $claims->session,
+            null,
+            $claims->surface,
+            $claims->target,
+            $claims->sample,
         );
     }
 }
