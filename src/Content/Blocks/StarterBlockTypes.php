@@ -51,6 +51,12 @@ final class StarterBlockTypes
      * caption, which a drifting picture would cover. A picture that should drift is a container's
      * background.
      */
+    /** A text field block's style capabilities: a heading's (type layouts spec §4). */
+    private const FIELD_TEXT = [
+        'spacing', 'width', 'alignment.self', 'alignment.text', 'typography', 'colors.text',
+        'visibility', 'layout.item',
+    ];
+
     private const KEN_BURNS_FRAMES = ['container' => 'root', 'hero' => 'media'];
 
     /**
@@ -772,6 +778,97 @@ final class StarterBlockTypes
                     ['name' => 'directions', 'type' => 'boolean', 'label' => 'Show a Get directions link'],
                     ['name' => 'click_to_load', 'type' => 'boolean', 'label' => 'Load the map only when clicked'],
                     ['name' => 'caption', 'type' => 'string'],
+                ]],
+            // ---- Fields (type layouts spec §4): layout-only blocks that show the current entry's
+            // data and hold none of it. Refused anywhere but in a layout (FieldValidator).
+            ['slug' => 'entry_title', 'label' => 'Entry title', 'icon' => 'i-lucide-heading-1',
+                'category' => 'Fields', 'description' => 'The entry\'s title.',
+                'flags' => ['layout_only' => true],
+                'style_capabilities' => self::FIELD_TEXT,
+                'style_targets' => StyleTargets::root('text', self::FIELD_TEXT),
+                'schema' => [
+                    ['name' => 'level', 'type' => 'enum', 'enum' => ['h1', 'h2', 'h3', 'h4']],
+                    ['name' => 'link', 'type' => 'boolean', 'label' => 'Link to the entry'],
+                ]],
+            ['slug' => 'entry_date', 'label' => 'Entry date', 'icon' => 'i-lucide-calendar',
+                'category' => 'Fields', 'description' => 'When the entry was published.',
+                'flags' => ['layout_only' => true],
+                'style_capabilities' => self::FIELD_TEXT,
+                'style_targets' => StyleTargets::root('text', self::FIELD_TEXT),
+                'schema' => [
+                    ['name' => 'format', 'type' => 'enum', 'enum' => ['long', 'short', 'relative']],
+                    ['name' => 'prefix', 'type' => 'string'],
+                ]],
+            ['slug' => 'entry_cover', 'label' => 'Entry cover', 'icon' => 'i-lucide-image',
+                'category' => 'Fields', 'description' => 'An image field of the entry, such as its cover.',
+                'flags' => ['layout_only' => true],
+                'style_capabilities' => [
+                    'spacing', 'width', 'alignment.self', 'visibility', 'radius', 'shadow', 'layout.item',
+                ],
+                'style_targets' => StyleTargets::root('box', [
+                    'spacing', 'width', 'alignment.self', 'visibility', 'layout.item',
+                ], [
+                    'targets' => ['picture' => ['kind' => 'box', 'optional' => true]],
+                    'map' => ['radius' => 'picture', 'shadow' => 'picture'],
+                ]),
+                'schema' => [
+                    ['name' => 'field', 'type' => 'string', 'label' => 'Image field'],
+                    ['name' => 'aspect', 'type' => 'enum', 'enum' => ['natural', '16:9', '4:3', '1:1']],
+                    ['name' => 'link', 'type' => 'boolean', 'label' => 'Link to the entry'],
+                ]],
+            ['slug' => 'entry_excerpt', 'label' => 'Entry excerpt', 'icon' => 'i-lucide-text-quote',
+                'category' => 'Fields', 'description' => 'A short text field of the entry, shown as its lead.',
+                'flags' => ['layout_only' => true],
+                'style_capabilities' => self::FIELD_TEXT,
+                'style_targets' => StyleTargets::root('text', self::FIELD_TEXT),
+                'schema' => [
+                    ['name' => 'field', 'type' => 'string', 'label' => 'Text field'],
+                    ['name' => 'clamp', 'type' => 'number', 'min' => 0, 'max' => 6, 'label' => 'Lines at most'],
+                ]],
+            ['slug' => 'entry_terms', 'label' => 'Entry terms', 'icon' => 'i-lucide-tags',
+                'category' => 'Fields', 'description' => 'A reference field\'s terms, such as its categories.',
+                'flags' => ['layout_only' => true],
+                'style_capabilities' => self::FIELD_TEXT,
+                'style_targets' => StyleTargets::root('text', self::FIELD_TEXT),
+                'schema' => [
+                    ['name' => 'field', 'type' => 'string', 'label' => 'Reference field'],
+                    ['name' => 'style', 'type' => 'enum', 'enum' => ['text', 'badges']],
+                    ['name' => 'link', 'type' => 'boolean', 'label' => 'Link to their archives'],
+                ]],
+            ['slug' => 'entry_field', 'label' => 'Entry field', 'icon' => 'i-lucide-text-cursor-input',
+                'category' => 'Fields', 'description' => 'Any other field of the entry.',
+                'flags' => ['layout_only' => true],
+                'style_capabilities' => self::FIELD_TEXT,
+                'style_targets' => StyleTargets::root('text', self::FIELD_TEXT),
+                'schema' => [
+                    ['name' => 'field', 'type' => 'string', 'label' => 'Field'],
+                    ['name' => 'format', 'type' => 'enum', 'enum' => ['text', 'rich', 'number', 'date']],
+                ]],
+            ['slug' => 'entry_content', 'label' => 'Entry content', 'icon' => 'i-lucide-square-dashed-bottom-code',
+                'category' => 'Fields', 'description' => 'Where each entry\'s own blocks go.',
+                'flags' => ['layout_only' => true],
+                'style_capabilities' => ['spacing', 'width', 'visibility', 'layout.item'],
+                'style_targets' => StyleTargets::root('box', ['spacing', 'width', 'visibility', 'layout.item']),
+                'schema' => [
+                    ['name' => 'field', 'type' => 'string', 'label' => 'Blocks field'],
+                ]],
+            ['slug' => 'entry_neighbours', 'label' => 'Previous and next', 'icon' => 'i-lucide-arrow-left-right',
+                'category' => 'Fields', 'description' => 'Links to the previous and next entry.',
+                'flags' => ['layout_only' => true],
+                'style_capabilities' => ['spacing', 'width', 'visibility', 'layout.item'],
+                'style_targets' => StyleTargets::root('box', ['spacing', 'width', 'visibility', 'layout.item']),
+                'schema' => [
+                    ['name' => 'previous_label', 'type' => 'string'],
+                    ['name' => 'next_label', 'type' => 'string'],
+                ]],
+            ['slug' => 'entry_related', 'label' => 'Related entries', 'icon' => 'i-lucide-list',
+                'category' => 'Fields', 'description' => 'The newest other entries of the same type.',
+                'flags' => ['layout_only' => true],
+                'style_capabilities' => ['spacing', 'width', 'visibility', 'layout.item'],
+                'style_targets' => StyleTargets::root('box', ['spacing', 'width', 'visibility', 'layout.item']),
+                'schema' => [
+                    ['name' => 'count', 'type' => 'number', 'min' => 1, 'max' => 6],
+                    ['name' => 'style', 'type' => 'enum', 'enum' => ['list', 'cards']],
                 ]],
             ['slug' => 'audio', 'label' => 'Audio', 'icon' => 'i-lucide-audio-lines',
                 'category' => 'Media', 'description' => 'An uploaded audio file with native controls.',

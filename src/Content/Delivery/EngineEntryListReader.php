@@ -106,6 +106,29 @@ final class EngineEntryListReader implements EntryListReader
         return ['items' => $items, 'cache_tags' => array_values(array_unique($tags))];
     }
 
+    public function neighbours(string $type, string $uuid, string $locale): array
+    {
+        $typeRow = $this->types->findBySlug($type);
+        if ($typeRow === null || !$this->visible($typeRow)) {
+            return ['previous' => null, 'next' => null, 'cache_tags' => []];
+        }
+        $rows = $this->delivery->neighbourRows((string) $typeRow['uuid'], $locale, $uuid);
+        $expanded = new ExpandedTargets();
+        $out = ['previous' => null, 'next' => null];
+        $tags = ['thallo:type:' . (string) $typeRow['slug']];
+        foreach (['previous', 'next'] as $side) {
+            if ($rows[$side] === null) {
+                continue;
+            }
+            $item = $this->listShaper->shape([$rows[$side]], $typeRow, $locale, $expanded)[0] ?? null;
+            $out[$side] = $item;
+            if (($item['uuid'] ?? null) !== null) {
+                $tags[] = 'thallo:entry:' . (string) $item['uuid'];
+            }
+        }
+        return $out + ['cache_tags' => array_values(array_unique($tags))];
+    }
+
     /** @param array<string,mixed> $typeRow */
     private function visible(array $typeRow): bool
     {

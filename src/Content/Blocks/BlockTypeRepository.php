@@ -98,7 +98,8 @@ final class BlockTypeRepository
 
     /** The flags a block type may declare (spec §1.7, §3.5). */
     /** Rendering hints a block type may carry (visual builder spec §3.1). */
-    public const FLAGS = ['renders_children_inline'];
+    /** `layout_only`: a field block (type layouts spec §5.6) — refused anywhere but in a layout. */
+    public const FLAGS = ['renders_children_inline', 'layout_only'];
 
     /**
      * Validate the four style keys of a payload and return them encoded for storage. Absent or
@@ -267,6 +268,19 @@ final class BlockTypeRepository
             'updated_at' => gmdate('Y-m-d H:i:s'),
         ]);
         $this->schemas = null;
+    }
+
+    /** @return list<string> the slugs of the block types flagged `layout_only` (field blocks) */
+    public function layoutOnlySlugs(): array
+    {
+        $out = [];
+        foreach ($this->all() as $row) {
+            $flags = is_array($row['flags'] ?? null) ? $row['flags'] : [];
+            if (($flags['layout_only'] ?? false) === true) {
+                $out[] = (string) $row['slug'];
+            }
+        }
+        return $out;
     }
 
     /**

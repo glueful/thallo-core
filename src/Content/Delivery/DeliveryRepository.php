@@ -342,6 +342,39 @@ final class DeliveryRepository
     }
 
     /** @return array<string,mixed>|null */
+    /**
+     * The published entries of a type immediately before and after one by publish date (type
+     * layouts spec §4): `previous` the older, `next` the newer; equal times fall back to the version
+     * id so the order is total.
+     *
+     * @return array{previous: ?array<string,mixed>, next: ?array<string,mixed>}
+     */
+    public function neighbourRows(string $contentTypeUuid, string $locale, string $entryUuid): array
+    {
+        $current = $this->findPublishedByUuid($contentTypeUuid, $locale, $entryUuid);
+        if ($current === null) {
+            return ['previous' => null, 'next' => null];
+        }
+        $at = (string) ($current['published_at'] ?? '');
+        $previous = $this->base($contentTypeUuid, $locale)
+            ->where('p.entry_uuid', '!=', $entryUuid)
+            ->where('p.published_at', '<=', $at)
+            ->orderByRaw('p.published_at DESC, v.id DESC')
+            ->first();
+        $next = $this->base($contentTypeUuid, $locale)
+            ->where('p.entry_uuid', '!=', $entryUuid)
+            ->where('p.published_at', '>=', $at)
+            ->orderByRaw('p.published_at ASC, v.id ASC')
+            ->first();
+        if ($previous !== null && $next !== null && $previous['entry_uuid'] === $next['entry_uuid']) {
+            $next = null; // one entry at the very same time is shown once, as the older
+        }
+        return [
+            'previous' => $previous === null ? null : $this->hydrate($previous),
+            'next' => $next === null ? null : $this->hydrate($next),
+        ];
+    }
+
     public function findPublishedByUuid(string $contentTypeUuid, string $locale, string $entryUuid): ?array
     {
         $row = $this->base($contentTypeUuid, $locale)->where('p.entry_uuid', '=', $entryUuid)->first();
