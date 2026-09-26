@@ -1,0 +1,112 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Thallo\Core\Content\Layouts;
+
+use Thallo\Core\Content\Schema\ContentTypeSchema;
+use Thallo\Core\Content\Schema\FieldDefinition;
+
+/**
+ * The layout a content type's entries open on before anyone designs one (type layouts spec §2.10),
+ * built from the type's schema so it is valid for every shape a type can have.
+ *
+ * A type is article-like when it has a filterable reference field or a plain-text field named
+ * `excerpt` or `summary`. The starter is, in order: the terms (article-like only), the title (a
+ * `title` string field), the date (article-like only), the excerpt (article-like only), the cover
+ * (article-like only, the first asset field), the content — the primary body's slot when there is a
+ * blocks field, else the first rich-text field — and related entries (article-like only). The seeded
+ * post gets the design `entry/post.twig` has; the seeded page exactly its title, then its body.
+ */
+final class Starters
+{
+    /** @return list<array<string,mixed>> */
+    public static function forSchema(ContentTypeSchema $schema): array
+    {
+        $fields = $schema->fields();
+        $reference = self::first(
+            $fields,
+            static fn (FieldDefinition $f): bool => $f->type === 'reference' && $f->filterable,
+        );
+        $excerpt = self::first(
+            $fields,
+            static fn (FieldDefinition $f): bool => in_array($f->name, ['excerpt', 'summary'], true)
+                && ($f->type === 'string' || ($f->type === 'text' && $f->format !== 'rich')),
+        );
+        $article = $reference !== null || $excerpt !== null;
+        $title = self::first(
+            $fields,
+            static fn (FieldDefinition $f): bool => $f->name === 'title' && $f->type === 'string',
+        );
+        $cover = self::first($fields, static fn (FieldDefinition $f): bool => $f->type === 'asset');
+        $body = self::primaryBody($schema);
+        $rich = self::first(
+            $fields,
+            static fn (FieldDefinition $f): bool => $f->type === 'text' && $f->format === 'rich',
+        );
+
+        $tree = [];
+        if ($article && $reference !== null) {
+            $tree[] = self::block('entry_terms', ['field' => $reference->name, 'style' => 'badges', 'link' => true]);
+        }
+        if ($title !== null) {
+            $tree[] = self::block('entry_title', ['level' => 'h1']);
+        }
+        if ($article) {
+            $tree[] = self::block('entry_date', ['format' => 'long']);
+        }
+        if ($article && $excerpt !== null) {
+            $tree[] = self::block('entry_excerpt', ['field' => $excerpt->name]);
+        }
+        if ($article && $cover !== null) {
+            $tree[] = self::block('entry_cover', ['field' => $cover->name, 'aspect' => '16:9']);
+        }
+        if ($body !== null) {
+            $tree[] = self::block('entry_content', ['field' => $body]);
+        } elseif ($rich !== null) {
+            $tree[] = self::block('entry_field', ['field' => $rich->name, 'format' => 'rich']);
+        }
+        if ($article) {
+            $tree[] = self::block('entry_related', ['count' => 3, 'style' => 'list']);
+        }
+        return $tree;
+    }
+
+    /** The type's primary body: the blocks field named `body`, else the first blocks field. */
+    public static function primaryBody(ContentTypeSchema $schema): ?string
+    {
+        $blocks = array_values(array_filter(
+            $schema->fields(),
+            static fn (FieldDefinition $f): bool => $f->type === 'blocks',
+        ));
+        foreach ($blocks as $field) {
+            if ($field->name === 'body') {
+                return 'body';
+            }
+        }
+        return $blocks[0]->name ?? null;
+    }
+
+    /**
+     * @param list<FieldDefinition> $fields
+     * @param callable(FieldDefinition): bool $test
+     */
+    private static function first(array $fields, callable $test): ?FieldDefinition
+    {
+        foreach ($fields as $field) {
+            if ($test($field)) {
+                return $field;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * @param array<string,mixed> $data
+     * @return array{type: string, data: array<string,mixed>, settings: array<string,mixed>}
+     */
+    private static function block(string $type, array $data): array
+    {
+        return ['type' => $type, 'data' => $data, 'settings' => []];
+    }
+}

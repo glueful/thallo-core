@@ -1442,6 +1442,17 @@ final class CoreServiceProvider extends ServiceProvider
         );
     }
 
+    public static function makeLayoutReader(ContainerInterface $container): \Thallo\Contracts\Layouts\LayoutReader
+    {
+        return $container->get(\Thallo\Core\Content\Layouts\LayoutResolver::class);
+    }
+
+    public static function makeLayoutSurfaceRegistry(
+        ContainerInterface $container,
+    ): \Thallo\Contracts\Layouts\LayoutSurfaceRegistry {
+        return $container->get(\Thallo\Core\Content\Layouts\LayoutSurfaces::class);
+    }
+
     public static function makeBlockDocumentSources(
         ContainerInterface $container,
     ): \Thallo\Core\Content\Blocks\Sources\BlockDocumentSources {
@@ -1701,6 +1712,29 @@ final class CoreServiceProvider extends ServiceProvider
                 'class' => \Thallo\Core\Content\Layouts\LayoutRepository::class,
                 'shared' => true,
                 'autowire' => true,
+            ],
+            \Thallo\Core\Content\Layouts\LayoutResolver::class => [
+                'class' => \Thallo\Core\Content\Layouts\LayoutResolver::class,
+                'shared' => true,
+                'autowire' => true,
+            ],
+            \Thallo\Contracts\Layouts\LayoutReader::class => [
+                'shared' => true,
+                'factory' => [self::class, 'makeLayoutReader'],
+            ],
+            \Thallo\Core\Content\Layouts\EntrySurface::class => [
+                'class' => \Thallo\Core\Content\Layouts\EntrySurface::class,
+                'shared' => true,
+                'autowire' => true,
+            ],
+            \Thallo\Core\Content\Layouts\LayoutSurfaces::class => [
+                'class' => \Thallo\Core\Content\Layouts\LayoutSurfaces::class,
+                'shared' => true,
+                'autowire' => true,
+            ],
+            \Thallo\Contracts\Layouts\LayoutSurfaceRegistry::class => [
+                'shared' => true,
+                'factory' => [self::class, 'makeLayoutSurfaceRegistry'],
             ],
             \Thallo\Core\Content\Patterns\SavedSectionRepository::class => [
                 'class' => \Thallo\Core\Content\Patterns\SavedSectionRepository::class,
