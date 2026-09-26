@@ -13,6 +13,7 @@ use Thallo\Core\Content\Blocks\Sources\BlockDocumentSource;
 use Thallo\Core\Content\Blocks\Sources\BlockDocumentSources;
 use Thallo\Core\Content\Blocks\Sources\DocumentRef;
 use Thallo\Core\Content\Blocks\Sources\RegionsSource;
+use Thallo\Core\Content\Blocks\Sources\LayoutsSource;
 use Thallo\Core\Content\Blocks\Sources\SavedSectionsSource;
 
 /**
@@ -218,6 +219,9 @@ final class StyleClassJobRunner
         }
         if ($ref->sourceType === SavedSectionsSource::ID) {
             return; // the library is read fresh; no page renders a saved section as such
+        }
+        if ($ref->sourceType === LayoutsSource::ID) {
+            return; // the source's own write forgets the layout and purges its pages
         }
         $tags = ['thallo:entry:' . (string) ($ref->meta['entry_uuid'] ?? $ref->sourceId)];
         if (isset($ref->meta['content_type'])) {

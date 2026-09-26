@@ -13,6 +13,7 @@ use Thallo\Core\Content\Blocks\Sources\EntryDraftsSource;
 use Thallo\Core\Content\Blocks\Sources\EntryVersionsSource;
 use Thallo\Core\Content\Blocks\Sources\PublishedEntriesSource;
 use Thallo\Core\Content\Blocks\Sources\RegionsSource;
+use Thallo\Core\Content\Blocks\Sources\LayoutsSource;
 use Thallo\Core\Content\Blocks\Sources\SavedSectionsSource;
 use Glueful\Database\Connection;
 
@@ -37,7 +38,7 @@ final class StyleClassUsage
      * @return array{
      *   references: int,
      *   by_source: array{entry_drafts: int, entry_published: int, entry_versions: int, regions: int,
-     *     saved_sections: int},
+     *     saved_sections: int, layouts: int},
      *   active: int,
      *   dormant: int,
      *   properties: array<string, array{active: int, dormant: int}>
@@ -48,6 +49,7 @@ final class StyleClassUsage
         $declared = self::declaredPaths($style);
         $bySource = [
             'entry_drafts' => 0, 'entry_published' => 0, 'entry_versions' => 0, 'regions' => 0, 'saved_sections' => 0,
+            'layouts' => 0,
         ];
         $properties = [];
         foreach ($declared as $path) {
@@ -62,6 +64,7 @@ final class StyleClassUsage
             EntryVersionsSource::ID => 'entry_versions',
             RegionsSource::ID => 'regions',
             SavedSectionsSource::ID => 'saved_sections',
+            LayoutsSource::ID => 'layouts',
         ];
         $count = function (DocumentRef $ref) use (
             $classId,

@@ -49,6 +49,8 @@ final class MigrationController
             return Response::error($e->getMessage(), Response::HTTP_CONFLICT);
         } catch (SchemaParseException $e) {
             return Response::validation(['ops' => $e->getMessage()]);
+        } catch (\Thallo\Core\Content\Layouts\LayoutBindingConflict $e) {
+            return Response::validation(['ops' => $e->getMessage()]);
         }
 
         return Response::created(['migration' => $this->migrations->find($uuid)], 'Migration started.');

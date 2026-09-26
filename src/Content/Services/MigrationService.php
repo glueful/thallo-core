@@ -24,6 +24,9 @@ final class MigrationService
         private readonly ContentTypeRepository $types,
         private readonly MigrationRepository $migrations,
         private readonly QueueManager $queue,
+        /** Type layouts (spec §5.7): the type's lock, and the layouts that follow its fields. */
+        private readonly ?\Thallo\Core\Content\Layouts\LayoutWriteLock $layoutLock = null,
+        private readonly ?\Thallo\Core\Content\Layouts\LayoutBindings $layoutBindings = null,
     ) {
     }
 
@@ -36,6 +39,19 @@ final class MigrationService
         if ($type === null) {
             throw new SchemaParseException("content type {$contentTypeUuid} not found");
         }
+        // Under the type's lock (type layouts spec §5.7): a layout save cannot bind a field this
+        // migration is deleting, and the layouts' rewrite commits with the flip or not at all.
+        $slug = (string) $type['slug'];
+        $run = fn (): string => $this->migrateLocked($contentTypeUuid, $rawOps, $actor, $slug);
+        return $this->layoutLock !== null ? $this->layoutLock->withinType($slug, $run) : $run();
+    }
+
+    /** @param list<array<string,mixed>> $rawOps */
+    private function migrateLocked(string $contentTypeUuid, array $rawOps, ?string $actor, string $slug): string
+    {
+        $type = $this->types->findByUuid($contentTypeUuid) ?? throw new SchemaParseException(
+            "content type {$contentTypeUuid} not found",
+        );
         if ($this->migrations->activeForType($contentTypeUuid) !== null) {
             throw new ActiveMigrationException('a migration is already in progress for this content type');
         }
@@ -54,6 +70,7 @@ final class MigrationService
             $parsed->toArray(),
             $workItems,
             $actor,
+            fn () => $this->layoutBindings?->apply($slug, $opSet),
         );
 
         $this->db->afterCommit(function () use ($uuid): void {

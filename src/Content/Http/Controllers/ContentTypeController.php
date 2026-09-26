@@ -48,6 +48,9 @@ final class ContentTypeController
         private readonly ?\Glueful\Cache\CacheStore $cache = null,
         /** Root URL namespace guard; null = ungated (tests, minimal wiring). */
         private readonly ?RootMountGuard $rootGuard = null,
+        /** Type layouts (spec §5.7): deleting a type tombstones its layouts. */
+        private readonly ?\Thallo\Core\Content\Layouts\LayoutBindings $layouts = null,
+        private readonly ?\Glueful\Database\Connection $db = null,
     ) {
     }
 
@@ -264,7 +267,11 @@ final class ContentTypeController
         if ($row === null) {
             return Response::notFound('Content type not found.');
         }
-        $this->types->softDelete((string) $row['uuid']);
+        $delete = function () use ($row): void {
+            $this->types->softDelete((string) $row['uuid']);
+            $this->layouts?->tombstoneType((string) $row['slug']);
+        };
+        $this->db !== null ? $this->db->transaction($delete) : $delete();
         $this->events?->emitAfterCommit(new ModelDeleted(type: (string) $row['slug'], actor: $this->actor($request)));
         return Response::success([], 'Content type deleted.');
     }

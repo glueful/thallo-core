@@ -34,6 +34,8 @@ final class MigrationRepository
         array $newSchema,
         int $workItemsTotal,
         ?string $actor,
+        /** Run inside the flip's transaction, before it (type layouts: bindings follow the schema). */
+        ?callable $withinTransaction = null,
     ): string {
         $uuid = Utils::generateNanoID(12);
         $now = $this->now();
@@ -46,8 +48,12 @@ final class MigrationRepository
             $newSchema,
             $workItemsTotal,
             $actor,
-            $now
+            $now,
+            $withinTransaction
         ): void {
+            if ($withinTransaction !== null) {
+                $withinTransaction();
+            }
             $this->db->table('entry_schema_migrations')->insert([
                 'uuid' => $uuid,
                 'content_type_uuid' => $contentTypeUuid,

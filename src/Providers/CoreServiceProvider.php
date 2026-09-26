@@ -885,6 +885,14 @@ final class CoreServiceProvider extends ServiceProvider
                 'shared' => true,
                 'autowire' => true,
             ],
+            \Thallo\Core\Content\Blocks\Sources\LayoutsSource::class => [
+                'shared' => true,
+                'factory' => [self::class, 'makeLayoutsSource'],
+            ],
+            \Thallo\Core\Content\Layouts\LayoutBindings::class => [
+                'shared' => true,
+                'factory' => [self::class, 'makeLayoutBindings'],
+            ],
             \Thallo\Core\Content\Blocks\Sources\SavedSectionsSource::class => [
                 'class' => \Thallo\Core\Content\Blocks\Sources\SavedSectionsSource::class,
                 'shared' => true,
@@ -1494,6 +1502,35 @@ final class CoreServiceProvider extends ServiceProvider
             $container->get(\Thallo\Core\Content\Blocks\Sources\EntryVersionsSource::class),
             $container->get(\Thallo\Core\Content\Blocks\Sources\RegionsSource::class),
             $container->get(\Thallo\Core\Content\Blocks\Sources\SavedSectionsSource::class),
+            $container->get(\Thallo\Core\Content\Blocks\Sources\LayoutsSource::class),
+        );
+    }
+
+    public static function makeLayoutsSource(
+        ContainerInterface $container,
+    ): \Thallo\Core\Content\Blocks\Sources\LayoutsSource {
+        return new \Thallo\Core\Content\Blocks\Sources\LayoutsSource(
+            $container->get(Connection::class),
+            $container->get(\Thallo\Core\Content\Layouts\LayoutRepository::class),
+            $container->get(\Thallo\Core\Content\Layouts\LayoutResolver::class),
+            $container->has(\Thallo\Contracts\Delivery\RenderedPageCachePurge::class)
+                ? $container->get(\Thallo\Contracts\Delivery\RenderedPageCachePurge::class)
+                : null,
+        );
+    }
+
+    public static function makeLayoutBindings(
+        ContainerInterface $container,
+    ): \Thallo\Core\Content\Layouts\LayoutBindings {
+        return new \Thallo\Core\Content\Layouts\LayoutBindings(
+            $container->get(Connection::class),
+            $container->get(\Thallo\Core\Content\Layouts\LayoutRepository::class),
+            $container->get(\Thallo\Core\Content\Layouts\LayoutWriteLock::class),
+            $container->get(\Thallo\Contracts\Layouts\LayoutSurfaceRegistry::class),
+            $container->get(\Thallo\Core\Content\Layouts\LayoutResolver::class),
+            $container->has(\Thallo\Contracts\Delivery\RenderedPageCachePurge::class)
+                ? $container->get(\Thallo\Contracts\Delivery\RenderedPageCachePurge::class)
+                : null,
         );
     }
 

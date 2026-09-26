@@ -23,6 +23,12 @@ final class MigrationOpSet
         $this->ops = array_values($ops);
     }
 
+    /** @return list<MigrationOp> */
+    public function ops(): array
+    {
+        return $this->ops;
+    }
+
     /**
      * @param array<string,mixed> $fields
      * @return array<string,mixed>
