@@ -154,7 +154,8 @@ final class LayoutPreviewController
         $settings = is_array($input->layout['settings'] ?? null) ? $input->layout['settings'] : [];
         $before = is_array($baseline['layout']['blocks'] ?? null) ? $baseline['layout']['blocks'] : [];
         try {
-            $clean = $this->validator->validate($claims->surface, $claims->target, $blocks, $settings, $before);
+            // No style-class guard on an apply: it persists nothing; the Save that would does.
+            $clean = $this->validator->validate($claims->surface, $claims->target, $blocks, $settings, $before, false);
         } catch (ValidationException $e) {
             return Response::validation($e->errors());
         }

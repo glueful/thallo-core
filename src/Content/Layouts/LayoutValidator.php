@@ -30,8 +30,20 @@ final class LayoutValidator
         'entry_content' => ['blocks'],
     ];
 
-    /** The field a block shows when none is chosen: its template's default. */
-    private const DEFAULT_FIELD = ['entry_content' => 'body'];
+    /**
+     * The field a block shows when none is chosen: its template's default. Validation writes it
+     * into the block where the type has that field (and the block can show it), so every binding a
+     * layout relies on is explicit — a rename moves it and a delete is refused (spec §5.7).
+     */
+    private const DEFAULT_FIELD = [
+        'entry_content' => 'body',
+        'entry_cover' => 'cover',
+        'entry_excerpt' => 'excerpt',
+        'entry_terms' => 'categories',
+    ];
+
+    /** Entry field formats that need a field of their kind: a date read from a word fails the page. */
+    private const FORMAT_NEEDS = ['date' => ['datetime'], 'number' => ['number']];
 
     private const SETTINGS = [
         'width' => ['contained', 'full'],
@@ -53,11 +65,19 @@ final class LayoutValidator
      * @param array<string,mixed> $settings
      * @param list<array<string,mixed>> $before the stored layout's blocks: style classes they already
      *        reference are not re-checked, so a class archived since never blocks an edit elsewhere
+     * @param bool $guard run the style-class reference guard — a write that serialises against a
+     *        class job, so Save's alone (inside its lock); an apply, which persists nothing, passes false
      * @return array{blocks: list<array<string,mixed>>, settings: array<string,mixed>}
      * @throws ValidationException
      */
-    public function validate(string $surface, string $target, array $blocks, array $settings, array $before = []): array
-    {
+    public function validate(
+        string $surface,
+        string $target,
+        array $blocks,
+        array $settings,
+        array $before = [],
+        bool $guard = true,
+    ): array {
         $kind = $this->surfaces->get($surface);
         if ($kind === null) {
             throw new ValidationException(['surface' => "unknown layout surface '{$surface}'"]);
@@ -82,10 +102,12 @@ final class LayoutValidator
 
         $schema = ContentTypeSchema::fromArray([['name' => 'blocks', 'type' => 'blocks']]);
         $clean = $this->fields->forLayouts()->validate($schema, ['blocks' => array_values($blocks)], true);
-        $cleanBlocks = array_values($clean['blocks'] ?? []);
+        $cleanBlocks = self::bindDefaults(array_values($clean['blocks'] ?? []), $kind->bindable($target));
 
         $this->assertBindings($kind, $target, $cleanBlocks);
-        $this->guard?->assertBlocksWritable($before, $cleanBlocks);
+        if ($guard) {
+            $this->guard?->assertBlocksWritable($before, $cleanBlocks);
+        }
 
         return ['blocks' => $cleanBlocks, 'settings' => $cleanSettings];
     }
@@ -107,11 +129,13 @@ final class LayoutValidator
                 continue;
             }
             $data = is_array($block['data'] ?? null) ? $block['data'] : [];
+            // bindDefaults() has bound every default the type has; a block still without a field shows
+            // nothing — except Entry content, whose `body` the slot count still needs to judge.
             $field = is_string($data['field'] ?? null) && $data['field'] !== ''
                 ? $data['field']
-                : (self::DEFAULT_FIELD[$type] ?? null);
+                : ($type === 'entry_content' ? 'body' : null);
             if ($field === null) {
-                continue; // unchosen: the block shows its own default, or nothing
+                continue;
             }
             $fieldType = $bindable[$field] ?? null;
             if ($fieldType === null) {
@@ -120,6 +144,12 @@ final class LayoutValidator
             }
             if (!in_array($fieldType, self::BINDINGS[$type], true)) {
                 $errors["{$path}.data.field"] = "'{$field}' cannot be shown by this block";
+                continue;
+            }
+            $format = is_string($data['format'] ?? null) ? $data['format'] : null;
+            $needs = $type === 'entry_field' && $format !== null ? (self::FORMAT_NEEDS[$format] ?? null) : null;
+            if ($needs !== null && !in_array($fieldType, $needs, true)) {
+                $errors["{$path}.data.format"] = "'{$field}' cannot be shown as a {$format}";
                 continue;
             }
             if ($type === 'entry_content') {
@@ -139,6 +169,39 @@ final class LayoutValidator
         if ($errors !== []) {
             throw new ValidationException($errors);
         }
+    }
+
+    /**
+     * Write the default field into every field block left without one, where the type has that
+     * field and the block can show it; elsewhere leave the block unbound (it shows nothing).
+     *
+     * @param list<mixed> $blocks
+     * @param array<string,string> $bindable field name => field type
+     * @return list<mixed>
+     */
+    private static function bindDefaults(array $blocks, array $bindable): array
+    {
+        foreach ($blocks as $i => $block) {
+            if (!is_array($block)) {
+                continue;
+            }
+            $type = (string) ($block['type'] ?? '');
+            $data = is_array($block['data'] ?? null) ? $block['data'] : [];
+            $default = self::DEFAULT_FIELD[$type] ?? null;
+            $chosen = is_string($data['field'] ?? null) && $data['field'] !== '';
+            if (
+                $default !== null && !$chosen && isset($bindable[$default])
+                && in_array($bindable[$default], self::BINDINGS[$type], true)
+            ) {
+                $blocks[$i]['data'] = ['field' => $default] + $data;
+            }
+            foreach ($data as $key => $value) {
+                if (is_array($value) && array_is_list($value) && isset($value[0]['type'])) {
+                    $blocks[$i]['data'][$key] = self::bindDefaults($value, $bindable);
+                }
+            }
+        }
+        return $blocks;
     }
 
     /** @return array<string,true> the general content blocks and the surface's field blocks */
