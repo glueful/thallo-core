@@ -1736,6 +1736,11 @@ final class CoreServiceProvider extends ServiceProvider
                 'shared' => true,
                 'factory' => [self::class, 'makeLayoutSurfaceRegistry'],
             ],
+            \Thallo\Core\Content\Layouts\LayoutValidator::class => [
+                'class' => \Thallo\Core\Content\Layouts\LayoutValidator::class,
+                'shared' => true,
+                'autowire' => true,
+            ],
             \Thallo\Core\Content\Patterns\SavedSectionRepository::class => [
                 'class' => \Thallo\Core\Content\Patterns\SavedSectionRepository::class,
                 'shared' => true,
