@@ -14,7 +14,8 @@ use Glueful\Helpers\Utils;
  * keeps the row with `blocks` null — a tombstone — so the version keeps counting. Rows go through
  * the query builder, so the tenancy pack scopes them like every other owned table.
  */
-final class LayoutRepository
+/** Not final: the save contract's proofs substitute a repository that fails inside the write. */
+class LayoutRepository
 {
     public function __construct(
         private readonly Connection $db,

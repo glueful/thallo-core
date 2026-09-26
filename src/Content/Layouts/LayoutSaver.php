@@ -1,0 +1,142 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Thallo\Core\Content\Layouts;
+
+use Glueful\Database\Connection;
+use Thallo\Contracts\Delivery\RenderedPageCachePurge;
+use Thallo\Core\Content\Preview\LayoutPreviewStore;
+use Thallo\Core\Content\Preview\LayoutPreviewToken;
+
+/**
+ * Save and remove (type layouts spec §5.5), the Regions save contract applied to one document.
+ *
+ * Inside the type's lock and then the layout's (a content-type migration takes the type's first):
+ * validation that reads the database, the version comparison and the write. Everything that shows
+ * the result — the session's new baseline, then clearing its working copy on the exact pair (save)
+ * or retiring it (remove), forgetting the resolver's answer and purging the surface's pages — is
+ * registered with `afterCommit`, in that order: it runs once the outermost transaction commits, and
+ * a rollback anywhere discards it. So a render at any moment shows the working copy or the
+ * committed layout, never the old baseline, and a failed write changes nothing anyone can see.
+ */
+final class LayoutSaver
+{
+    public function __construct(
+        private readonly Connection $db,
+        private readonly LayoutWriteLock $lock,
+        private readonly LayoutRepository $layouts,
+        private readonly LayoutValidator $validator,
+        private readonly LayoutPreviewStore $store,
+        private readonly LayoutResolver $resolver,
+        private readonly ?RenderedPageCachePurge $purge = null,
+    ) {
+    }
+
+    /**
+     * @param list<array<string,mixed>> $blocks
+     * @param array<string,mixed> $settings
+     * @param array{epoch: string, revision: int}|null $pair the working copy the save was made from
+     * @return array{layout: array{blocks: list<array<string,mixed>>, settings: array<string,mixed>, lock_version: int},
+     *     preview_cleared: bool} `preview_cleared` is what the effects did — false while an outer
+     *     transaction still defers them
+     * @throws LayoutVersionConflict
+     * @throws \Thallo\Core\Content\Validation\ValidationException
+     */
+    public function save(
+        LayoutPreviewToken $claims,
+        array $blocks,
+        array $settings,
+        int $expected,
+        ?array $pair,
+        ?string $by,
+    ): array {
+        $surface = $claims->surface;
+        $target = $claims->target;
+        $cleared = false;
+        $layout = $this->locked($surface, $target, function () use (
+            $claims,
+            $surface,
+            $target,
+            $blocks,
+            $settings,
+            $expected,
+            $pair,
+            $by,
+            &$cleared,
+        ): array {
+            $stored = $this->layouts->find($surface, $target);
+            $clean = $this->validator->validate($surface, $target, $blocks, $settings, $stored['blocks'] ?? []);
+            $current = $stored['lock_version'] ?? 0;
+            if ($current !== $expected) {
+                throw new LayoutVersionConflict($current);
+            }
+            $version = $this->layouts->saveExpected(
+                $surface,
+                $target,
+                $clean['blocks'],
+                $clean['settings'],
+                $expected,
+                $by,
+            );
+            $sample = $this->store->baseline($claims->session)['sample'] ?? $claims->sample;
+            $effects = function () use ($claims, $surface, $target, $clean, $version, $sample, $pair, &$cleared): void {
+                $this->store->putBaseline($claims->session, [
+                    'layout' => $clean,
+                    'lock_version' => $version,
+                    'surface' => $surface,
+                    'target' => $target,
+                    'sample' => $sample,
+                ], $claims->expiresAt);
+                if ($pair !== null) {
+                    $cleared = $this->store->clearIfPair($claims->session, $pair['epoch'], $pair['revision']);
+                }
+                $this->forgetAndPurge($surface, $target);
+            };
+            $this->db->afterCommit($effects);
+            return $clean + ['lock_version' => $version];
+        });
+        return ['layout' => $layout, 'preview_cleared' => $cleared];
+    }
+
+    /**
+     * Tombstone the layout and retire the session that removed it.
+     *
+     * @return int the tombstone's version
+     * @throws LayoutVersionConflict
+     */
+    public function remove(LayoutPreviewToken $claims, int $expected, ?string $by): int
+    {
+        $surface = $claims->surface;
+        $target = $claims->target;
+        return $this->locked($surface, $target, function () use ($claims, $surface, $target, $expected, $by): int {
+            $current = $this->layouts->version($surface, $target);
+            if ($current !== $expected || ($this->layouts->find($surface, $target)['blocks'] ?? null) === null) {
+                throw new LayoutVersionConflict($current);
+            }
+            $version = $this->layouts->tombstone($surface, $target, $expected, $by);
+            $this->db->afterCommit(function () use ($claims, $surface, $target): void {
+                $this->store->retire($claims->session, $claims->expiresAt);
+                $this->forgetAndPurge($surface, $target);
+            });
+            return $version;
+        });
+    }
+
+    private function forgetAndPurge(string $surface, string $target): void
+    {
+        $this->resolver->forget($surface, $target);
+        $this->purge?->purge(["thallo:layout:{$surface}:{$target}"]);
+    }
+
+    /**
+     * @template T
+     * @param callable(): T $fn
+     * @return T
+     */
+    private function locked(string $surface, string $target, callable $fn): mixed
+    {
+        $inner = fn (): mixed => $this->lock->within($surface, $target, $fn);
+        return $surface === 'entry' ? $this->lock->withinType($target, $inner) : $inner();
+    }
+}

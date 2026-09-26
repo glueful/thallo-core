@@ -15,7 +15,8 @@ use Thallo\Contracts\Layouts\LayoutStageSnapshots;
  * working copy goes, under the lock every apply takes, so an apply either lands before the
  * retirement (and is deleted by it) or after it (and is refused) — never between.
  */
-final class LayoutPreviewStore extends SessionDocumentStore implements LayoutStageSnapshots
+/** Not final: the save contract's proofs observe the order of its writes. */
+class LayoutPreviewStore extends SessionDocumentStore implements LayoutStageSnapshots
 {
     protected function namespace(): string
     {

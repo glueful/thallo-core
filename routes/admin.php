@@ -29,6 +29,7 @@ use Thallo\Core\Http\Controllers\ImportExportController;
 use Thallo\Core\Http\Controllers\MediaAdminController;
 use Thallo\Core\Http\Controllers\PlatformPaymentsSettingsController;
 use Thallo\Core\Http\Controllers\RegionAdminController;
+use Thallo\Core\Http\Controllers\LayoutAdminController;
 use Thallo\Core\Http\Controllers\LayoutPreviewController;
 use Thallo\Core\Http\Controllers\RegionPreviewController;
 use Thallo\Core\Http\Controllers\ScheduledTasksController;
@@ -296,6 +297,16 @@ $router->group(['prefix' => '/v1/admin'], function (Router $router): void {
         ->middleware('content_permission:content.view');
         $router->post('/regions/preview/apply', [RegionPreviewController::class, 'apply'])
         ->middleware('content_permission:content.manage');
+
+        // Layouts (type layouts spec §5.5, §6.1): the list, a layout's samples, Save and Remove.
+        $router->get('/layouts', [LayoutAdminController::class, 'index'])
+            ->middleware('content_permission:content.view');
+        $router->get('/layouts/{surface}/{target}/samples', [LayoutAdminController::class, 'samples'])
+            ->middleware('content_permission:templates.manage');
+        $router->put('/layouts/{surface}/{target}', [LayoutAdminController::class, 'save'])
+            ->middleware('content_permission:templates.manage');
+        $router->delete('/layouts/{surface}/{target}', [LayoutAdminController::class, 'destroy'])
+            ->middleware('content_permission:templates.manage');
 
         // A layout's stage (type layouts spec §5.2, §5.3): a session pins the saved layout (or the
         // starter); an apply builds that session's own working copy. Neither writes a layout.

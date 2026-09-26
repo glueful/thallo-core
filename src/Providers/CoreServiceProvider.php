@@ -1458,6 +1458,21 @@ final class CoreServiceProvider extends ServiceProvider
         );
     }
 
+    public static function makeLayoutSaver(ContainerInterface $container): \Thallo\Core\Content\Layouts\LayoutSaver
+    {
+        return new \Thallo\Core\Content\Layouts\LayoutSaver(
+            $container->get(Connection::class),
+            $container->get(\Thallo\Core\Content\Layouts\LayoutWriteLock::class),
+            $container->get(\Thallo\Core\Content\Layouts\LayoutRepository::class),
+            $container->get(\Thallo\Core\Content\Layouts\LayoutValidator::class),
+            $container->get(\Thallo\Core\Content\Preview\LayoutPreviewStore::class),
+            $container->get(\Thallo\Core\Content\Layouts\LayoutResolver::class),
+            $container->has(\Thallo\Contracts\Delivery\RenderedPageCachePurge::class)
+                ? $container->get(\Thallo\Contracts\Delivery\RenderedPageCachePurge::class)
+                : null,
+        );
+    }
+
     public static function makeLayoutStageSnapshots(
         ContainerInterface $container,
     ): \Thallo\Contracts\Layouts\LayoutStageSnapshots {
@@ -1760,6 +1775,15 @@ final class CoreServiceProvider extends ServiceProvider
             \Thallo\Contracts\Layouts\LayoutStageSnapshots::class => [
                 'shared' => true,
                 'factory' => [self::class, 'makeLayoutStageSnapshots'],
+            ],
+            \Thallo\Core\Content\Layouts\LayoutSaver::class => [
+                'shared' => true,
+                'factory' => [self::class, 'makeLayoutSaver'],
+            ],
+            \Thallo\Core\Http\Controllers\LayoutAdminController::class => [
+                'class' => \Thallo\Core\Http\Controllers\LayoutAdminController::class,
+                'shared' => true,
+                'autowire' => true,
             ],
             \Thallo\Core\Http\Controllers\LayoutPreviewController::class => [
                 'class' => \Thallo\Core\Http\Controllers\LayoutPreviewController::class,
