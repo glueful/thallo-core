@@ -106,6 +106,8 @@ final class LayoutPreviewController
             'revision' => null,
             'layout' => $layout + ['lock_version' => $lockVersion],
             'starter' => $starter,
+            // What Reset to starter puts back, whatever the baseline.
+            'starter_layout' => $starter ? $layout['blocks'] : self::withIds($surface->starter($input->target)),
             'required' => $surface->required($input->target),
             'palette' => $surface->palette(),
             'sample' => $sample,
