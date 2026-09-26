@@ -15,6 +15,7 @@ use Glueful\Routing\Attributes\ApiResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Thallo\Core\Http\DTOs\ChangePasswordData;
 use Thallo\Core\Http\DTOs\UpdateAccountData;
+use Thallo\Core\Settings\AdminUiSettings;
 use Thallo\Core\Support\ActorHelper;
 
 /**
@@ -31,6 +32,8 @@ final class AccountAdminController
         private readonly ApplicationContext $context,
         private readonly UserRepository $users,
         private readonly ?SessionStoreInterface $sessions = null,
+        /** The menus and landing page the user's roles and own settings give them. */
+        private readonly ?AdminUiSettings $ui = null,
     ) {
     }
 
@@ -39,7 +42,9 @@ final class AccountAdminController
         summary: 'Your own account',
         description: 'The signed-in user\'s account and profile, and `two_factor_available`: whether '
             . 'email two-factor authentication is switched on for this install (`TWO_FACTOR_ENABLED`). '
-            . 'While it is off, turning it on for an account would never ask for a code.',
+            . 'While it is off, turning it on for an account would never ask for a code. `ui` is what '
+            . 'the admin shows them: the sidebar item paths `hidden` for them (set per role and per '
+            . 'user) and the `landing` page signing in takes them to, null for Home.',
         tags: ['Thallo Admin'],
     )]
     #[ApiResponse(200, description: 'The account.')]
@@ -133,6 +138,7 @@ final class AccountAdminController
                 'photo_url' => $profile['photo_url'] ?? null,
             ],
             'two_factor_available' => (bool) config($this->context, 'auth.two_factor.enabled', false),
+            'ui' => $this->ui?->resolve($uuid) ?? ['hidden' => [], 'landing' => null],
         ];
     }
 

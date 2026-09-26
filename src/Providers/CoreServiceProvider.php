@@ -1988,6 +1988,16 @@ final class CoreServiceProvider extends ServiceProvider
                 'shared' => true,
                 'autowire' => true,
             ],
+            \Thallo\Core\Http\Controllers\AdminUiSettingsController::class => [
+                'class' => \Thallo\Core\Http\Controllers\AdminUiSettingsController::class,
+                'shared' => true,
+                'autowire' => true,
+            ],
+            \Thallo\Core\Settings\AdminUiSettings::class => [
+                'class' => \Thallo\Core\Settings\AdminUiSettings::class,
+                'shared' => true,
+                'autowire' => true,
+            ],
             AssignableRolesController::class => [
                 'class' => AssignableRolesController::class,
                 'shared' => true,
