@@ -175,7 +175,7 @@ final class LayoutValidator
     }
 
     /**
-     * A required block without a field (the product page's Add to cart) is placed exactly once,
+     * A required block without a field (the product page's Product buy box) is placed exactly once,
      * anywhere in the tree: missing, the error names it by its label; twice, the second is refused.
      *
      * @param list<array<string,mixed>> $blocks
