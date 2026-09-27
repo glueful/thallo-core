@@ -88,8 +88,9 @@ final class LayoutValidator
         if ($kind === null) {
             throw new ValidationException(['surface' => "unknown layout surface '{$surface}'"]);
         }
-        if (!self::isTarget($kind, $target)) {
-            throw new ValidationException(['target' => "'{$target}' cannot have a layout"]);
+        $row = (new LayoutTargets($this->blockTypes))->find($kind, $target);
+        if ($row === null || !$row['enabled']) {
+            throw new ValidationException(['target' => $row['reason'] ?? "'{$target}' cannot have a layout"]);
         }
         $cleanSettings = self::settings($settings);
 
@@ -348,16 +349,6 @@ final class LayoutValidator
             $allowed[$slug] = true;
         }
         return $allowed;
-    }
-
-    private static function isTarget(LayoutSurface $kind, string $target): bool
-    {
-        foreach ($kind->targets() as $row) {
-            if ($row['target'] === $target) {
-                return $row['enabled'];
-            }
-        }
-        return false;
     }
 
     /**

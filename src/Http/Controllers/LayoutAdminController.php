@@ -12,6 +12,7 @@ use Symfony\Component\HttpFoundation\Request;
 use Thallo\Contracts\Layouts\LayoutSurfaceRegistry;
 use Thallo\Contracts\Style\StyleClassProvider;
 use Thallo\Core\Content\Layouts\LayoutRepository;
+use Thallo\Core\Content\Layouts\LayoutTargets;
 use Thallo\Core\Content\Layouts\LayoutSaver;
 use Thallo\Core\Content\Layouts\LayoutVersionConflict;
 use Thallo\Core\Content\Preview\LayoutPreviewStore;
@@ -43,6 +44,8 @@ final class LayoutAdminController
         private readonly ?StyleClassProvider $styleClasses = null,
         /** Whether the caller may open the editor (the list is `content.view`; editing `templates.manage`). */
         private readonly ?\Thallo\Contracts\Authorization\PermissionRequirementAuthority $authority = null,
+        /** The targets as the site can use them; null reads the surface's own. */
+        private readonly ?LayoutTargets $targets = null,
     ) {
     }
 
@@ -61,7 +64,7 @@ final class LayoutAdminController
         $rows = [];
         $saved = [];
         foreach ($this->surfaces->all() as $surface) {
-            foreach ($surface->targets() as $target) {
+            foreach ($this->targets?->of($surface) ?? $surface->targets() as $target) {
                 $row = $this->layouts->find($surface->key(), $target['target']);
                 $saved[] = $row['updated_by'] ?? null;
                 $rows[] = [

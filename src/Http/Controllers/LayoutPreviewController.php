@@ -15,6 +15,7 @@ use Thallo\Contracts\Layouts\LayoutSurface;
 use Thallo\Contracts\Layouts\LayoutSurfaceRegistry;
 use Thallo\Contracts\Style\StyleClassProvider;
 use Thallo\Core\Content\Layouts\LayoutRepository;
+use Thallo\Core\Content\Layouts\LayoutTargets;
 use Thallo\Core\Content\Layouts\LayoutValidator;
 use Thallo\Core\Content\Preview\LayoutPreviewStore;
 use Thallo\Core\Content\Preview\LayoutPreviewToken;
@@ -43,6 +44,8 @@ final class LayoutPreviewController
         private readonly PreviewMinter $minter,
         private readonly LocaleManagerInterface $locales,
         private readonly ?StyleClassProvider $styleClasses = null,
+        /** The targets as the site can use them; null reads the surface's own. */
+        private readonly ?LayoutTargets $targets = null,
     ) {
     }
 
@@ -64,8 +67,9 @@ final class LayoutPreviewController
         if ($surface === null) {
             return Response::validation(['surface' => "unknown layout surface '{$input->surface}'"]);
         }
-        if (!self::isTarget($surface, $input->target)) {
-            return Response::validation(['target' => "'{$input->target}' cannot have a layout"]);
+        $target = $this->targets?->find($surface, $input->target) ?? self::target($surface, $input->target);
+        if ($target === null || !$target['enabled']) {
+            return Response::validation(['target' => $target['reason'] ?? "'{$input->target}' cannot have a layout"]);
         }
         $row = $this->layouts->find($input->surface, $input->target);
         $starter = $row === null || $row['blocks'] === null;
@@ -211,14 +215,15 @@ final class LayoutPreviewController
         return $samples[0] ?? null;
     }
 
-    private static function isTarget(LayoutSurface $surface, string $target): bool
+    /** @return array{target: string, label: string, enabled: bool, reason: ?string}|null */
+    private static function target(LayoutSurface $surface, string $target): ?array
     {
         foreach ($surface->targets() as $row) {
             if ($row['target'] === $target) {
-                return $row['enabled'];
+                return $row;
             }
         }
-        return false;
+        return null;
     }
 
     /**

@@ -1848,6 +1848,11 @@ final class CoreServiceProvider extends ServiceProvider
                 'shared' => true,
                 'autowire' => true,
             ],
+            \Thallo\Core\Content\Layouts\LayoutTargets::class => [
+                'class' => \Thallo\Core\Content\Layouts\LayoutTargets::class,
+                'shared' => true,
+                'autowire' => true,
+            ],
             \Thallo\Core\Content\Layouts\LayoutValidator::class => [
                 'class' => \Thallo\Core\Content\Layouts\LayoutValidator::class,
                 'shared' => true,
