@@ -68,6 +68,15 @@ final class LayoutResolver implements LayoutReader
         $prefix = $this->tenantCache !== null && $this->context !== null
             ? $this->tenantCache->segment($this->context, 'layouts')
             : '';
-        return $prefix . 'thallo:layout:' . $surface . ':' . $target;
+        return self::cacheKey($prefix, $surface, $target);
+    }
+
+    /**
+     * The key a subject's answer is cached under, before its generation suffix. A site-wide target
+     * (`@site`) is encoded: cache drivers refuse `@` in keys (Redis refuses `{}()/\@`).
+     */
+    public static function cacheKey(string $prefix, string $surface, string $target): string
+    {
+        return $prefix . 'thallo:layout:' . $surface . ':' . rawurlencode($target);
     }
 }

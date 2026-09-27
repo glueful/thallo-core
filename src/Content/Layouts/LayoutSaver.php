@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Thallo\Core\Content\Layouts;
 
 use Glueful\Database\Connection;
-use Thallo\Contracts\Delivery\RenderedPageCachePurge;
 use Thallo\Core\Content\Preview\LayoutPreviewStore;
 use Thallo\Core\Content\Preview\LayoutPreviewToken;
 
@@ -15,7 +14,7 @@ use Thallo\Core\Content\Preview\LayoutPreviewToken;
  * Inside the type's lock and then the layout's (a content-type migration takes the type's first):
  * validation that reads the database, the version comparison and the write. Everything that shows
  * the result — the session's new baseline, then clearing its working copy on the exact pair (save)
- * or retiring it (remove), forgetting the resolver's answer and purging the surface's pages — is
+ * or retiring it (remove), then announcing the change ({@see LayoutChanges}) — is
  * registered with `afterCommit`, in that order: it runs once the outermost transaction commits, and
  * a rollback anywhere discards it. So a render at any moment shows the working copy or the
  * committed layout, never the old baseline, and a failed write changes nothing anyone can see.
@@ -28,8 +27,7 @@ final class LayoutSaver
         private readonly LayoutRepository $layouts,
         private readonly LayoutValidator $validator,
         private readonly LayoutPreviewStore $store,
-        private readonly LayoutResolver $resolver,
-        private readonly ?RenderedPageCachePurge $purge = null,
+        private readonly LayoutChanges $changes,
     ) {
     }
 
@@ -91,7 +89,7 @@ final class LayoutSaver
                 if ($pair !== null) {
                     $cleared = $this->store->clearIfPair($claims->session, $pair['epoch'], $pair['revision']);
                 }
-                $this->forgetAndPurge($surface, $target);
+                $this->changes->announce($surface, $target);
             };
             $this->db->afterCommit($effects);
             return $clean + ['lock_version' => $version];
@@ -117,16 +115,10 @@ final class LayoutSaver
             $version = $this->layouts->tombstone($surface, $target, $expected, $by);
             $this->db->afterCommit(function () use ($claims, $surface, $target): void {
                 $this->store->retire($claims->session, $claims->expiresAt);
-                $this->forgetAndPurge($surface, $target);
+                $this->changes->announce($surface, $target);
             });
             return $version;
         });
-    }
-
-    private function forgetAndPurge(string $surface, string $target): void
-    {
-        $this->resolver->forget($surface, $target);
-        $this->purge?->purge(["thallo:layout:{$surface}:{$target}"]);
     }
 
     /**

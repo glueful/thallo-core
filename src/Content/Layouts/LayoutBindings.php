@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Thallo\Core\Content\Layouts;
 
 use Glueful\Database\Connection;
-use Thallo\Contracts\Delivery\RenderedPageCachePurge;
 use Thallo\Contracts\Layouts\LayoutSurfaceRegistry;
 use Thallo\Core\Content\Schema\Migration\DeleteField;
 use Thallo\Core\Content\Schema\Migration\MigrationOpSet;
@@ -17,7 +16,7 @@ use Thallo\Core\Content\Schema\Migration\RenameField;
  * it, bumping each layout's version; deleting the type tombstones its layouts.
  *
  * Every write runs inside the caller's transaction, under the type's lock and then each layout's;
- * forgetting the resolver's answer and purging the pages follow the outermost commit.
+ * announcing each change ({@see LayoutChanges}) follows the outermost commit.
  */
 final class LayoutBindings
 {
@@ -26,8 +25,7 @@ final class LayoutBindings
         private readonly LayoutRepository $layouts,
         private readonly LayoutWriteLock $lock,
         private readonly LayoutSurfaceRegistry $surfaces,
-        private readonly LayoutResolver $resolver,
-        private readonly ?RenderedPageCachePurge $purge = null,
+        private readonly LayoutChanges $changes,
     ) {
     }
 
@@ -131,10 +129,7 @@ final class LayoutBindings
 
     private function afterCommit(string $surface, string $target): void
     {
-        $this->db->afterCommit(function () use ($surface, $target): void {
-            $this->resolver->forget($surface, $target);
-            $this->purge?->purge(["thallo:layout:{$surface}:{$target}"]);
-        });
+        $this->db->afterCommit(fn () => $this->changes->announce($surface, $target));
     }
 
     /**

@@ -154,6 +154,12 @@ final class EntrySurface implements LayoutSurface
         return 'layouts/entry.twig';
     }
 
+    /** Every entry page of a supported type carries its surface tag (spec §7.4). */
+    public function pageTags(string $target): array
+    {
+        return ["thallo:layout:entry:{$target}"];
+    }
+
     public function starter(string $target): array
     {
         $schema = $this->schema($target);

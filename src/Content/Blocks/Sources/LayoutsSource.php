@@ -5,17 +5,16 @@ declare(strict_types=1);
 namespace Thallo\Core\Content\Blocks\Sources;
 
 use Glueful\Database\Connection;
-use Thallo\Contracts\Delivery\RenderedPageCachePurge;
+use Thallo\Core\Content\Layouts\LayoutChanges;
 use Thallo\Core\Content\Layouts\LayoutRepository;
-use Thallo\Core\Content\Layouts\LayoutResolver;
 use Thallo\Core\Content\Schema\ContentTypeSchema;
 
 /**
  * The site's layouts (type layouts spec §5.7): one document per live layout, with a single `blocks`
  * field, so every walker over stored blocks — a block type's migration, a style class's usage and
  * its detach- and remove-everywhere jobs — reaches them as it reaches regions. A write is
- * conditional on the layout's `lock_version` and bumps it; once it commits, the resolver forgets
- * the layout and the pages it renders are purged.
+ * conditional on the layout's `lock_version` and bumps it; once it commits, the change is announced
+ * ({@see LayoutChanges}).
  */
 final class LayoutsSource implements BlockDocumentSource
 {
@@ -26,8 +25,7 @@ final class LayoutsSource implements BlockDocumentSource
     public function __construct(
         private readonly Connection $db,
         private readonly LayoutRepository $layouts,
-        private readonly LayoutResolver $resolver,
-        private readonly ?RenderedPageCachePurge $purge = null,
+        private readonly LayoutChanges $changes,
     ) {
     }
 
@@ -61,10 +59,7 @@ final class LayoutsSource implements BlockDocumentSource
         }
         // After the outermost commit (at once when there is none): nothing shows a write that
         // could still roll back.
-        $this->db->afterCommit(function () use ($surface, $target): void {
-            $this->resolver->forget($surface, $target);
-            $this->purge?->purge(["thallo:layout:{$surface}:{$target}"]);
-        });
+        $this->db->afterCommit(fn () => $this->changes->announce($surface, $target));
         return true;
     }
 

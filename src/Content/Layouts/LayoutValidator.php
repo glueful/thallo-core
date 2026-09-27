@@ -165,10 +165,44 @@ final class LayoutValidator
             if ($required['type'] === 'entry_content' && is_string($field) && !isset($placed[$field])) {
                 $errors['blocks'] ??= "the layout must show the '{$field}' field once, with an Entry content block";
             }
+            if ($field === null) {
+                $errors += $this->placedOnce($required['type'], $blocks);
+            }
         }
         if ($errors !== []) {
             throw new ValidationException($errors);
         }
+    }
+
+    /**
+     * A required block without a field (the product page's Add to cart) is placed exactly once,
+     * anywhere in the tree: missing, the error names it by its label; twice, the second is refused.
+     *
+     * @param list<array<string,mixed>> $blocks
+     * @return array<string,string>
+     */
+    private function placedOnce(string $type, array $blocks): array
+    {
+        $seen = false;
+        foreach (self::walk($blocks) as $path => $block) {
+            if (($block['type'] ?? null) !== $type) {
+                continue;
+            }
+            if ($seen) {
+                return ["{$path}.type" => "'{$type}' can appear only once in a layout"];
+            }
+            $seen = true;
+        }
+        if ($seen) {
+            return [];
+        }
+        $label = $type;
+        foreach ($this->blockTypes->all() as $row) {
+            if (($row['slug'] ?? null) === $type && is_string($row['label'] ?? null)) {
+                $label = $row['label'];
+            }
+        }
+        return ['blocks' => "the layout must show the {$label} block"];
     }
 
     /**

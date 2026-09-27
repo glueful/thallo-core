@@ -1474,10 +1474,28 @@ final class CoreServiceProvider extends ServiceProvider
             $container->get(\Thallo\Core\Content\Layouts\LayoutRepository::class),
             $container->get(\Thallo\Core\Content\Layouts\LayoutValidator::class),
             $container->get(\Thallo\Core\Content\Preview\LayoutPreviewStore::class),
+            $container->get(\Thallo\Core\Content\Layouts\LayoutChanges::class),
+        );
+    }
+
+    public static function makeLayoutChanges(ContainerInterface $container): \Thallo\Core\Content\Layouts\LayoutChanges
+    {
+        return new \Thallo\Core\Content\Layouts\LayoutChanges(
             $container->get(\Thallo\Core\Content\Layouts\LayoutResolver::class),
+            $container->get(\Thallo\Contracts\Layouts\LayoutSurfaceRegistry::class),
             $container->has(\Thallo\Contracts\Delivery\RenderedPageCachePurge::class)
                 ? $container->get(\Thallo\Contracts\Delivery\RenderedPageCachePurge::class)
                 : null,
+            $container->has(\Glueful\Events\EventService::class)
+                ? $container->get(\Glueful\Events\EventService::class)
+                : null,
+            $container->has(\Thallo\Tenancy\System\SystemFlags::class)
+                ? $container->get(\Thallo\Tenancy\System\SystemFlags::class)
+                : null,
+            $container->has(\Glueful\Extensions\Contracts\Tenancy\CurrentTenantResolver::class)
+                ? $container->get(\Glueful\Extensions\Contracts\Tenancy\CurrentTenantResolver::class)
+                : null,
+            $container->get(ApplicationContext::class),
         );
     }
 
@@ -1512,10 +1530,7 @@ final class CoreServiceProvider extends ServiceProvider
         return new \Thallo\Core\Content\Blocks\Sources\LayoutsSource(
             $container->get(Connection::class),
             $container->get(\Thallo\Core\Content\Layouts\LayoutRepository::class),
-            $container->get(\Thallo\Core\Content\Layouts\LayoutResolver::class),
-            $container->has(\Thallo\Contracts\Delivery\RenderedPageCachePurge::class)
-                ? $container->get(\Thallo\Contracts\Delivery\RenderedPageCachePurge::class)
-                : null,
+            $container->get(\Thallo\Core\Content\Layouts\LayoutChanges::class),
         );
     }
 
@@ -1527,10 +1542,7 @@ final class CoreServiceProvider extends ServiceProvider
             $container->get(\Thallo\Core\Content\Layouts\LayoutRepository::class),
             $container->get(\Thallo\Core\Content\Layouts\LayoutWriteLock::class),
             $container->get(\Thallo\Contracts\Layouts\LayoutSurfaceRegistry::class),
-            $container->get(\Thallo\Core\Content\Layouts\LayoutResolver::class),
-            $container->has(\Thallo\Contracts\Delivery\RenderedPageCachePurge::class)
-                ? $container->get(\Thallo\Contracts\Delivery\RenderedPageCachePurge::class)
-                : null,
+            $container->get(\Thallo\Core\Content\Layouts\LayoutChanges::class),
         );
     }
 
@@ -1786,6 +1798,10 @@ final class CoreServiceProvider extends ServiceProvider
                 'class' => \Thallo\Core\Content\Layouts\LayoutResolver::class,
                 'shared' => true,
                 'autowire' => true,
+            ],
+            \Thallo\Core\Content\Layouts\LayoutChanges::class => [
+                'factory' => [self::class, 'makeLayoutChanges'],
+                'shared' => true,
             ],
             \Thallo\Contracts\Layouts\LayoutReader::class => [
                 'shared' => true,
