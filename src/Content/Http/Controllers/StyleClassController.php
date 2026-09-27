@@ -17,6 +17,7 @@ use Thallo\Core\Content\Http\DTOs\Responses\StyleClasses\StyleClassJobData;
 use Thallo\Core\Content\Http\DTOs\StyleClassData;
 use Thallo\Core\Content\Http\DTOs\StyleClassJobRequestData;
 use Thallo\Core\Content\Http\DTOs\UpdateStyleClassData;
+use Thallo\Core\Content\Layouts\RequiredBlockClassGuard;
 use Thallo\Core\Content\Style\Classes\StyleClassLocked;
 use Thallo\Core\Content\Style\Classes\StyleClassNameTaken;
 use Thallo\Core\Content\Style\Classes\StyleClassNotFound;
@@ -44,6 +45,8 @@ final class StyleClassController
         private readonly SettingsValidator $settings = new SettingsValidator(),
         private readonly ?StyleClassJobService $jobService = null,
         private readonly ?StyleClassJobRepository $jobs = null,
+        /** Refuses an edit that would hide a layout's required block (type layouts plan C1). */
+        private readonly ?RequiredBlockClassGuard $layouts = null,
     ) {
     }
 
@@ -102,7 +105,9 @@ final class StyleClassController
         summary: 'Update a style class',
         description: '`version` is the version the client loaded; a stale one is 409 '
             . '`STYLE_CLASS_VERSION_CONFLICT` carrying `current_version`. Only the keys present change. '
-            . 'Saving changes published pages immediately.',
+            . 'Saving changes published pages immediately. A style that would hide a layout\'s required '
+            . 'block — the product page\'s Product buy box — through a block holding it is refused (422, '
+            . '`style.visibility`).',
         tags: ['Thallo Admin'],
     )]
     #[ApiResponse(200, schema: StyleClassResultData::class, description: 'Style class updated.')]
@@ -122,6 +127,10 @@ final class StyleClassController
             [$style, $errors] = $this->style($input->style);
             if ($errors !== []) {
                 return Response::validation($errors);
+            }
+            $refusal = $this->layouts?->refusal($id, $style);
+            if ($refusal !== null) {
+                return Response::validation(['style.visibility' => $refusal]);
             }
             $changes['style'] = $style;
         }

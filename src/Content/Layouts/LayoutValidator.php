@@ -223,6 +223,42 @@ final class LayoutValidator
      */
     private function neverHidden(string $type, array $blocks): array
     {
+        $errors = [];
+        foreach ($this->hiddenHolders($type, $blocks) as $path => $label) {
+            $errors[$path] = "this block holds the {$label} block, which every page shows: it cannot be hidden";
+        }
+        return $errors;
+    }
+
+    /**
+     * The layout's required blocks without a field that a block holding them would hide — as stored,
+     * or with some style classes' styles replaced by what an edit would save (a class edit's check).
+     * Keyed by the holder's offending setting (`….settings.style.visibility` or `….settings.classes`),
+     * each naming the required block by its label.
+     *
+     * @param list<array<string,mixed>> $blocks
+     * @param array<string, array<string,mixed>> $classStyles class id => the style to judge it by
+     * @return array<string,string>
+     */
+    public function hiddenRequired(string $surface, string $target, array $blocks, array $classStyles = []): array
+    {
+        $kind = $this->surfaces->get($surface);
+        $out = [];
+        foreach ($kind?->required($target) ?? [] as $required) {
+            if (($required['field'] ?? null) === null) {
+                $out += $this->hiddenHolders($required['type'], $blocks, $classStyles);
+            }
+        }
+        return $out;
+    }
+
+    /**
+     * @param list<array<string,mixed>> $blocks
+     * @param array<string, array<string,mixed>> $classStyles
+     * @return array<string,string> offending setting path => the required block's label
+     */
+    private function hiddenHolders(string $type, array $blocks, array $classStyles = []): array
+    {
         $holders = self::holdersOf($type, $blocks);
         if ($holders === []) {
             return [];
@@ -236,7 +272,6 @@ final class LayoutValidator
             }
         }
         $def = StyleSchema::property('visibility');
-        $message = "this block holds the {$label} block, which every page shows: it cannot be hidden";
         $errors = [];
         foreach ($holders as $path => $block) {
             $row = $rows[(string) ($block['type'] ?? '')] ?? null;
@@ -254,9 +289,9 @@ final class LayoutValidator
                 static fn ($r): bool => $r->isManaged() && ($r->value['value'] ?? null) === 'hidden',
             ) !== [];
             if ($hiddenBy([])) {
-                $errors["{$path}.settings.style.visibility"] = $message;
-            } elseif ($hiddenBy($this->classDefinitions($settings['classes'] ?? null))) {
-                $errors["{$path}.settings.classes"] = $message;
+                $errors["{$path}.settings.style.visibility"] = $label;
+            } elseif ($hiddenBy($this->classDefinitions($settings['classes'] ?? null, $classStyles))) {
+                $errors["{$path}.settings.classes"] = $label;
             }
         }
         return $errors;
@@ -289,11 +324,18 @@ final class LayoutValidator
         return [];
     }
 
-    /** @return list<array{id: string, style: array<string,mixed>}> the classes' styles, in order */
-    private function classDefinitions(mixed $ids): array
+    /**
+     * @param array<string, array<string,mixed>> $overrides class id => the style to use instead
+     * @return list<array{id: string, style: array<string,mixed>}> the classes' styles, in order
+     */
+    private function classDefinitions(mixed $ids, array $overrides = []): array
     {
         $out = [];
         foreach (is_array($ids) ? $ids : [] as $id) {
+            if (is_string($id) && isset($overrides[$id])) {
+                $out[] = ['id' => $id, 'style' => $overrides[$id]];
+                continue;
+            }
             $class = is_string($id) ? $this->styleClasses?->find($id) : null;
             if ($class !== null) {
                 $out[] = ['id' => $id, 'style' => is_array($class['style'] ?? null) ? $class['style'] : []];

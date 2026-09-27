@@ -1848,6 +1848,11 @@ final class CoreServiceProvider extends ServiceProvider
                 'shared' => true,
                 'autowire' => true,
             ],
+            \Thallo\Core\Content\Layouts\RequiredBlockClassGuard::class => [
+                'class' => \Thallo\Core\Content\Layouts\RequiredBlockClassGuard::class,
+                'shared' => true,
+                'autowire' => true,
+            ],
             \Thallo\Core\Content\Layouts\LayoutTargets::class => [
                 'class' => \Thallo\Core\Content\Layouts\LayoutTargets::class,
                 'shared' => true,
