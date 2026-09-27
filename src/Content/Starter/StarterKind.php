@@ -13,7 +13,12 @@ interface StarterKind
 
     public function fingerprint(StarterDefinition $definition): string;
 
-    /** @return array{key:string,fingerprint:string}|null */
+    /**
+     * `legacy_fingerprint`, when present, is what an earlier release recorded for this row untouched:
+     * a sync that finds it recorded treats the row as unchanged since it was seeded.
+     *
+     * @return array{key:string,fingerprint:string,legacy_fingerprint?:string}|null
+     */
     public function locateExact(string $definitionKey): ?array;
 
     /** @return array{key:string,fingerprint:string}|null */

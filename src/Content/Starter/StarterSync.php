@@ -69,7 +69,15 @@ final class StarterSync implements TenantStarterSync
                 continue;
             }
             $located = $kind->locateExact((string) $provenance['definition_key']);
-            if ($located === null || $located['fingerprint'] !== $provenance['fingerprint']) {
+            $recorded = (string) $provenance['fingerprint'];
+            // Untouched since the sync recorded it — in today's fingerprint or the one an earlier
+            // release recorded — or identical to the definition as it is now.
+            $untouched = $located !== null && (
+                $located['fingerprint'] === $recorded
+                || ($located['legacy_fingerprint'] ?? null) === $recorded
+                || $located['fingerprint'] === $sourceFingerprint
+            );
+            if ($located === null || !$untouched) {
                 $this->provenance->markState((string) $provenance['uuid'], 'customized');
                 $report->add($kind->kind(), $definition->sourceId, 'skipped_customized');
                 continue;

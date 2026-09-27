@@ -120,20 +120,43 @@ final class BlockTypeKind extends AbstractStarterKind
         return $this->capabilities->isEnabled($capability);
     }
 
+    /**
+     * In the shape of the row it seeds ({@see self::normalizeRow()}): a definition that leaves a
+     * column out — most carry no starter content — fingerprints as the row that stores it empty, so
+     * a seeded row is its definition to every later sync.
+     */
     public function fingerprint(StarterDefinition $definition): string
     {
         $payload = $definition->payload;
-        unset($payload['slug']);
-        return Fingerprint::of($payload);
+        return Fingerprint::of($this->normalizeRow([
+            'label' => $payload['label'] ?? '',
+            'icon' => $payload['icon'] ?? null,
+            'category' => $payload['category'] ?? null,
+            'description' => $payload['description'] ?? null,
+            'schema' => $payload['schema'] ?? [],
+            'active' => $payload['active'] ?? true,
+            'style_capabilities' => $payload['style_capabilities'] ?? null,
+            'style_targets' => $payload['style_targets'] ?? null,
+            'flags' => $payload['flags'] ?? null,
+            'starter_content' => $payload['starter_content'] ?? null,
+        ]));
     }
 
     public function locateExact(string $definitionKey): ?array
     {
         $row = $this->blocks->findBySlug($definitionKey);
-        return $row === null ? null : [
-            'key' => $definitionKey,
-            'fingerprint' => Fingerprint::of($this->normalizeRow($row)),
-        ];
+        if ($row === null) {
+            return null;
+        }
+        $normalized = $this->normalizeRow($row);
+        $located = ['key' => $definitionKey, 'fingerprint' => Fingerprint::of($normalized)];
+        if ($normalized['starter_content'] === null) {
+            // What a sync recorded for this row before 1.0.0-beta.68, when a definition's fingerprint
+            // left out the starter content it did not carry.
+            unset($normalized['starter_content']);
+            $located['legacy_fingerprint'] = Fingerprint::of($normalized);
+        }
+        return $located;
     }
 
     public function apply(StarterDefinition $definition, SeedContext $seed): StarterApplyResult
