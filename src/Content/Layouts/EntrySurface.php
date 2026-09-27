@@ -176,12 +176,22 @@ final class EntrySurface implements LayoutSurface
         );
     }
 
-    /** "Posts" → "post": the type's name, lower-cased, a plural `s` dropped. */
+    /** Names read as uncountable, or already one item: kept as they are. */
+    private const KEPT = ['news', 'series', 'species', 'status', 'press', 'media', 'data', 'faq'];
+
+    /** "Posts" → "post", "Categories" → "category", "Boxes" → "box"; "News" and "Series" stay. */
     private static function singular(string $name): string
     {
         $lower = mb_strtolower(trim($name));
-        return mb_strlen($lower) > 3 && str_ends_with($lower, 's') && !str_ends_with($lower, 'ss')
-            ? mb_substr($lower, 0, -1)
-            : $lower;
+        if (in_array($lower, self::KEPT, true) || mb_strlen($lower) <= 3 || !str_ends_with($lower, 's')) {
+            return $lower;
+        }
+        return match (true) {
+            str_ends_with($lower, 'ies') => mb_substr($lower, 0, -3) . 'y',
+            str_ends_with($lower, 'sses'), str_ends_with($lower, 'xes'), str_ends_with($lower, 'zes'),
+            str_ends_with($lower, 'ches'), str_ends_with($lower, 'shes') => mb_substr($lower, 0, -2),
+            str_ends_with($lower, 'ss'), str_ends_with($lower, 'us'), str_ends_with($lower, 'is') => $lower,
+            default => mb_substr($lower, 0, -1),
+        };
     }
 }

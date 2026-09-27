@@ -41,6 +41,8 @@ final class LayoutAdminController
         private readonly LayoutSaver $saver,
         private readonly LayoutPreviewStore $store,
         private readonly ?StyleClassProvider $styleClasses = null,
+        /** Whether the caller may open the editor (the list is `content.view`; editing `templates.manage`). */
+        private readonly ?\Thallo\Contracts\Authorization\PermissionRequirementAuthority $authority = null,
     ) {
     }
 
@@ -48,17 +50,20 @@ final class LayoutAdminController
     #[ApiOperation(
         summary: 'List the layouts',
         description: 'Every page kind that can have a layout — for each content type, its single entry — '
-            . 'with whether it has one (`custom`) or renders through the theme (`theme`), and when a '
-            . 'target cannot have one, why. Requires `content.view`.',
+            . 'with whether it has one (`custom`) or renders through the theme (`theme`), who saved it, '
+            . 'and when a target cannot have one, why; `can_edit` says whether the caller may open the '
+            . 'editor (`templates.manage`). Requires `content.view`.',
         tags: ['Thallo Layouts'],
     )]
     #[ApiResponse(200, description: 'The layouts.')]
-    public function index(): Response
+    public function index(Request $request): Response
     {
         $rows = [];
+        $saved = [];
         foreach ($this->surfaces->all() as $surface) {
             foreach ($surface->targets() as $target) {
                 $row = $this->layouts->find($surface->key(), $target['target']);
+                $saved[] = $row['updated_by'] ?? null;
                 $rows[] = [
                     'surface' => $surface->key(),
                     'target' => $target['target'],
@@ -73,7 +78,39 @@ final class LayoutAdminController
                 ];
             }
         }
-        return Response::success(['layouts' => $rows], 'Layouts retrieved.');
+        $names = $this->namesOf(array_values(array_unique(array_filter($saved, 'is_string'))));
+        foreach ($rows as $i => $row) {
+            // Who saved it, only while it is a custom layout: a removal is not an authorship.
+            $by = $row['state'] === 'custom' && is_string($row['updated_by']) ? $row['updated_by'] : null;
+            $rows[$i]['updated_by_name'] = $by === null ? null : ($names[$by] ?? null);
+        }
+        return Response::success([
+            'layouts' => $rows,
+            'can_edit' => $this->authority?->allows($request, ['templates.manage']) ?? false,
+        ], 'Layouts retrieved.');
+    }
+
+    /**
+     * The username — else the email — of each user who saved a layout, read in one query.
+     *
+     * @param list<string> $uuids
+     * @return array<string,string>
+     */
+    private function namesOf(array $uuids): array
+    {
+        if ($uuids === []) {
+            return [];
+        }
+        $names = [];
+        foreach (db($this->context)->table('users')->whereIn('uuid', $uuids)->get() as $user) {
+            $name = is_string($user['username'] ?? null) && $user['username'] !== ''
+                ? $user['username']
+                : (is_string($user['email'] ?? null) ? $user['email'] : null);
+            if ($name !== null) {
+                $names[(string) $user['uuid']] = $name;
+            }
+        }
+        return $names;
     }
 
     /** GET /v1/admin/layouts/{surface}/{target}/samples */

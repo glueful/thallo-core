@@ -77,34 +77,47 @@ final class LayoutBindings
 
     public function renameField(string $typeSlug, string $from, string $to): void
     {
-        foreach ($this->live($typeSlug) as $row) {
-            $changed = false;
-            $blocks = self::rename($row['blocks'], $from, $to, $changed);
-            if (!$changed) {
-                continue;
-            }
-            $surface = (string) $row['surface'];
-            $target = (string) $row['target'];
-            // Under the type's lock no save can move this layout, so the version read is current.
-            if (!$this->layouts->persistBlocks($surface, $target, (int) $row['lock_version'], $blocks)) {
-                throw new \RuntimeException("layout {$surface}:{$target} moved during a field rename");
-            }
-            $this->afterCommit($surface, $target);
+        foreach ($this->live($typeSlug) as $listed) {
+            $surface = (string) $listed['surface'];
+            $target = (string) $listed['target'];
+            // Re-read under the layout's own lock: a backfill write may have moved it since the list
+            // (a save cannot — it waits on the type lock the migration holds).
+            $this->lock->within($surface, $target, function () use ($surface, $target, $from, $to): void {
+                $row = $this->layouts->find($surface, $target);
+                if ($row === null || $row['blocks'] === null) {
+                    return;
+                }
+                $changed = false;
+                $blocks = self::rename($row['blocks'], $from, $to, $changed);
+                if (!$changed) {
+                    return;
+                }
+                if (!$this->layouts->persistBlocks($surface, $target, $row['lock_version'], $blocks)) {
+                    throw new \RuntimeException("layout {$surface}:{$target} moved during a field rename");
+                }
+                $this->afterCommit($surface, $target);
+            });
         }
     }
 
     public function tombstoneType(string $typeSlug): void
     {
-        foreach ($this->live($typeSlug) as $row) {
-            $surface = (string) $row['surface'];
-            $target = (string) $row['target'];
-            $this->lock->within(
-                $surface,
-                $target,
-                fn (): int => $this->layouts->tombstone($surface, $target, (int) $row['lock_version'], null),
-            );
-            $this->afterCommit($surface, $target);
-        }
+        // Under the type's lock, as a save takes it, and each layout re-read under its own: a save
+        // committing between the list and the write cannot turn the delete into a conflict.
+        $this->lock->withinType($typeSlug, function () use ($typeSlug): void {
+            foreach ($this->live($typeSlug) as $listed) {
+                $surface = (string) $listed['surface'];
+                $target = (string) $listed['target'];
+                $this->lock->within($surface, $target, function () use ($surface, $target): void {
+                    $row = $this->layouts->find($surface, $target);
+                    if ($row === null || $row['blocks'] === null) {
+                        return;
+                    }
+                    $this->layouts->tombstone($surface, $target, $row['lock_version'], null);
+                    $this->afterCommit($surface, $target);
+                });
+            }
+        });
     }
 
     /** @return list<array<string,mixed>> the type's live layouts */

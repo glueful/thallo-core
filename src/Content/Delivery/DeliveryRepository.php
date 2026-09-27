@@ -355,20 +355,17 @@ final class DeliveryRepository
         if ($current === null) {
             return ['previous' => null, 'next' => null];
         }
+        // One total order — publish time, then entry uuid — so entries published in the same second
+        // still sit in a line: walking previous and next visits each once, never in a circle.
         $at = (string) ($current['published_at'] ?? '');
         $previous = $this->base($contentTypeUuid, $locale)
-            ->where('p.entry_uuid', '!=', $entryUuid)
-            ->where('p.published_at', '<=', $at)
-            ->orderByRaw('p.published_at DESC, v.id DESC')
+            ->whereRaw('(p.published_at < ? OR (p.published_at = ? AND p.entry_uuid < ?))', [$at, $at, $entryUuid])
+            ->orderByRaw('p.published_at DESC, p.entry_uuid DESC')
             ->first();
         $next = $this->base($contentTypeUuid, $locale)
-            ->where('p.entry_uuid', '!=', $entryUuid)
-            ->where('p.published_at', '>=', $at)
-            ->orderByRaw('p.published_at ASC, v.id ASC')
+            ->whereRaw('(p.published_at > ? OR (p.published_at = ? AND p.entry_uuid > ?))', [$at, $at, $entryUuid])
+            ->orderByRaw('p.published_at ASC, p.entry_uuid ASC')
             ->first();
-        if ($previous !== null && $next !== null && $previous['entry_uuid'] === $next['entry_uuid']) {
-            $next = null; // one entry at the very same time is shown once, as the older
-        }
         return [
             'previous' => $previous === null ? null : $this->hydrate($previous),
             'next' => $next === null ? null : $this->hydrate($next),
