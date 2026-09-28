@@ -194,7 +194,7 @@ final class EntrySurface implements LayoutSurface
     private const KEPT = ['news', 'series', 'species', 'status', 'press', 'media', 'data', 'faq'];
 
     /** "Posts" → "post", "Categories" → "category", "Boxes" → "box"; "News" and "Series" stay. */
-    private static function singular(string $name): string
+    public static function singular(string $name): string
     {
         $lower = mb_strtolower(trim($name));
         if (in_array($lower, self::KEPT, true) || mb_strlen($lower) <= 3 || !str_ends_with($lower, 's')) {

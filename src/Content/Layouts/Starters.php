@@ -72,6 +72,38 @@ final class Starters
         return $tree;
     }
 
+    /**
+     * The layout a type's listing pages — or, with `$archive`, its archive pages — open on (type
+     * layouts plan B): today's listing page in blocks. Its title; on an archive, the term's
+     * description; the Entry list, whose card is today's row — the cover (an asset field named
+     * `cover`, linked, as the row is), the linked title, the date, the excerpt (a plain-text field
+     * named `excerpt`) — and the page navigation.
+     *
+     * @return list<array<string,mixed>>
+     */
+    public static function forListing(ContentTypeSchema $schema, bool $archive): array
+    {
+        $cover = $schema->field('cover');
+        $excerpt = $schema->field('excerpt');
+        $card = [];
+        if ($cover !== null && $cover->type === 'asset') {
+            $card[] = self::block('entry_cover', ['field' => 'cover', 'link' => true]);
+        }
+        $card[] = self::block('entry_title', ['level' => 'h2', 'link' => true]);
+        $card[] = self::block('entry_date', ['format' => 'long']);
+        $plain = $excerpt !== null
+            && ($excerpt->type === 'string' || ($excerpt->type === 'text' && $excerpt->format !== 'rich'));
+        if ($plain) {
+            $card[] = self::block('entry_excerpt', ['field' => 'excerpt']);
+        }
+        return [
+            self::block('listing_title', ['level' => 'h1']),
+            ...($archive ? [self::block('term_description', [])] : []),
+            self::block('entry_loop', ['card' => $card]),
+            self::block('pagination', []),
+        ];
+    }
+
     /** The type's primary body: the blocks field named `body`, else the first blocks field. */
     public static function primaryBody(ContentTypeSchema $schema): ?string
     {

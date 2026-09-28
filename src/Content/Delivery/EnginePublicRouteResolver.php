@@ -544,6 +544,7 @@ final class EnginePublicRouteResolver implements PublicRouteResolver
             'kind' => 'listing', 'locale' => $locale, 'type' => $typeSlug,
             'content' => null, 'redirect' => null,
             'listing' => $listing, 'term' => null, 'term_type' => null, 'field' => null,
+            'type_listing' => $this->typeListing($typeSlug, $locale),
             'preview' => false,
             'cache_tags' => $this->expansionTags($expanded),
         ];
@@ -622,6 +623,9 @@ final class EnginePublicRouteResolver implements PublicRouteResolver
             'term' => $this->shaper->shapePublic($termRow, $targetUuid, $targetSlug, $expanded),
             'term_type' => $targetSlug,
             'field' => $field,
+            'type_listing' => $this->typeListing($typeSlug, $locale),
+            // How a layout's Term description shows the term's `description` (type layouts plan B).
+            'term_description_format' => self::descriptionFormat($targetRow),
             'preview' => false,
             'cache_tags' => $this->expansionTags($expanded),
         ];
@@ -715,7 +719,7 @@ final class EnginePublicRouteResolver implements PublicRouteResolver
      *
      * @return array{path: string, archives: array<string, array{path: string, slug_field: ?string}>}|null
      */
-    private function typeListing(string $typeSlug, string $locale): ?array
+    public function typeListing(string $typeSlug, string $locale): ?array
     {
         if ($typeSlug === '' || !in_array($typeSlug, $this->listingTypes(), true)) {
             return null;
@@ -727,6 +731,31 @@ final class EnginePublicRouteResolver implements PublicRouteResolver
         $prefix = $locale === $this->locales->default() ? '' : '/' . rawurlencode($locale);
         $path = $prefix . '/' . rawurlencode($typeSlug);
         $archives = [];
+        foreach ($this->archivedFields($typeRow) as $field) {
+            $archives[$field['name']] = [
+                'path' => $path . '/' . rawurlencode($field['name']),
+                'slug_field' => $field['slug_field'],
+            ];
+        }
+        return ['path' => $path, 'archives' => $archives];
+    }
+
+    /** {@see self::typeListing()} in the default language (a layout stage's placeholder page). */
+    public function defaultTypeListing(string $typeSlug): ?array
+    {
+        return $this->typeListing($typeSlug, $this->locales->default());
+    }
+
+    /**
+     * The fields a type is archived by (listing spec §2): its filterable reference fields whose
+     * target type is publicly delivered — the `/{type}/{field}/{term}` pages that can exist.
+     *
+     * @param array<string,mixed> $typeRow
+     * @return list<array{name: string, label: string, target: string, slug_field: ?string}>
+     */
+    public function archivedFields(array $typeRow): array
+    {
+        $out = [];
         foreach (ContentTypeSchema::fromArray((array) ($typeRow['schema'] ?? []))->fields() as $field) {
             if ($field->type !== 'reference' || !$field->filterable) {
                 continue;
@@ -735,12 +764,25 @@ final class EnginePublicRouteResolver implements PublicRouteResolver
             if ($target === null || !$this->isPubliclyDeliverable($target)) {
                 continue;
             }
-            $archives[$field->name] = [
-                'path' => $path . '/' . rawurlencode($field->name),
+            $out[] = [
+                'name' => $field->name,
+                // A field has no label of its own: its name, as people read it.
+                'label' => ucfirst(str_replace('_', ' ', $field->name)),
+                'target' => (string) $target['slug'],
                 'slug_field' => $field->referenceSlugField,
             ];
         }
-        return ['path' => $path, 'archives' => $archives];
+        return $out;
+    }
+
+    /** @param array<string,mixed> $typeRow a term type: rich when its `description` is a rich text field */
+    private static function descriptionFormat(array $typeRow): ?string
+    {
+        $field = ContentTypeSchema::fromArray((array) ($typeRow['schema'] ?? []))->field('description');
+        if ($field === null) {
+            return null;
+        }
+        return $field->type === 'text' && $field->format === 'rich' ? 'rich' : 'plain';
     }
 
     /**

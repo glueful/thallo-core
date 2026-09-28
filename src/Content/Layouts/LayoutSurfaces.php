@@ -7,15 +7,20 @@ namespace Thallo\Core\Content\Layouts;
 use Thallo\Contracts\Layouts\LayoutSurface;
 use Thallo\Contracts\Layouts\LayoutSurfaceRegistry;
 
-/** The page kinds layouts can describe: core's entry surface, and what packs register (the shop's product page). */
+/**
+ * The page kinds layouts can describe: core's entry, listing and archive surfaces, and what packs
+ * register (the shop's product page).
+ */
 final class LayoutSurfaces implements LayoutSurfaceRegistry
 {
     /** @var array<string, LayoutSurface> */
     private array $surfaces = [];
 
-    public function __construct(EntrySurface $entry)
+    public function __construct(EntrySurface $entry, ListingSurface $listing, ArchiveSurface $archive)
     {
-        $this->surfaces[$entry->key()] = $entry;
+        foreach ([$entry, $listing, $archive] as $surface) {
+            $this->surfaces[$surface->key()] = $surface;
+        }
     }
 
     public function get(string $key): ?LayoutSurface

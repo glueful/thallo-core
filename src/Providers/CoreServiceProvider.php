@@ -803,6 +803,12 @@ final class CoreServiceProvider extends ServiceProvider
                 'shared'   => true,
                 'autowire' => true,
             ],
+            // The same resolver by its class, for core's listing and archive surfaces (its archived
+            // fields and a type's listing paths): one shared instance under both keys.
+            \Thallo\Core\Content\Delivery\EnginePublicRouteResolver::class => [
+                'factory' => [self::class, 'makeEnginePublicRouteResolver'],
+                'shared' => true,
+            ],
             FacetCountsReader::class => [
                 'class'    => EngineFacetCountsReader::class,
                 'shared'   => true,
@@ -1466,6 +1472,16 @@ final class CoreServiceProvider extends ServiceProvider
         );
     }
 
+    public static function makeEnginePublicRouteResolver(
+        ContainerInterface $container,
+    ): \Thallo\Core\Content\Delivery\EnginePublicRouteResolver {
+        $resolver = $container->get(\Thallo\Contracts\Delivery\PublicRouteResolver::class);
+        if (!$resolver instanceof \Thallo\Core\Content\Delivery\EnginePublicRouteResolver) {
+            throw new \LogicException('The public route resolver is not the engine\'s.');
+        }
+        return $resolver;
+    }
+
     public static function makeLayoutSaver(ContainerInterface $container): \Thallo\Core\Content\Layouts\LayoutSaver
     {
         return new \Thallo\Core\Content\Layouts\LayoutSaver(
@@ -1809,6 +1825,16 @@ final class CoreServiceProvider extends ServiceProvider
             ],
             \Thallo\Core\Content\Layouts\EntrySurface::class => [
                 'class' => \Thallo\Core\Content\Layouts\EntrySurface::class,
+                'shared' => true,
+                'autowire' => true,
+            ],
+            \Thallo\Core\Content\Layouts\ListingSurface::class => [
+                'class' => \Thallo\Core\Content\Layouts\ListingSurface::class,
+                'shared' => true,
+                'autowire' => true,
+            ],
+            \Thallo\Core\Content\Layouts\ArchiveSurface::class => [
+                'class' => \Thallo\Core\Content\Layouts\ArchiveSurface::class,
                 'shared' => true,
                 'autowire' => true,
             ],
