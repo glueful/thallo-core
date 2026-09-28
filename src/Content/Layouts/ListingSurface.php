@@ -137,7 +137,7 @@ final class ListingSurface implements LayoutSurface, LayoutSampleContext
         $type = $this->types->findBySlug($target);
         return $type === null
             ? []
-            : Starters::forListing(ContentTypeSchema::fromArray((array) ($type['schema'] ?? [])), false);
+            : Starters::forListing(ContentTypeSchema::fromArray((array) ($type['schema'] ?? [])));
     }
 
     /**

@@ -172,7 +172,7 @@ final class ArchiveSurface implements LayoutSurface, LayoutSampleContext
         $type = $this->types->findBySlug(self::split($target)[0]);
         return $type === null
             ? []
-            : Starters::forListing(ContentTypeSchema::fromArray((array) ($type['schema'] ?? [])), true);
+            : Starters::forListing(ContentTypeSchema::fromArray((array) ($type['schema'] ?? [])));
     }
 
     /** @return array{0: string, 1: string} the type and the field of `{type}:{field}` */

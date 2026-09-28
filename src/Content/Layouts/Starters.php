@@ -73,34 +73,61 @@ final class Starters
     }
 
     /**
-     * The layout a type's listing pages — or, with `$archive`, its archive pages — open on (type
-     * layouts plan B): today's listing page in blocks. Its title; on an archive, the term's
-     * description; the Entry list, whose card is today's row — the cover (an asset field named
-     * `cover`, linked, as the row is), the linked title, the date, the excerpt (a plain-text field
-     * named `excerpt`) — and the page navigation.
+     * The layout a type's listing pages and its archive pages open on (type layouts plan B): today's
+     * listing and archive page in blocks — the title, the Entry list, whose card is today's row, and
+     * the page navigation. (Today's archive shows no term description; the Term description block is
+     * in the archive's palette for a layout that wants it.)
+     *
+     * The card is block flow, so today's row is a container in it: a row holding the cover (an asset
+     * field named `cover`, linked, as the row is) beside a column of the linked title, the date and
+     * the excerpt (a plain-text field named `excerpt`, three lines at most) a small step apart. With
+     * no cover the card holds the column alone. The theme gives a card's cover and text today's
+     * sizes (blocks.css).
      *
      * @return list<array<string,mixed>>
      */
-    public static function forListing(ContentTypeSchema $schema, bool $archive): array
+    public static function forListing(ContentTypeSchema $schema): array
     {
         $cover = $schema->field('cover');
         $excerpt = $schema->field('excerpt');
-        $card = [];
-        if ($cover !== null && $cover->type === 'asset') {
-            $card[] = self::block('entry_cover', ['field' => 'cover', 'link' => true]);
-        }
-        $card[] = self::block('entry_title', ['level' => 'h2', 'link' => true]);
-        $card[] = self::block('entry_date', ['format' => 'long']);
+        $text = [
+            self::block('entry_title', ['level' => 'h2', 'link' => true]),
+            self::block('entry_date', ['format' => 'long']),
+        ];
         $plain = $excerpt !== null
             && ($excerpt->type === 'string' || ($excerpt->type === 'text' && $excerpt->format !== 'rich'));
         if ($plain) {
-            $card[] = self::block('entry_excerpt', ['field' => 'excerpt']);
+            $text[] = self::block('entry_excerpt', ['field' => 'excerpt', 'clamp' => 3]);
+        }
+        $card = [
+            self::container($text, ['gap' => ['row' => ['base' => ['type' => 'token', 'value' => 'spacing.xs']]]]),
+        ];
+        if ($cover !== null && $cover->type === 'asset') {
+            $card = [self::container(
+                [self::block('entry_cover', ['field' => 'cover', 'link' => true]), ...$card],
+                ['direction' => ['base' => ['type' => 'choice', 'value' => 'row']]],
+            )];
         }
         return [
             self::block('listing_title', ['level' => 'h1']),
-            ...($archive ? [self::block('term_description', [])] : []),
             self::block('entry_loop', ['card' => $card]),
             self::block('pagination', []),
+        ];
+    }
+
+    /**
+     * A container holding `$content`, its layout settings `$layout`.
+     *
+     * @param list<array<string,mixed>> $content
+     * @param array<string,mixed> $layout
+     * @return array{type: string, data: array<string,mixed>, settings: array<string,mixed>}
+     */
+    private static function container(array $content, array $layout): array
+    {
+        return [
+            'type' => 'container',
+            'data' => ['element' => 'div', 'content' => $content],
+            'settings' => ['style' => ['layout' => $layout]],
         ];
     }
 
