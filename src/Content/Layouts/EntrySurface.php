@@ -68,21 +68,22 @@ final class EntrySurface implements LayoutSurface
 
     public function samples(string $target, ?string $query): array
     {
-        return $this->samplesAmong($target, $query, null);
+        return $this->samplesWhere($target, $query, null);
     }
 
     /**
-     * The type's published entries, newest first, at most fifty — among `$uuids` only, when given
-     * (an archive's terms that have members: restricted in the query, so older terms with members are
-     * found behind any number of newer ones without).
+     * The type's published entries, newest first, at most fifty — only those `$where` admits, when
+     * given: one SQL condition on `entries` and its bindings (an archive's terms that have members,
+     * restricted in the query, so older terms with members are found behind any number of newer ones
+     * without, and no list of ids is bound).
      *
-     * @param list<string>|null $uuids
+     * @param array{0: string, 1: list<mixed>}|null $where
      * @return list<array{id: string, label: string}>
      */
-    public function samplesAmong(string $target, ?string $query, ?array $uuids): array
+    public function samplesWhere(string $target, ?string $query, ?array $where): array
     {
         $type = $this->types->findBySlug($target);
-        if ($type === null || $uuids === []) {
+        if ($type === null) {
             return [];
         }
         $rows = $this->db->table('entries')
@@ -91,8 +92,9 @@ final class EntrySurface implements LayoutSurface
             ->join('entry_versions', 'entry_versions.uuid', '=', 'entry_publications.version_uuid')
             ->where('entries.content_type_uuid', '=', (string) $type['uuid'])
             ->where('entries.status', '=', 'active');
-        if ($uuids !== null) {
-            $rows = $rows->whereIn('entries.uuid', $uuids);
+        if ($where !== null) {
+            // Wrapped whole: the builder joins raw conditions unparenthesised.
+            $rows = $rows->whereRaw('(' . $where[0] . ')', $where[1]);
         }
         $rows = $rows->orderBy('entry_publications.published_at', 'DESC')
             ->limit(200)

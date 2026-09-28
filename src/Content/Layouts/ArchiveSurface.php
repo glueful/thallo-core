@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Thallo\Core\Content\Layouts;
 
-use Glueful\Database\Connection;
 use Thallo\Contracts\Layouts\CollectionPage;
 use Thallo\Contracts\Layouts\LayoutSampleContext;
 use Thallo\Contracts\Layouts\LayoutSurface;
@@ -28,7 +27,6 @@ final class ArchiveSurface implements LayoutSurface, LayoutSampleContext
         private readonly EnginePublicRouteResolver $resolver,
         private readonly ListingSurface $listing,
         private readonly EntrySurface $entries,
-        private readonly Connection $db,
     ) {
     }
 
@@ -75,16 +73,13 @@ final class ArchiveSurface implements LayoutSurface, LayoutSampleContext
         if ($archived === null || $typeRow === null || !$this->listing->openness($type)['enabled']) {
             return [];
         }
-        $members = [];
-        $rows = $this->db->table('published_entry_references')
-            ->select(['target_entry_uuid'])
-            ->where('source_content_type_uuid', '=', (string) $typeRow['uuid'])
-            ->where('field', '=', $field)
-            ->get();
-        foreach ($rows as $row) {
-            $members[(string) $row['target_entry_uuid']] = true;
-        }
-        return $this->entries->samplesAmong($archived['target'], $query, array_map('strval', array_keys($members)));
+        // Terms with members: the published references of this type's field point at them. The entries
+        // query is the workspace's own; the references it reads are the type's, which is too.
+        return $this->entries->samplesWhere($archived['target'], $query, [
+            'entries.uuid IN (SELECT DISTINCT target_entry_uuid FROM published_entry_references '
+                . 'WHERE source_content_type_uuid = ? AND field = ?)',
+            [(string) $typeRow['uuid'], $field],
+        ]);
     }
 
     public function defaultSample(string $target): ?string

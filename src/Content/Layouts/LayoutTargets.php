@@ -32,10 +32,22 @@ final class LayoutTargets
     ) {
     }
 
-    /** @return list<array{target: string, label: string, enabled: bool, reason: ?string, link: ?string}> */
+    /**
+     * Each row says whether a layout kept there may be removed while the row is closed (`removable`):
+     * a target the surface itself closes — its pages are off the site — or a kept one it no longer
+     * offers. A target closed here for missing blocks is still live (the site renders its layout), so
+     * it is never removable.
+     *
+     * @return list<array{
+     *     target: string, label: string, enabled: bool, reason: ?string, link: ?string, removable: bool
+     * }>
+     */
     public function of(LayoutSurface $surface): array
     {
-        $rows = $surface->targets();
+        $rows = array_map(
+            static fn (array $row): array => $row + ['removable' => !$row['enabled']],
+            $surface->targets(),
+        );
         if (!$this->provisioned($surface)) {
             foreach ($rows as $i => $row) {
                 if ($row['enabled']) {
@@ -45,21 +57,20 @@ final class LayoutTargets
         }
         if ($this->layouts !== null) {
             $offered = array_flip(array_column($rows, 'target'));
-            foreach ($this->layouts->live() as $saved) {
-                $target = (string) $saved['target'];
-                if ($saved['surface'] !== $surface->key() || isset($offered[$target])) {
+            foreach ($this->layouts->liveTargets($surface->key()) as $target) {
+                if (isset($offered[$target])) {
                     continue;
                 }
                 $rows[] = [
                     'target' => $target, 'label' => $surface->label($target),
-                    'enabled' => false, 'reason' => self::KEPT, 'link' => null,
+                    'enabled' => false, 'reason' => self::KEPT, 'link' => null, 'removable' => true,
                 ];
             }
         }
         return $rows;
     }
 
-    /** @return array{target: string, label: string, enabled: bool, reason: ?string, link: ?string}|null */
+    /** @return array{target: string, label: string, enabled: bool, reason: ?string, link: ?string, removable: bool}|null */
     public function find(LayoutSurface $surface, string $target): ?array
     {
         foreach ($this->of($surface) as $row) {

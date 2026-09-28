@@ -144,6 +144,22 @@ class LayoutRepository
     }
 
     /**
+     * The targets of a surface that hold a live layout — what is kept, without reading any blocks.
+     *
+     * @return list<string>
+     */
+    public function liveTargets(string $surface): array
+    {
+        $rows = $this->db->table('layouts')
+            ->select(['target'])
+            ->where('surface', '=', $surface)
+            ->whereNotNull('blocks')
+            ->orderBy('target', 'ASC')
+            ->get();
+        return array_values(array_map(static fn (array $row): string => (string) $row['target'], $rows));
+    }
+
+    /**
      * Every layout that follows one content type, tombstones included: its entries' (`entry:{type}`),
      * its listing's (`listing:{type}`) and its archives' (`archive:{type}:{field}`).
      *

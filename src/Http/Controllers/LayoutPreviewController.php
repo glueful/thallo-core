@@ -72,12 +72,13 @@ final class LayoutPreviewController
         }
         $target = $this->targets?->find($surface, $input->target) ?? self::target($surface, $input->target);
         $row = $this->layouts->find($input->surface, $input->target);
-        // A closed target opens only while it keeps a saved layout — to remove it (Save and apply stay
-        // refused); with none there is nothing to open.
+        // A closed target opens only while its pages are off the site and it keeps a saved layout — to
+        // remove it (Save and apply stay refused). A target closed for missing blocks is still live
+        // and opens nothing, as before; with no layout there is nothing to open.
         $closed = null;
         if ($target === null || !$target['enabled']) {
             $closed = $target['reason'] ?? "'{$input->target}' cannot have a layout";
-            if ($row === null || $row['blocks'] === null) {
+            if (!($target['removable'] ?? false) || $row === null || $row['blocks'] === null) {
                 return Response::validation(['target' => $closed]);
             }
         }
