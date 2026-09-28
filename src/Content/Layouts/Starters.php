@@ -111,7 +111,7 @@ final class Starters
         return [
             self::block('listing_title', ['level' => 'h1']),
             self::block('entry_loop', ['card' => $card]),
-            self::block('pagination', []),
+            self::block('pagination', ['count' => true]),
         ];
     }
 

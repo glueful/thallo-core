@@ -151,9 +151,11 @@ class LayoutRepository
      */
     public function forType(string $typeSlug): array
     {
+        // One parenthesised condition: the builder joins raw conditions unwrapped, and a bare OR
+        // here would escape the workspace filter the tenancy hook adds to every query of the table.
         $rows = $this->db->table('layouts')
             ->whereRaw(
-                "(surface IN ('entry', 'listing') AND target = ?) OR (surface = 'archive' AND target LIKE ?)",
+                "((surface IN ('entry', 'listing') AND target = ?) OR (surface = 'archive' AND target LIKE ?))",
                 [$typeSlug, addcslashes($typeSlug, '%_\\') . ':%'],
             )
             ->orderBy('surface', 'ASC')

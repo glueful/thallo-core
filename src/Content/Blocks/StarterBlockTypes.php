@@ -903,7 +903,9 @@ final class StarterBlockTypes
                     ['name' => 'previous_label', 'type' => 'string', 'label' => 'Newer label'],
                     ['name' => 'next_label', 'type' => 'string', 'label' => 'Older label'],
                     ['name' => 'count', 'type' => 'boolean', 'label' => 'Show "Page X of Y"'],
-                ]],
+                ],
+                // The count shows until switched off, and the switch says so from the start.
+                'starter_content' => ['count' => true]],
             ['slug' => 'listing_title', 'label' => 'Listing title', 'icon' => 'i-lucide-heading-1',
                 'category' => 'Fields',
                 'description' => 'The list\'s title: the content type, or the term of an archive.',
