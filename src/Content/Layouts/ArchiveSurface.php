@@ -84,10 +84,7 @@ final class ArchiveSurface implements LayoutSurface, LayoutSampleContext
         foreach ($rows as $row) {
             $members[(string) $row['target_entry_uuid']] = true;
         }
-        return array_values(array_filter(
-            $this->entries->samples($archived['target'], $query),
-            static fn (array $term): bool => isset($members[$term['id']]),
-        ));
+        return $this->entries->samplesAmong($archived['target'], $query, array_map('strval', array_keys($members)));
     }
 
     public function defaultSample(string $target): ?string
@@ -109,7 +106,10 @@ final class ArchiveSurface implements LayoutSurface, LayoutSampleContext
         if (is_string($slug) && $slug !== '') {
             $path = '/' . rawurlencode($type) . '/' . rawurlencode($field) . '/' . rawurlencode($slug);
         }
-        return CollectionPage::context($result, $path);
+        $vars = CollectionPage::context($result, $path);
+        // A term whose posts were all unpublished since the session began samples nothing: the stage
+        // falls back to the placeholder and its one card.
+        return $vars['items'] === [] ? null : $vars;
     }
 
     public function placeholder(string $target): array

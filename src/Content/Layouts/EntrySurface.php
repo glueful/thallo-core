@@ -68,8 +68,21 @@ final class EntrySurface implements LayoutSurface
 
     public function samples(string $target, ?string $query): array
     {
+        return $this->samplesAmong($target, $query, null);
+    }
+
+    /**
+     * The type's published entries, newest first, at most fifty — among `$uuids` only, when given
+     * (an archive's terms that have members: restricted in the query, so older terms with members are
+     * found behind any number of newer ones without).
+     *
+     * @param list<string>|null $uuids
+     * @return list<array{id: string, label: string}>
+     */
+    public function samplesAmong(string $target, ?string $query, ?array $uuids): array
+    {
         $type = $this->types->findBySlug($target);
-        if ($type === null) {
+        if ($type === null || $uuids === []) {
             return [];
         }
         $rows = $this->db->table('entries')
@@ -77,8 +90,11 @@ final class EntrySurface implements LayoutSurface
             ->join('entry_publications', 'entry_publications.entry_uuid', '=', 'entries.uuid')
             ->join('entry_versions', 'entry_versions.uuid', '=', 'entry_publications.version_uuid')
             ->where('entries.content_type_uuid', '=', (string) $type['uuid'])
-            ->where('entries.status', '=', 'active')
-            ->orderBy('entry_publications.published_at', 'DESC')
+            ->where('entries.status', '=', 'active');
+        if ($uuids !== null) {
+            $rows = $rows->whereIn('entries.uuid', $uuids);
+        }
+        $rows = $rows->orderBy('entry_publications.published_at', 'DESC')
             ->limit(200)
             ->get();
         $needle = $query === null ? '' : mb_strtolower(trim($query));

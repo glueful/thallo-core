@@ -88,7 +88,10 @@ final class ListingSurface implements LayoutSurface, LayoutSampleContext
         if (($result['kind'] ?? null) !== 'listing') {
             return null;
         }
-        return CollectionPage::context($result, $path);
+        $vars = CollectionPage::context($result, $path);
+        // A page with nothing on it — every post unpublished since the session began — samples
+        // nothing: the stage falls back to the placeholder and its one card.
+        return $vars['items'] === [] ? null : $vars;
     }
 
     public function placeholder(string $target): array
