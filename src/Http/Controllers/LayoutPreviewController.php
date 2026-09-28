@@ -55,7 +55,9 @@ final class LayoutPreviewController
         description: 'Mints a layout preview token for a surface and target, pins the saved layout (or '
             . 'the starter when there is none) and its version as the session baseline, and picks the '
             . 'sample the stage renders it against: the one asked for, the newest published item, or '
-            . 'a placeholder built in memory. Requires `templates.manage`.',
+            . 'a placeholder built in memory. The session names the surface\'s required blocks, its '
+            . 'palette and its loops (each loop\'s card field and the blocks only a card holds). '
+            . 'Requires `templates.manage`.',
         tags: ['Thallo Layouts'],
     )]
     #[ApiResponse(200, description: 'Session opened.')]
