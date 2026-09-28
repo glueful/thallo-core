@@ -870,6 +870,55 @@ final class StarterBlockTypes
                     ['name' => 'count', 'type' => 'number', 'min' => 1, 'max' => 6],
                     ['name' => 'style', 'type' => 'enum', 'enum' => ['list', 'cards']],
                 ]],
+            // ---- Listing and archive pages (type layouts plan B): the page's own blocks. Layout-only.
+            // The Entry list's card is a template, repeated for each entry on the page; its own box is
+            // the block's root, and `cards` arranges the repeated cards — rows, or a grid of cards.
+            // No visibility on either: every listing page shows its entries, at every size.
+            ['slug' => 'entry_loop', 'label' => 'Entry list', 'icon' => 'i-lucide-rows-3',
+                'category' => 'Fields',
+                'description' => 'Every entry on the page, each shown as the card you design once.',
+                'flags' => ['layout_only' => true],
+                'style_capabilities' => [
+                    'spacing', 'width', 'layout.item', 'layout.display', 'layout.direction', 'layout.wrap',
+                    'alignment.content', 'layout.align_items', 'layout.columns', 'layout.gap.column', 'layout.gap.row',
+                ],
+                'style_targets' => StyleTargets::root('box', ['spacing', 'width', 'layout.item'], [
+                    'targets' => ['cards' => ['kind' => 'stack']],
+                    'map' => [
+                        'layout.display' => 'cards', 'layout.direction' => 'cards', 'layout.wrap' => 'cards',
+                        'alignment.content' => 'cards', 'layout.align_items' => 'cards',
+                        'layout.columns' => 'cards', 'layout.gap.column' => 'cards', 'layout.gap.row' => 'cards',
+                    ],
+                ]),
+                'schema' => [
+                    ['name' => 'card', 'type' => 'blocks'],
+                    ['name' => 'empty_text', 'type' => 'string', 'label' => 'When there are no entries'],
+                ]],
+            ['slug' => 'pagination', 'label' => 'Page navigation', 'icon' => 'i-lucide-arrow-left-right',
+                'category' => 'Fields', 'description' => 'Links to the newer and older pages of the list.',
+                'flags' => ['layout_only' => true],
+                'style_capabilities' => self::FIELD_TEXT,
+                'style_targets' => StyleTargets::root('text', self::FIELD_TEXT),
+                'schema' => [
+                    ['name' => 'previous_label', 'type' => 'string', 'label' => 'Newer label'],
+                    ['name' => 'next_label', 'type' => 'string', 'label' => 'Older label'],
+                    ['name' => 'count', 'type' => 'boolean', 'label' => 'Show "Page X of Y"'],
+                ]],
+            ['slug' => 'listing_title', 'label' => 'Listing title', 'icon' => 'i-lucide-heading-1',
+                'category' => 'Fields',
+                'description' => 'The list\'s title: the content type, or the term of an archive.',
+                'flags' => ['layout_only' => true],
+                'style_capabilities' => self::FIELD_TEXT,
+                'style_targets' => StyleTargets::root('text', self::FIELD_TEXT),
+                'schema' => [
+                    ['name' => 'level', 'type' => 'enum', 'enum' => ['h1', 'h2', 'h3', 'h4']],
+                ]],
+            ['slug' => 'term_description', 'label' => 'Term description', 'icon' => 'i-lucide-text',
+                'category' => 'Fields', 'description' => 'An archive term\'s description.',
+                'flags' => ['layout_only' => true],
+                'style_capabilities' => self::FIELD_TEXT,
+                'style_targets' => StyleTargets::root('text', self::FIELD_TEXT),
+                'schema' => []],
             ['slug' => 'audio', 'label' => 'Audio', 'icon' => 'i-lucide-audio-lines',
                 'category' => 'Media', 'description' => 'An uploaded audio file with native controls.',
                 'flags' => [],
