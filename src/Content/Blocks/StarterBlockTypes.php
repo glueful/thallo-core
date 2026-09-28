@@ -882,8 +882,10 @@ final class StarterBlockTypes
                     'spacing', 'width', 'layout.item', 'layout.display', 'layout.direction', 'layout.wrap',
                     'alignment.content', 'layout.align_items', 'layout.columns', 'layout.gap.column', 'layout.gap.row',
                 ],
+                // The cards stack as rows until someone arranges them: a flex column, the inspector's
+                // default, declared so every loop states its own (type layouts plan C2).
                 'style_targets' => StyleTargets::root('box', ['spacing', 'width', 'layout.item'], [
-                    'targets' => ['cards' => ['kind' => 'stack']],
+                    'targets' => ['cards' => ['kind' => 'stack', 'defaults' => ['display' => 'flex']]],
                     'map' => [
                         'layout.display' => 'cards', 'layout.direction' => 'cards', 'layout.wrap' => 'cards',
                         'alignment.content' => 'cards', 'layout.align_items' => 'cards',
