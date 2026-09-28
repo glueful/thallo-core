@@ -62,7 +62,11 @@ final class LayoutPreviewController
         tags: ['Thallo Layouts'],
     )]
     #[ApiResponse(200, description: 'Session opened.')]
-    #[ApiResponse(422, description: 'An unknown surface, or a target that cannot have a layout and keeps none.')]
+    #[ApiResponse(
+        422,
+        description: 'An unknown surface, or a target that cannot be opened: closed while its pages are still on '
+            . 'the site (its blocks not installed), or off the site with no layout kept.',
+    )]
     public function session(LayoutSessionData $input): Response
     {
         $this->styleClasses?->refresh();
