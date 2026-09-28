@@ -114,6 +114,7 @@ final class LayoutPreviewController
             'starter_layout' => $starter ? $layout['blocks'] : self::withIds($surface->starter($input->target)),
             'required' => $surface->required($input->target),
             'palette' => $surface->palette(),
+            'loops' => $surface->loops($input->target),
             'sample' => $sample,
             'placeholder' => $sample === null,
             'label' => $surface->label($input->target),

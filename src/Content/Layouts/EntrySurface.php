@@ -58,7 +58,10 @@ final class EntrySurface implements LayoutSurface
                 continue;
             }
             $slug = (string) $type['slug'];
-            $out[] = ['target' => $slug, 'label' => $this->label($slug), 'enabled' => true, 'reason' => null];
+            $out[] = [
+                'target' => $slug, 'label' => $this->label($slug), 'enabled' => true, 'reason' => null,
+                'link' => null,
+            ];
         }
         return $out;
     }
@@ -138,6 +141,11 @@ final class EntrySurface implements LayoutSurface
         $schema = $this->schema($target);
         $body = $schema === null ? null : Starters::primaryBody($schema);
         return $body === null ? [] : [['type' => 'entry_content', 'field' => $body]];
+    }
+
+    public function loops(string $target): array
+    {
+        return [];
     }
 
     public function bindable(string $target): array

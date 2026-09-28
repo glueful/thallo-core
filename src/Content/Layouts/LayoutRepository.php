@@ -143,14 +143,81 @@ class LayoutRepository
         return array_values(array_map(self::decode(...), $rows));
     }
 
-    /** @return list<array<string,mixed>> the layouts of one content type's entries, tombstones included */
+    /**
+     * Every layout that follows one content type, tombstones included: its entries' (`entry:{type}`),
+     * its listing's (`listing:{type}`) and its archives' (`archive:{type}:{field}`).
+     *
+     * @return list<array<string,mixed>>
+     */
     public function forType(string $typeSlug): array
     {
         $rows = $this->db->table('layouts')
-            ->where('surface', '=', 'entry')
-            ->where('target', '=', $typeSlug)
+            ->whereRaw(
+                "(surface IN ('entry', 'listing') AND target = ?) OR (surface = 'archive' AND target LIKE ?)",
+                [$typeSlug, addcslashes($typeSlug, '%_\\') . ':%'],
+            )
+            ->orderBy('surface', 'ASC')
+            ->orderBy('target', 'ASC')
             ->get();
         return array_values(array_map(self::decode(...), $rows));
+    }
+
+    /**
+     * Move a live layout to another target of its surface — an archived field renamed (spec §5.1: a
+     * version never goes backwards). Under both targets' write locks, taken in key order: the
+     * destination (created, or its tombstone updated in place) takes the layout at a version above
+     * either row's, and the source becomes a tombstone one version on — so an editor holding either
+     * name's old version meets a conflict. Nothing moves when the source is absent or a tombstone.
+     *
+     * @return array{from: int, to: int}|null the two new versions; null when nothing moved
+     * @throws LayoutBindingConflict when the destination holds a live layout
+     */
+    public function move(string $surface, string $from, string $to, ?string $by): ?array
+    {
+        $first = $this->lock->key($surface, $from) <= $this->lock->key($surface, $to) ? $from : $to;
+        $second = $first === $from ? $to : $from;
+        return $this->lock->within($surface, $first, fn (): ?array => $this->lock->within(
+            $surface,
+            $second,
+            function () use ($surface, $from, $to, $by): ?array {
+                $source = $this->find($surface, $from);
+                if ($source === null || $source['blocks'] === null) {
+                    return null;
+                }
+                $destination = $this->find($surface, $to);
+                if ($destination !== null && $destination['blocks'] !== null) {
+                    throw new LayoutBindingConflict([$to => ["{$surface}:{$to}"]]);
+                }
+                $now = gmdate('Y-m-d H:i:s');
+                $toVersion = max($source['lock_version'], $destination['lock_version'] ?? 0) + 1;
+                $values = [
+                    'blocks' => json_encode($source['blocks'], JSON_THROW_ON_ERROR),
+                    'settings' => json_encode((object) $source['settings'], JSON_THROW_ON_ERROR),
+                    'lock_version' => $toVersion,
+                    'updated_by' => $by,
+                    'updated_at' => $now,
+                ];
+                if ($destination === null) {
+                    $this->db->table('layouts')->insert($values + [
+                        'id' => Utils::generateNanoID(),
+                        'surface' => $surface,
+                        'target' => $to,
+                        'created_at' => $now,
+                    ]);
+                } else {
+                    $this->db->table('layouts')->where('surface', '=', $surface)->where('target', '=', $to)
+                        ->where('lock_version', '=', $destination['lock_version'])->update($values);
+                }
+                $this->db->table('layouts')->where('surface', '=', $surface)->where('target', '=', $from)
+                    ->where('lock_version', '=', $source['lock_version'])->update([
+                        'blocks' => null,
+                        'lock_version' => $source['lock_version'] + 1,
+                        'updated_by' => $by,
+                        'updated_at' => $now,
+                    ]);
+                return ['from' => $source['lock_version'] + 1, 'to' => $toVersion];
+            },
+        ));
     }
 
     private function assertLocked(string $surface, string $target): void

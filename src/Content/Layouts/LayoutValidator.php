@@ -103,6 +103,7 @@ final class LayoutValidator
                 $errors["{$path}.type"] = "'{$label}' cannot be placed in a layout";
             }
         }
+        $errors += $this->cardErrors($kind, $target, array_values($blocks));
         if ($errors !== []) {
             throw new ValidationException($errors);
         }
@@ -294,6 +295,77 @@ final class LayoutValidator
                 $errors["{$path}.settings.classes"] = $label;
             }
         }
+        return $errors;
+    }
+
+    /**
+     * The card rules of a surface's loops (spec §5.6): a block a loop's card holds goes inside that
+     * card only; inside a card, no page-level block of the surface — a loop, a required block, a
+     * surface block that is not the card's — goes. General content blocks go anywhere.
+     *
+     * @param list<mixed> $blocks
+     * @return array<string,string>
+     */
+    private function cardErrors(LayoutSurface $kind, string $target, array $blocks): array
+    {
+        $loops = [];
+        foreach ($kind->loops($target) as $loop) {
+            $loops[$loop['type']] = $loop;
+        }
+        if ($loops === []) {
+            return [];
+        }
+        $cardOf = [];
+        foreach ($loops as $type => $loop) {
+            foreach ($loop['items'] as $item) {
+                $cardOf[$item] = $type;
+            }
+        }
+        $pageLevel = array_fill_keys(
+            [...$kind->palette(), ...array_column($kind->required($target), 'type'), ...array_keys($loops)],
+            true,
+        );
+        foreach (array_keys($cardOf) as $item) {
+            unset($pageLevel[$item]);
+        }
+        $labels = [];
+        foreach ($this->blockTypes->all() as $row) {
+            $labels[(string) $row['slug']] = (string) ($row['label'] ?? $row['slug']);
+        }
+        $errors = [];
+        $walk = function (
+            array $list,
+            string $prefix,
+            ?string $card,
+        ) use (
+            &$walk,
+            &$errors,
+            $loops,
+            $cardOf,
+            $pageLevel,
+            $labels,
+        ): void {
+            foreach ($list as $i => $block) {
+                if (!is_array($block)) {
+                    continue;
+                }
+                $type = is_string($block['type'] ?? null) ? $block['type'] : '';
+                $path = $prefix . $i;
+                if (isset($cardOf[$type]) && $card !== $cardOf[$type]) {
+                    $loop = $labels[$cardOf[$type]] ?? $cardOf[$type];
+                    $errors["{$path}.type"] = "'{$type}' goes inside the {$loop}'s card";
+                } elseif ($card !== null && isset($pageLevel[$type])) {
+                    $errors["{$path}.type"] = "'{$type}' cannot go inside a card";
+                }
+                foreach (is_array($block['data'] ?? null) ? $block['data'] : [] as $field => $value) {
+                    if (is_array($value) && array_is_list($value) && isset($value[0]['type'])) {
+                        $inner = isset($loops[$type]) && $loops[$type]['card'] === $field ? $type : $card;
+                        $walk($value, "{$path}.data.{$field}.", $inner);
+                    }
+                }
+            }
+        };
+        $walk($blocks, 'blocks.', null);
         return $errors;
     }
 

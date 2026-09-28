@@ -23,10 +23,10 @@ final class LayoutTargets
     {
     }
 
-    /** @return list<array{target: string, label: string, enabled: bool, reason: ?string}> */
+    /** @return list<array{target: string, label: string, enabled: bool, reason: ?string, link: ?string}> */
     public function of(LayoutSurface $surface): array
     {
-        $rows = $surface->targets();
+        $rows = array_map(static fn (array $row): array => $row + ['link' => null], $surface->targets());
         if (!$this->provisioned($surface)) {
             foreach ($rows as $i => $row) {
                 if ($row['enabled']) {
@@ -37,7 +37,7 @@ final class LayoutTargets
         return $rows;
     }
 
-    /** @return array{target: string, label: string, enabled: bool, reason: ?string}|null */
+    /** @return array{target: string, label: string, enabled: bool, reason: ?string, link: ?string}|null */
     public function find(LayoutSurface $surface, string $target): ?array
     {
         foreach ($this->of($surface) as $row) {

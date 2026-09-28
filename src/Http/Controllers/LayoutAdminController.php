@@ -75,6 +75,7 @@ final class LayoutAdminController
                     'state' => $row !== null && $row['blocks'] !== null ? 'custom' : 'theme',
                     'enabled' => $target['enabled'],
                     'reason' => $target['reason'],
+                    'link' => $target['link'] ?? null,
                     'lock_version' => $row['lock_version'] ?? 0,
                     'updated_by' => $row['updated_by'] ?? null,
                     'updated_at' => $row['updated_at'] ?? null,

@@ -11,9 +11,11 @@ use Thallo\Core\Content\Schema\Migration\MigrationOpSet;
 use Thallo\Core\Content\Schema\Migration\RenameField;
 
 /**
- * Layouts follow their content type (type layouts spec §5.7). A field a layout shows cannot be
+ * Layouts follow their content type (type layouts spec §5.7) — its entries', its listing's and its
+ * archives' layouts. A field a layout shows, or the field an archive layout is for, cannot be
  * deleted (the change is refused with the layouts named); renaming it rewrites the blocks that show
- * it, bumping each layout's version; deleting the type tombstones its layouts.
+ * it, bumping each layout's version, and moves the archive layout to the renamed field's target
+ * ({@see LayoutRepository::move()}); deleting the type tombstones its layouts.
  *
  * Every write runs inside the caller's transaction, under the type's lock and then each layout's;
  * announcing each change ({@see LayoutChanges}) follows the outermost commit.
@@ -47,6 +49,17 @@ final class LayoutBindings
         if ($bound !== []) {
             throw new LayoutBindingConflict($bound);
         }
+        // An archive layout moves with its field — never onto another live layout: refuse before any
+        // rename writes.
+        $blocked = [];
+        foreach ($ops->ops() as $op) {
+            if ($op instanceof RenameField) {
+                $blocked += $this->moveBlockedBy($typeSlug, $op->from, $op->to);
+            }
+        }
+        if ($blocked !== []) {
+            throw new LayoutBindingConflict($blocked);
+        }
         foreach ($ops->ops() as $op) {
             if ($op instanceof RenameField) {
                 $this->renameField($typeSlug, $op->from, $op->to);
@@ -63,7 +76,10 @@ final class LayoutBindings
         $out = [];
         foreach ($this->live($typeSlug) as $row) {
             $shown = self::fieldsShown($row['blocks']);
-            $label = $this->surfaces->get((string) $row['surface'])?->label((string) $row['target']) ?? $row['target'];
+            if ($row['surface'] === 'archive') {
+                $shown[] = self::archivedField((string) $row['target']);
+            }
+            $label = $this->label($row);
             foreach ($fields as $field) {
                 if (in_array($field, $shown, true)) {
                     $out[$field][] = $label;
@@ -74,6 +90,32 @@ final class LayoutBindings
     }
 
     public function renameField(string $typeSlug, string $from, string $to): void
+    {
+        $this->rebind($typeSlug, $from, $to);
+        $moved = $this->layouts->move('archive', "{$typeSlug}:{$from}", "{$typeSlug}:{$to}", null);
+        if ($moved !== null) {
+            $this->afterCommit('archive', "{$typeSlug}:{$from}");
+            $this->afterCommit('archive', "{$typeSlug}:{$to}");
+        }
+    }
+
+    /**
+     * The live layout a rename's archive move would land on — never overwritten.
+     *
+     * @return array<string, list<string>> the renamed-to field => the label of the layout in the way
+     */
+    private function moveBlockedBy(string $typeSlug, string $from, string $to): array
+    {
+        $source = $this->layouts->find('archive', "{$typeSlug}:{$from}");
+        $destination = $this->layouts->find('archive', "{$typeSlug}:{$to}");
+        $live = static fn (?array $row): bool => $row !== null && $row['blocks'] !== null;
+        if (!$live($source) || !$live($destination)) {
+            return [];
+        }
+        return [$to => [$this->label($destination)]];
+    }
+
+    private function rebind(string $typeSlug, string $from, string $to): void
     {
         foreach ($this->live($typeSlug) as $listed) {
             $surface = (string) $listed['surface'];
@@ -125,6 +167,19 @@ final class LayoutBindings
             $this->layouts->forType($typeSlug),
             static fn (array $row): bool => is_array($row['blocks'] ?? null),
         ));
+    }
+
+    /** @param array<string,mixed> $row */
+    private function label(array $row): string
+    {
+        return $this->surfaces->get((string) $row['surface'])?->label((string) $row['target'])
+            ?? (string) $row['target'];
+    }
+
+    /** The field an archive target (`{type}:{field}`) is for. */
+    private static function archivedField(string $target): string
+    {
+        return explode(':', $target, 2)[1] ?? '';
     }
 
     private function afterCommit(string $surface, string $target): void

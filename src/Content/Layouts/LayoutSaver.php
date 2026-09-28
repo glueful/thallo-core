@@ -64,11 +64,13 @@ final class LayoutSaver
             &$cleared,
         ): array {
             $stored = $this->layouts->find($surface, $target);
-            $clean = $this->validator->validate($surface, $target, $blocks, $settings, $stored['blocks'] ?? []);
+            // The version before anything else: an editor who is behind hears "changed" — also at a
+            // target that is gone (an archive whose field was renamed away) — never a validation error.
             $current = $stored['lock_version'] ?? 0;
             if ($current !== $expected) {
                 throw new LayoutVersionConflict($current);
             }
+            $clean = $this->validator->validate($surface, $target, $blocks, $settings, $stored['blocks'] ?? []);
             $version = $this->layouts->saveExpected(
                 $surface,
                 $target,
@@ -129,6 +131,20 @@ final class LayoutSaver
     private function locked(string $surface, string $target, callable $fn): mixed
     {
         $inner = fn (): mixed => $this->lock->within($surface, $target, $fn);
-        return $surface === 'entry' ? $this->lock->withinType($target, $inner) : $inner();
+        $type = self::typeOf($surface, $target);
+        return $type !== null ? $this->lock->withinType($type, $inner) : $inner();
+    }
+
+    /**
+     * The content type a layout follows — whose schema migrations it waits on: an entry or listing
+     * layout's target, an archive's target up to its `:`; null for a site-wide surface.
+     */
+    public static function typeOf(string $surface, string $target): ?string
+    {
+        return match ($surface) {
+            'entry', 'listing' => $target,
+            'archive' => explode(':', $target, 2)[0],
+            default => null,
+        };
     }
 }
