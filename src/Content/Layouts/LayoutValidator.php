@@ -219,6 +219,10 @@ final class LayoutValidator
      * hidden at any breakpoint, by its own Visibility or by a style class it carries (the block itself
      * has no Visibility). Checked where the block type offers Visibility — elsewhere neither applies.
      *
+     * Nor may it, or any block holding it, carry a CSS class typed on the Advanced tab: a class name can
+     * be hidden by any stylesheet the site loads, which nothing here can read. Style classes — checked
+     * above — are the way to style them.
+     *
      * @param list<array<string,mixed>> $blocks
      * @return array<string,string>
      */
@@ -228,7 +232,28 @@ final class LayoutValidator
         foreach ($this->hiddenHolders($type, $blocks) as $path => $label) {
             $errors[$path] = "this block holds the {$label} block, which every page shows: it cannot be hidden";
         }
+        $label = $this->labelOf($type);
+        foreach (self::holdersOf($type, $blocks) as $path => $block) {
+            $classes = $block['settings']['advanced']['css_classes'] ?? null;
+            if (!is_array($classes) || $classes === []) {
+                continue;
+            }
+            $errors["{$path}.settings.advanced.css_classes"] = ($block['type'] ?? null) === $type
+                ? "the {$label} block is on every page: it cannot carry CSS classes"
+                : "this block holds the {$label} block, which every page shows: it cannot carry CSS classes";
+        }
         return $errors;
+    }
+
+    /** A block type's label, else its slug. */
+    private function labelOf(string $type): string
+    {
+        foreach ($this->blockTypes->all() as $row) {
+            if (($row['slug'] ?? null) === $type && is_string($row['label'] ?? null)) {
+                return $row['label'];
+            }
+        }
+        return $type;
     }
 
     /**
