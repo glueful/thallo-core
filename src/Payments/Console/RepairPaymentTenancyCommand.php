@@ -14,6 +14,8 @@ use Symfony\Component\Console\Output\OutputInterface;
 use Thallo\Core\Payments\Tenancy\PaymentAdoptionRefusedException;
 use Thallo\Core\Payments\Tenancy\PaymentAdoptionReport;
 use Thallo\Core\Payments\Tenancy\PaymentTenancyAdoption;
+use Thallo\Tenancy\Adoption\AdoptionGate;
+use Thallo\Tenancy\Adoption\AdoptionGateBusyException;
 use Thallo\Tenancy\System\SystemFlags;
 
 /**
@@ -38,6 +40,8 @@ final class RepairPaymentTenancyCommand extends BaseCommand
         ApplicationContext $context,
         private ?PaymentTenancyAdoption $adoption = null,
         private ?SystemFlags $flags = null,
+        private ?AdoptionGate $gate = null,
+        private readonly int $gateTimeoutMs = 10000,
     ) {
         parent::__construct($container, $context);
     }
@@ -82,7 +86,14 @@ final class RepairPaymentTenancyCommand extends BaseCommand
 
         $refused = false;
         try {
-            $report = $apply ? $adoption->apply($tenant) : $adoption->diagnose($tenant);
+            $report = $apply ? $this->applyBehindTheGate($adoption, $tenant) : $adoption->diagnose($tenant);
+        } catch (AdoptionGateBusyException) {
+            $output->writeln(
+                '<error>Payment work that began before this repair is still running (a request, or a '
+                . 'queue worker that has handled a payment). Nothing was changed. Let it finish, or stop '
+                . 'the queue workers, then run it again.</error>'
+            );
+            return self::FAILURE;
         } catch (PaymentAdoptionRefusedException $e) {
             $report = $e->report;
             $refused = true;
@@ -128,6 +139,23 @@ final class RepairPaymentTenancyCommand extends BaseCommand
         $output->writeln("Payments' tables now refuse a row with no workspace.");
 
         return self::SUCCESS;
+    }
+
+    /**
+     * The move, with the adoption gate closed through its commit or rollback: webhook work that read a
+     * payment's owner before the move holds the gate until its unit of work ends, so the repair waits
+     * for its write instead of moving the row out from under it; work arriving during the move is
+     * refused and retried after it.
+     */
+    private function applyBehindTheGate(PaymentTenancyAdoption $adoption, string $tenant): PaymentAdoptionReport
+    {
+        $gate = $this->gate ??= $this->getContainer()->get(AdoptionGate::class);
+        $gate->acquireExclusive($this->gateTimeoutMs);
+        try {
+            return $adoption->apply($tenant);
+        } finally {
+            $gate->releaseExclusive();
+        }
     }
 
     private function render(OutputInterface $output, PaymentAdoptionReport $report): void

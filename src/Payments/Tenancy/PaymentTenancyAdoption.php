@@ -6,6 +6,7 @@ namespace Thallo\Core\Payments\Tenancy;
 
 use Glueful\Database\Connection;
 use PDO;
+use Thallo\Tenancy\System\SystemFlags;
 
 /**
  * Moves payments' unassigned rows (tenant '') into the default workspace — once, atomically with
@@ -24,6 +25,14 @@ use PDO;
 final class PaymentTenancyAdoption
 {
     public const CONSTRAINT = 'thallo_tenant_assigned';
+
+    /**
+     * Certifies the complete guard: every inventory table moved and refusing unassigned rows. Written
+     * in the same transaction as the last constraint, so a rollback — this one's, or the flip's
+     * around it — takes it along; until it is set, the adoption gate keeps covering every payments
+     * statement ({@see PaymentAdoptionGateWrapper}).
+     */
+    public const GUARDED_FLAG = 'tenancy.payments_guarded';
 
     /** Statuses of an intent that is live or collected: two of them for one order is a duplicate. */
     private const COUNTED_INTENT_STATUSES = ['initializing', 'open', 'closed'];
@@ -49,8 +58,10 @@ final class PaymentTenancyAdoption
             'its payment belongs to another workspace'],
     ];
 
-    public function __construct(private readonly Connection $connection)
-    {
+    public function __construct(
+        private readonly Connection $connection,
+        private readonly SystemFlags $flags,
+    ) {
     }
 
     /** @return list<string> payments' workspace-owned tables present in this database */
@@ -117,6 +128,10 @@ final class PaymentTenancyAdoption
                 $pdo->exec('ALTER TABLE ' . self::ident($table) . ' ADD CONSTRAINT ' . self::CONSTRAINT
                     . " CHECK (tenant_uuid <> '')");
             }
+            $this->flags->put(self::GUARDED_FLAG, '1');
+            // A rollback, even of a transaction around this one, must not leave the flag in a
+            // memo some read inside the transaction loaded.
+            $this->connection->afterRollback(fn () => $this->flags->clearCache());
 
             return $report->withMoved($moved, $tables);
         };
