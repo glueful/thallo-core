@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Thallo\Core\Payments\Tenancy;
 
 use Glueful\Database\Connection;
-use Glueful\Extensions\Payvia\Support\DiagnosticsReport;
 use PDO;
 
 /**
@@ -58,7 +57,7 @@ final class PaymentTenancyAdoption
     public function tables(): array
     {
         return array_values(array_filter(
-            DiagnosticsReport::tenantTables(),
+            PaymentTables::workspaceOwned(),
             fn (string $table): bool => $this->exists($table),
         ));
     }

@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Thallo\Core\Payments\Tenancy;
 
 use Glueful\Database\Execution\ExecutionWrapperInterface;
-use Glueful\Extensions\Payvia\Support\DiagnosticsReport;
 use PDOStatement;
 use Thallo\Tenancy\Adoption\AdoptionGate;
 use Thallo\Tenancy\Retrofit\RetrofitInProgressException;
@@ -55,7 +54,7 @@ final class PaymentAdoptionGateWrapper implements ExecutionWrapperInterface
     {
         self::$pattern ??= '/[\s"`\'(](' . implode('|', array_map(
             static fn (string $table): string => preg_quote($table, '/'),
-            DiagnosticsReport::tenantTables(),
+            PaymentTables::workspaceOwned(),
         )) . ')[\s"`\'(),;]/';
 
         return preg_match(self::$pattern, ' ' . strtolower($sql) . ' ') === 1;

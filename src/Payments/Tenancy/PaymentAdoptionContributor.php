@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Thallo\Core\Payments\Tenancy;
 
 use Glueful\Bootstrap\ApplicationContext;
-use Glueful\Extensions\Payvia\Support\DiagnosticsReport;
 use Thallo\Tenancy\Adoption\AdoptionContributor;
 
 /**
@@ -32,13 +31,15 @@ final class PaymentAdoptionContributor implements AdoptionContributor
     }
 
     /**
-     * Payvia registers these with the tenancy backstop itself; FinalizationProbe checks it did.
+     * What Payvia registers with the tenancy backstop itself, which FinalizationProbe checks before
+     * ON. Adoption moves more than this — {@see PaymentTables::workspaceOwned()} — but a table Payvia
+     * does not register here would block every enablement.
      *
      * @return list<string>
      */
     public function tables(): array
     {
-        return DiagnosticsReport::tenantTables();
+        return PaymentTables::backstopRegistered();
     }
 
     public function adopt(ApplicationContext $context, string $tenantUuid): void
