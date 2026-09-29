@@ -60,6 +60,12 @@ final class RawPdoWriteAudit implements StaticWriteAudit
         // interceptor) — same shape as ProductLinkRepository immediately above.
         'packages/thallo-commerce/src/Shop/PackSlugLifecycleAuthority.php',
         'packages/thallo-commerce/src/Shop/PackCheckoutAttemptAuthority.php',
+        // Payment-tenancy fix: AdoptionGate's getPDO() is a current_database() read and advisory
+        // locks only. PaymentTenancyAdoption writes raw SQL to Payvia's payment tables only — none
+        // is a Thallo-owned table — as operator-invoked maintenance (the adoption flip, the
+        // payments repair), under table locks and the adoption gate.
+        'packages/thallo-tenancy/src/Adoption/AdoptionGate.php',
+        'core/src/Payments/Tenancy/PaymentTenancyAdoption.php',
     ];
 
     private const SYSTEM_WRITERS = [
