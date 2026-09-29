@@ -11,7 +11,6 @@ use Psr\Container\ContainerInterface;
 use Thallo\Tenancy\Adoption\AdoptionGate;
 use Thallo\Tenancy\Resolution\TenancyMode;
 use Thallo\Tenancy\Resolution\TenancyModePolicy;
-use Thallo\Tenancy\Retrofit\RetrofitInProgressException;
 use Thallo\Tenancy\System\SystemFlags;
 
 /**
@@ -32,34 +31,15 @@ final class ThalloPayviaTenantResolver implements PayviaTenantResolver
 {
     private readonly TenancyModePolicy $policy;
 
-    public function __construct(
-        SystemFlags $flags,
-        ContainerInterface $container,
-        private readonly AdoptionGate $gate,
-    ) {
-        $this->policy = new TenancyModePolicy($flags, $container);
+    public function __construct(SystemFlags $flags, ContainerInterface $container, AdoptionGate $gate)
+    {
+        $this->policy = new TenancyModePolicy($flags, $container, $gate);
     }
 
     public function tenantUuid(ApplicationContext $context): string
     {
-        $mode = $this->policy->mode();
-        if ($mode === TenancyMode::Sentinel) {
-            if (!$this->gate->holdShared()) {
-                throw new RetrofitInProgressException();
-            }
-            $mode = $this->policy->mode();
-            if ($mode === TenancyMode::Sentinel) {
-                return '';
-            }
-            $this->gate->release();
-        }
-
-        if ($mode === TenancyMode::DefaultTenant) {
-            return $this->policy->defaultTenantUuid();
-        }
-
-        $tenantUuid = $this->policy->sharedResolver()->tenantUuid($context);
-        if ($tenantUuid === '') {
+        $tenantUuid = $this->policy->tenantUuid($context);
+        if ($tenantUuid === '' && $this->policy->mode() !== TenancyMode::Sentinel) {
             throw new TenantContextRequiredException('Payvia tenant context is required.');
         }
 
