@@ -11,6 +11,8 @@ use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
+use Glueful\Database\Connection;
+use Thallo\Core\Payments\Tenancy\IntentRetirement;
 use Thallo\Core\Payments\Tenancy\PaymentAdoptionRefusedException;
 use Thallo\Core\Payments\Tenancy\PaymentAdoptionReport;
 use Thallo\Core\Payments\Tenancy\PaymentTenancyAdoption;
@@ -60,6 +62,12 @@ final class RepairPaymentTenancyCommand extends BaseCommand
                 . "Duplicate intents are listed for reconciliation with the gateway, never resolved."
             )
             ->addOption('apply', null, InputOption::VALUE_NONE, 'Move the rows (default: dry run)')
+            ->addOption(
+                'retire-intent',
+                null,
+                InputOption::VALUE_REQUIRED,
+                'Supersede one payment intent (by uuid) instead of moving rows — a dry run unless --apply',
+            )
             ->addOption('json', null, InputOption::VALUE_NONE, 'Print the report as JSON');
     }
 
@@ -82,6 +90,11 @@ final class RepairPaymentTenancyCommand extends BaseCommand
                 . 'there is nowhere to move payments.</error>'
             );
             return self::FAILURE;
+        }
+
+        $retire = $input->getOption('retire-intent');
+        if (is_string($retire) && $retire !== '') {
+            return $this->retireIntent($output, $retire, $tenant, $apply);
         }
 
         $refused = false;
@@ -139,6 +152,79 @@ final class RepairPaymentTenancyCommand extends BaseCommand
         $output->writeln("Payments' tables now refuse a row with no workspace.");
 
         return self::SUCCESS;
+    }
+
+    /**
+     * Supersede one named intent — the way to clear a duplicate that blocks the move. Shows what the
+     * intent is before anything else, reaches only unassigned intents and the default workspace's,
+     * and retires through Payvia's conditional retirement ({@see IntentRetirement}).
+     */
+    private function retireIntent(OutputInterface $output, string $uuid, string $tenant, bool $apply): int
+    {
+        $retirement = new IntentRetirement(
+            $this->getContainer()->get(Connection::class),
+            $this->getContext(),
+        );
+        $intent = $retirement->find($uuid);
+        if ($intent === null) {
+            $output->writeln("<error>No payment intent {$uuid}.</error>");
+            return self::FAILURE;
+        }
+
+        $owner = (string) $intent['tenant_uuid'];
+        $output->writeln("Payment intent {$uuid}");
+        $output->writeln('  Workspace:  ' . match ($owner) {
+            '' => 'no workspace (unassigned)',
+            $tenant => "the default workspace ({$tenant})",
+            default => "another workspace ({$owner})",
+        });
+        $output->writeln("  Order:      {$intent['payable_type']} {$intent['payable_id']}");
+        $output->writeln("  Status:     {$intent['status']}");
+        $output->writeln("  Provider:   {$intent['gateway']}");
+        $output->writeln('  Reference:  ' . (string) ($intent['reference'] ?? '-'));
+        $output->writeln("  Amount:     {$intent['amount']} {$intent['currency']}");
+        $output->writeln('');
+        $output->writeln(
+            "Superseding marks this payment attempt abandoned in Thallo only. It does not cancel or refund "
+            . "anything at {$intent['gateway']}: if the customer paid it, refund it there."
+        );
+
+        $outcome = $apply ? $retirement->retire($uuid, $tenant) : $retirement->outcomeFor($intent, $tenant);
+        $status = (string) ($retirement->find($uuid)['status'] ?? $intent['status']);
+
+        return match ($outcome) {
+            IntentRetirement::RETIRED => $this->say($output, "Superseded {$uuid}.", self::SUCCESS),
+            IntentRetirement::ALREADY => $this->say(
+                $output,
+                "{$uuid} is already superseded; nothing to do.",
+                self::SUCCESS,
+            ),
+            IntentRetirement::FOREIGN => $this->say(
+                $output,
+                "<error>{$uuid} belongs to another workspace; this command reaches only unassigned intents "
+                . "and the default workspace's. Nothing was changed.</error>",
+                self::FAILURE,
+            ),
+            IntentRetirement::INACTIVE => $this->say(
+                $output,
+                "<error>Not superseded: {$uuid} is {$status}"
+                . ($status === 'closed' ? ', so it may have been paid' : '')
+                . '. Nothing was changed.</error>',
+                self::FAILURE,
+            ),
+            default => $this->say(
+                $output,
+                'Dry run: nothing was changed. Run it again with --apply to supersede it.',
+                self::SUCCESS,
+            ),
+        };
+    }
+
+    private function say(OutputInterface $output, string $message, int $status): int
+    {
+        $output->writeln($message);
+
+        return $status;
     }
 
     /**
@@ -224,6 +310,10 @@ final class RepairPaymentTenancyCommand extends BaseCommand
                     ));
                 }
             }
+            $output->writeln(
+                '  Once you know which attempt the customer did not pay, supersede it with '
+                . '--retire-intent=<uuid> (add --apply). That does not cancel anything at the provider.'
+            );
         }
         $output->writeln('');
     }
