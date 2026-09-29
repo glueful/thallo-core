@@ -42,8 +42,21 @@ final class PaymentAdoptionContributor implements AdoptionContributor
         return PaymentTables::backstopRegistered();
     }
 
+    /**
+     * A refusal here fails the enablement at its confirm stage: the flip rolled back, the schema is
+     * not recorded as widened — so the payments repair, which needs workspaces on, is no way out —
+     * and the write barrier stays up. The message says so and names the way on.
+     */
     public function adopt(ApplicationContext $context, string $tenantUuid): void
     {
-        $this->adoption->apply($tenantUuid);
+        try {
+            $this->adoption->apply($tenantUuid);
+        } catch (PaymentAdoptionRefusedException $refused) {
+            throw $refused->withRecovery(
+                'Enablement stopped at the confirm stage, and content stays read-only until it '
+                . 'finishes. Correct or remove these rows (check each against your payment provider '
+                . 'first), then run php glueful thallo:tenancy:enable --retry.'
+            );
+        }
     }
 }

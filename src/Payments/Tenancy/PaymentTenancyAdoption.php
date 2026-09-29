@@ -113,7 +113,10 @@ final class PaymentTenancyAdoption
 
             $report = $this->diagnose($tenantUuid);
             if ($report->refused()) {
-                throw new PaymentAdoptionRefusedException($report);
+                throw new PaymentAdoptionRefusedException(
+                    $report,
+                    'Resolve these rows, then run php glueful thallo:tenancy:payments:repair --apply again.',
+                );
             }
 
             $moved = [];
