@@ -12,6 +12,7 @@ use Thallo\Core\Updates\ReleaseFeed;
 use Thallo\Core\Updates\UpdateChecker;
 use Thallo\Core\Capabilities\DefaultCapabilityRegistry;
 use Thallo\Core\Capabilities\ExtensionCapabilityAvailabilityResolver;
+use Thallo\Core\Payments\Tenancy\PaymentAdoptionContributor;
 use Thallo\Core\Payments\Tenancy\ThalloPayviaTenantResolver;
 use Thallo\Core\Setup\InstallRoleGrants;
 use Thallo\Core\Setup\SetupService;
@@ -275,6 +276,7 @@ use Thallo\Contracts\Delivery\ReferenceTargetResolver;
 use Thallo\Contracts\Search\IndexableContentReader;
 use Thallo\Contracts\Schema\FieldTypeRegistry;
 use Thallo\Contracts\Tenancy\WriteBarrier;
+use Thallo\Tenancy\Adoption\AdoptionContributorRegistry;
 use Thallo\Tenancy\Adoption\AdoptionGate;
 use Thallo\Tenancy\System\SystemFlags;
 use Glueful\Database\Connection;
@@ -414,6 +416,25 @@ final class CoreServiceProvider extends ServiceProvider
         return new \Thallo\Core\Account\AccountMailTemplateChooser(
             $container->has($registry) ? $container->get($registry) : null,
         );
+    }
+
+    /**
+     * Payments join enable-time adoption next to commerce: push the contributor into the shared
+     * registry (packs register in their providers). Idempotent — a second boot in one process
+     * finds it already there.
+     */
+    private static function registerPaymentAdoption(ContainerInterface $container): void
+    {
+        if (!$container->has(AdoptionContributorRegistry::class)) {
+            return;
+        }
+        $registry = $container->get(AdoptionContributorRegistry::class);
+        foreach ($registry->all() as $existing) {
+            if ($existing->id() === PaymentAdoptionContributor::ID) {
+                return;
+            }
+        }
+        $registry->register($container->get(PaymentAdoptionContributor::class));
     }
 
     public static function makePayviaTenantResolver(ContainerInterface $container): ThalloPayviaTenantResolver
@@ -2398,6 +2419,16 @@ final class CoreServiceProvider extends ServiceProvider
                 'factory' => [self::class, 'makePayviaTenantResolver'],
                 'shared' => true,
             ],
+            \Thallo\Core\Payments\Tenancy\PaymentTenancyAdoption::class => [
+                'class' => \Thallo\Core\Payments\Tenancy\PaymentTenancyAdoption::class,
+                'shared' => true,
+                'autowire' => true,
+            ],
+            \Thallo\Core\Payments\Tenancy\PaymentAdoptionContributor::class => [
+                'class' => \Thallo\Core\Payments\Tenancy\PaymentAdoptionContributor::class,
+                'shared' => true,
+                'autowire' => true,
+            ],
             // Platform-payments-settings spec §2 (Task 6): the neutral Settings -> Payments API
             // (GET/PUT /v1/admin/settings/payments — see routes/admin.php), replacing
             // thallo-commerce's retired PaymentsSettingsController. Autowired — the constructor's
@@ -2847,6 +2878,7 @@ final class CoreServiceProvider extends ServiceProvider
             $enabled = false;
         }
         self::assertBlobPolicyReady($container, $enabled);
+        self::registerPaymentAdoption($container);
 
         // Mount the compiled admin SPA at /admin via the framework seam: secure asset serving
         // + index.html deep-link fallback + cache split. No-ops (with a warning) if the bundle
