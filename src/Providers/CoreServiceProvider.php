@@ -12,6 +12,7 @@ use Thallo\Core\Updates\ReleaseFeed;
 use Thallo\Core\Updates\UpdateChecker;
 use Thallo\Core\Capabilities\DefaultCapabilityRegistry;
 use Thallo\Core\Capabilities\ExtensionCapabilityAvailabilityResolver;
+use Thallo\Core\Payments\Tenancy\ThalloPayviaTenantResolver;
 use Thallo\Core\Setup\InstallRoleGrants;
 use Thallo\Core\Setup\SetupService;
 use Thallo\Core\Content\Delivery\DeliveryRepository;
@@ -274,6 +275,7 @@ use Thallo\Contracts\Delivery\ReferenceTargetResolver;
 use Thallo\Contracts\Search\IndexableContentReader;
 use Thallo\Contracts\Schema\FieldTypeRegistry;
 use Thallo\Contracts\Tenancy\WriteBarrier;
+use Thallo\Tenancy\Adoption\AdoptionGate;
 use Thallo\Tenancy\System\SystemFlags;
 use Glueful\Database\Connection;
 use Glueful\Database\Migrations\MigrationPriority;
@@ -411,6 +413,15 @@ final class CoreServiceProvider extends ServiceProvider
 
         return new \Thallo\Core\Account\AccountMailTemplateChooser(
             $container->has($registry) ? $container->get($registry) : null,
+        );
+    }
+
+    public static function makePayviaTenantResolver(ContainerInterface $container): ThalloPayviaTenantResolver
+    {
+        return new ThalloPayviaTenantResolver(
+            $container->get(SystemFlags::class),
+            $container,
+            $container->get(AdoptionGate::class),
         );
     }
 
@@ -2378,6 +2389,14 @@ final class CoreServiceProvider extends ServiceProvider
                 'class' => \Thallo\Core\Settings\PlatformPayviaSettingsOverride::class,
                 'shared' => true,
                 'autowire' => true,
+            ],
+            // Payment-tenancy fix: payments resolve their workspace from the same three-mode policy
+            // as commerce, replacing payvia's resolver, which failed closed in every mode once a
+            // shared resolver was bound. In services() for the same cached-boot reason as the
+            // override above; PaymentTenantResolverTest pins that this binding wins over payvia's.
+            \Glueful\Extensions\Payvia\Tenancy\PayviaTenantResolver::class => [
+                'factory' => [self::class, 'makePayviaTenantResolver'],
+                'shared' => true,
             ],
             // Platform-payments-settings spec §2 (Task 6): the neutral Settings -> Payments API
             // (GET/PUT /v1/admin/settings/payments — see routes/admin.php), replacing
