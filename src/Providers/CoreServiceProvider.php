@@ -2949,6 +2949,7 @@ final class CoreServiceProvider extends ServiceProvider
             SuperuserGrantCommand::class,
             SuperuserTransferCommand::class,
             MigratePlatformPaymentCredentialsCommand::class,
+            \Thallo\Core\Payments\Console\RepairPaymentTenancyCommand::class,
         ]);
     }
 
