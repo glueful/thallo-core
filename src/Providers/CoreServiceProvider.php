@@ -13,6 +13,7 @@ use Thallo\Core\Updates\UpdateChecker;
 use Thallo\Core\Capabilities\DefaultCapabilityRegistry;
 use Thallo\Core\Capabilities\ExtensionCapabilityAvailabilityResolver;
 use Thallo\Core\Payments\Tenancy\PaymentAdoptionContributor;
+use Thallo\Core\Payments\Tenancy\PaymentAdoptionGateWrapper;
 use Thallo\Core\Payments\Tenancy\ThalloPayviaTenantResolver;
 use Thallo\Core\Setup\InstallRoleGrants;
 use Thallo\Core\Setup\SetupService;
@@ -280,6 +281,7 @@ use Thallo\Tenancy\Adoption\AdoptionContributorRegistry;
 use Thallo\Tenancy\Adoption\AdoptionGate;
 use Thallo\Tenancy\System\SystemFlags;
 use Glueful\Database\Connection;
+use Glueful\Database\Execution\QueryExecutor;
 use Glueful\Database\Migrations\MigrationPriority;
 use Glueful\Events\EventService;
 use Glueful\Permissions\PermissionManager;
@@ -2429,6 +2431,11 @@ final class CoreServiceProvider extends ServiceProvider
                 'shared' => true,
                 'autowire' => true,
             ],
+            PaymentAdoptionGateWrapper::class => [
+                'class' => PaymentAdoptionGateWrapper::class,
+                'shared' => true,
+                'autowire' => true,
+            ],
             // Platform-payments-settings spec §2 (Task 6): the neutral Settings -> Payments API
             // (GET/PUT /v1/admin/settings/payments — see routes/admin.php), replacing
             // thallo-commerce's retired PaymentsSettingsController. Autowired — the constructor's
@@ -2879,6 +2886,7 @@ final class CoreServiceProvider extends ServiceProvider
         }
         self::assertBlobPolicyReady($container, $enabled);
         self::registerPaymentAdoption($container);
+        QueryExecutor::addExecutionWrapper($container->get(PaymentAdoptionGateWrapper::class));
 
         // Mount the compiled admin SPA at /admin via the framework seam: secure asset serving
         // + index.html deep-link fallback + cache split. No-ops (with a warning) if the bundle
