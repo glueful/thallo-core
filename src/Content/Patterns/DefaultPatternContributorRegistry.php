@@ -52,6 +52,9 @@ final class DefaultPatternContributorRegistry implements PatternContributorRegis
         $pageSections = array_column(StarterPatterns::sections(), 'slug');
         foreach ($contributor->templates() as $template) {
             $this->claim($template->slug, $id, $claimed);
+            if ($template->sections === []) {
+                throw new \LogicException("Template '{$template->slug}' of '{$id}' names no sections.");
+            }
             foreach ($template->sections as $slug) {
                 if (!isset($own[$slug]) && !in_array($slug, $pageSections, true)) {
                     throw new \LogicException(
