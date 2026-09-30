@@ -4,8 +4,15 @@ declare(strict_types=1);
 
 namespace Thallo\Core\Content\Patterns;
 
+use Thallo\Contracts\Layouts\LayoutSurfaceRegistry;
+use Thallo\Contracts\Patterns\LayoutSection;
+use Thallo\Contracts\Patterns\LayoutTemplate;
 use Thallo\Contracts\Patterns\PatternContributorRegistry;
 use Thallo\Core\Content\Blocks\BlockFactory;
+use Thallo\Core\Content\Layouts\LayoutSaver;
+use Thallo\Core\Content\Layouts\LayoutValidator;
+use Thallo\Core\Content\Repositories\ContentTypeRepository;
+use Thallo\Core\Content\Validation\ValidationException;
 
 /**
  * The section and page library as THIS site can use it.
@@ -23,6 +30,10 @@ use Thallo\Core\Content\Blocks\BlockFactory;
  * inserting it — 'product' when a section's product block needs one, and so for any template made
  * of such a section.
  *
+ * A layout's sections and templates are served per target ({@see self::forLayout()}): built for the
+ * target's type, validated against it — a template through the layout validator itself — and
+ * returned exactly as validated. The page library never holds them.
+ *
  * Blocks carry no ids: the editor mints them, as it does for every block it creates.
  */
 final class PatternLibrary
@@ -36,6 +47,12 @@ final class PatternLibrary
         private readonly ?SavedSectionRepository $saved = null,
         /** Packs' page sections and templates: listed after core's. */
         private readonly ?PatternContributorRegistry $contributors = null,
+        /** The layout surfaces this site has; null offers no layout patterns. */
+        private readonly ?LayoutSurfaceRegistry $surfaces = null,
+        /** What a layout accepts: a template is offered only when it passes. */
+        private readonly ?LayoutValidator $layouts = null,
+        /** The target's type, whose schema a layout pattern is built from. */
+        private readonly ?ContentTypeRepository $types = null,
     ) {
     }
 
@@ -44,7 +61,7 @@ final class PatternLibrary
      * templates, then the site's saved sections. Every entry says where it belongs: `scope` `page`,
      * or `region` with its `region`.
      *
-     * @return list<array{slug:string,kind:string,label:string,category:string,description:string,requires:?string,blocks:list<array<string,mixed>>,scope:string,region:?string,saved:bool,id:?string}>
+     * @return list<array{slug:string,kind:string,label:string,category:string,description:string,requires:?string,blocks:list<array<string,mixed>>,scope:string,region:?string,surface:?string,settings:?array<string,string>,saved:bool,id:?string}>
      */
     public function all(): array
     {
@@ -116,10 +133,165 @@ final class PatternLibrary
         return [...array_values($sections), ...$pages, ...$this->savedSections()];
     }
 
-    /** @return array{scope: string, region: ?string, saved: false, id: null} a shipped pattern's place */
+    /**
+     * A layout's sections, then its templates, then the site's sections saved for the surface —
+     * each shipped one built for the target, validated against it and served as validated
+     * (normalised, id-less). Nothing for a target that cannot have a layout.
+     *
+     * @return list<array<string,mixed>>
+     * @throws \InvalidArgumentException for a surface this site has no layout for
+     */
+    public function forLayout(string $surface, string $target): array
+    {
+        if ($this->surfaces?->get($surface) === null || $this->layouts === null) {
+            throw new \InvalidArgumentException("unknown layout surface '{$surface}'");
+        }
+        if ($this->layouts->targetError($surface, $target) !== null) {
+            return [];
+        }
+        $this->made = [];
+        $type = LayoutSaver::typeOf($surface, $target);
+        $row = $type === null ? null : $this->types?->findBySlug($type);
+        $built = LayoutPatterns::targetFor($surface, $target, $row === null ? null : (array) ($row['schema'] ?? []));
+
+        [$sections, $templates] = $this->layoutSources($surface);
+        $out = [];
+        foreach ($sections as $section) {
+            $block = ($section->build)($built);
+            $resolved = $block === null ? null : $this->resolve($block);
+            if ($resolved === null) {
+                continue;
+            }
+            $checked = $this->layouts->fragment($surface, $target, [$resolved]);
+            if ($checked['errors'] !== []) {
+                continue;
+            }
+            $out[] = [
+                'slug' => $section->slug, 'kind' => 'section', 'label' => $section->label,
+                'category' => $section->category, 'description' => $section->description, 'requires' => null,
+                'blocks' => $checked['blocks'], 'scope' => 'layout', 'region' => null, 'surface' => $surface,
+                'settings' => null, 'saved' => false, 'id' => null,
+            ];
+        }
+        foreach ($templates as $template) {
+            $tree = ($template->build)($built);
+            $resolved = $tree === null ? null : $this->resolveAll($tree);
+            if ($resolved === null) {
+                continue;
+            }
+            try {
+                $blocks = self::withIds($resolved);
+                $clean = $this->layouts->validate($surface, $target, $blocks, $template->settings, [], false);
+            } catch (ValidationException) {
+                continue;
+            }
+            $out[] = [
+                'slug' => $template->slug, 'kind' => 'page', 'label' => $template->label, 'category' => 'Layouts',
+                'description' => $template->description, 'requires' => null,
+                'blocks' => self::withoutIds($clean['blocks']), 'scope' => 'layout', 'region' => null,
+                'surface' => $surface, 'settings' => $clean['settings'], 'saved' => false, 'id' => null,
+            ];
+        }
+        foreach ($this->saved?->all() ?? [] as $saved) {
+            if (($saved['scope'] ?? null) === 'layout' && ($saved['surface'] ?? null) === $surface) {
+                $entry = $this->savedEntry($saved);
+                if ($entry !== null) {
+                    $out[] = $entry;
+                }
+            }
+        }
+        return $out;
+    }
+
+    /** @return list<string> every shipped layout pattern's slug, for the surfaces this site has */
+    public function layoutSlugs(): array
+    {
+        $out = [];
+        foreach (LayoutPatterns::SURFACES as $surface) {
+            if ($this->surfaces?->get($surface) === null) {
+                continue;
+            }
+            [$sections, $templates] = $this->layoutSources($surface);
+            foreach ([...$sections, ...$templates] as $pattern) {
+                $out[] = $pattern->slug;
+            }
+        }
+        return $out;
+    }
+
+    /** @return array{0: list<LayoutSection>, 1: list<LayoutTemplate>} core's, then the packs', for a surface */
+    private function layoutSources(string $surface): array
+    {
+        $sections = LayoutPatterns::sections();
+        $templates = LayoutPatterns::templates();
+        foreach ($this->contributors?->layoutContributors() ?? [] as $contributor) {
+            array_push($sections, ...$contributor->layoutSections());
+            array_push($templates, ...$contributor->layoutTemplates());
+        }
+        $mine = static fn (LayoutSection|LayoutTemplate $p): bool => $p->surface === $surface;
+        return [array_values(array_filter($sections, $mine)), array_values(array_filter($templates, $mine))];
+    }
+
+    /**
+     * @param list<array<string,mixed>> $blocks
+     * @return list<array<string,mixed>>|null each over its type's canonical instance; null when one cannot be
+     */
+    private function resolveAll(array $blocks): ?array
+    {
+        $out = [];
+        foreach ($blocks as $block) {
+            $resolved = $this->resolve($block);
+            if ($resolved === null) {
+                return null;
+            }
+            $out[] = $resolved;
+        }
+        return $out;
+    }
+
+    /**
+     * Every block, nested ones too, with a temporary id — what a layout's validation wants.
+     *
+     * @param list<array<string,mixed>> $blocks
+     * @return list<array<string,mixed>>
+     */
+    public static function withIds(array $blocks, int &$n = 0): array
+    {
+        foreach ($blocks as $i => $block) {
+            $blocks[$i] = ['id' => 'tmplib' . str_pad((string) ++$n, 6, '0', STR_PAD_LEFT)] + $block;
+            foreach ($block['data'] ?? [] as $key => $value) {
+                if (is_array($value) && array_is_list($value) && isset($value[0]['type'])) {
+                    $blocks[$i]['data'][$key] = self::withIds($value, $n);
+                }
+            }
+        }
+        return $blocks;
+    }
+
+    /**
+     * @param list<array<string,mixed>> $blocks
+     * @return list<array<string,mixed>> the blocks with every id removed, nested ones too
+     */
+    public static function withoutIds(array $blocks): array
+    {
+        foreach ($blocks as $i => $block) {
+            unset($blocks[$i]['id']);
+            foreach ($block['data'] ?? [] as $key => $value) {
+                if (is_array($value) && array_is_list($value) && isset($value[0]['type'])) {
+                    $blocks[$i]['data'][$key] = self::withoutIds($value);
+                }
+            }
+        }
+        return $blocks;
+    }
+
+    /** @return array{scope: string, region: ?string, surface: null, settings: null, saved: false, id: null} */
     private static function place(?string $region): array
     {
-        return ['scope' => $region === null ? 'page' : 'region', 'region' => $region, 'saved' => false, 'id' => null];
+        return [
+            'scope' => $region === null ? 'page' : 'region', 'region' => $region, 'surface' => null,
+            'settings' => null, 'saved' => false, 'id' => null,
+        ];
     }
 
     /**
@@ -132,25 +304,45 @@ final class PatternLibrary
     {
         $out = [];
         foreach ($this->saved?->all() ?? [] as $row) {
-            $block = $this->resolve($row['block']);
-            if ($block === null) {
-                continue;
+            if (($row['scope'] ?? null) === 'layout') {
+                continue; // a layout's own: offered in its surface's layouts only
             }
-            $out[] = [
-                'slug' => 'saved-' . $row['id'],
-                'kind' => 'section',
-                'label' => $row['name'],
-                'category' => $row['category'],
-                'description' => $row['description'] ?? '',
-                'requires' => null,
-                'blocks' => [$block],
-                'scope' => $row['scope'],
-                'region' => $row['region'],
-                'saved' => true,
-                'id' => $row['id'],
-            ];
+            $entry = $this->savedEntry($row);
+            if ($entry !== null) {
+                $out[] = $entry;
+            }
         }
         return $out;
+    }
+
+    /**
+     * A stored saved section as its library entry: `saved` true, `id` for renaming and deleting it;
+     * null when a block type in it can no longer be used, as a shipped section would be left out.
+     *
+     * @param array<string,mixed> $row a {@see SavedSectionRepository} row
+     * @return array<string,mixed>|null
+     */
+    public function savedEntry(array $row): ?array
+    {
+        $block = $this->resolve((array) $row['block']);
+        if ($block === null) {
+            return null;
+        }
+        return [
+            'slug' => 'saved-' . $row['id'],
+            'kind' => 'section',
+            'label' => $row['name'],
+            'category' => $row['category'],
+            'description' => $row['description'] ?? '',
+            'requires' => null,
+            'blocks' => [$block],
+            'scope' => $row['scope'],
+            'region' => $row['region'] ?? null,
+            'surface' => $row['surface'] ?? null,
+            'settings' => null,
+            'saved' => true,
+            'id' => $row['id'],
+        ];
     }
 
     /**

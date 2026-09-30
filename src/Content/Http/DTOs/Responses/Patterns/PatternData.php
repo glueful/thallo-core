@@ -27,10 +27,17 @@ final class PatternData implements ResponseData
         public readonly ?string $requires,
         /** @var list<array<string,mixed>> Block trees with no ids — the editor mints them. */
         public readonly array $blocks,
-        /** Where it is offered: `page` (a page body) or `region` (the header or footer). */
+        /** Where it is offered: `page` (a page body), `region` (the header or footer) or `layout`. */
         public readonly string $scope,
-        /** `header` or `footer` for a region's pattern; null for a page body's. */
+        /** `header` or `footer` for a region's pattern; null otherwise. */
         public readonly ?string $region,
+        /** The layout surface of a `layout` pattern (`entry`, `listing`, `product`…); null otherwise. */
+        public readonly ?string $surface,
+        /**
+         * @var array<string,string>|null A layout template's Frame settings (`width`, `header`,
+         * `footer`); null for every other pattern.
+         */
+        public readonly ?array $settings,
         /** True for a section this site saved from the stage; false for a shipped pattern. */
         public readonly bool $saved,
         /** A saved section's id, for renaming and deleting it; null for a shipped pattern. */
