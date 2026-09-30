@@ -20,6 +20,11 @@ final class PatternData implements ResponseData
         /** The group it is listed under; `Pages` for a page, `Header` or `Footer` for a template. */
         public readonly string $category,
         public readonly string $description,
+        /**
+         * What an editor chooses after inserting it: `product` for a shop pattern whose product
+         * block needs a product; null otherwise.
+         */
+        public readonly ?string $requires,
         /** @var list<array<string,mixed>> Block trees with no ids — the editor mints them. */
         public readonly array $blocks,
         /** Where it is offered: `page` (a page body) or `region` (the header or footer). */

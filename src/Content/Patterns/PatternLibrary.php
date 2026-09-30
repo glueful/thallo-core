@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Thallo\Core\Content\Patterns;
 
+use Thallo\Contracts\Patterns\PatternContributorRegistry;
 use Thallo\Core\Content\Blocks\BlockFactory;
 
 /**
@@ -16,6 +17,12 @@ use Thallo\Core\Content\Blocks\BlockFactory;
  * not offered, and neither is a page made of such a section: the library only hands out
  * documents a save accepts.
  *
+ * Packs add page sections and templates through the {@see PatternContributorRegistry}: theirs are
+ * resolved by the same rules, listed after core's, and a template naming a section that is not
+ * offered is not offered either. A pattern's `requires` names what an editor chooses after
+ * inserting it — 'product' when a section's product block needs one, and so for any template made
+ * of such a section.
+ *
  * Blocks carry no ids: the editor mints them, as it does for every block it creates.
  */
 final class PatternLibrary
@@ -27,6 +34,8 @@ final class PatternLibrary
         private readonly BlockFactory $factory,
         /** The site's own sections, saved from the stage: listed after the shipped ones. */
         private readonly ?SavedSectionRepository $saved = null,
+        /** Packs' page sections and templates: listed after core's. */
+        private readonly ?PatternContributorRegistry $contributors = null,
     ) {
     }
 
@@ -35,13 +44,27 @@ final class PatternLibrary
      * templates, then the site's saved sections. Every entry says where it belongs: `scope` `page`,
      * or `region` with its `region`.
      *
-     * @return list<array{slug:string,kind:string,label:string,category:string,description:string,blocks:list<array<string,mixed>>,scope:string,region:?string,saved:bool,id:?string}>
+     * @return list<array{slug:string,kind:string,label:string,category:string,description:string,requires:?string,blocks:list<array<string,mixed>>,scope:string,region:?string,saved:bool,id:?string}>
      */
     public function all(): array
     {
         $this->made = []; // the site's block types can change between two askings
+        $contributors = $this->contributors?->all() ?? [];
+        $sectionSources = [...StarterPatterns::sections()];
+        foreach ($contributors as $contributor) {
+            foreach ($contributor->sections() as $section) {
+                $sectionSources[] = [
+                    'slug' => $section->slug,
+                    'label' => $section->label,
+                    'category' => $section->category,
+                    'description' => $section->description,
+                    'block' => $section->block,
+                    'requires' => $section->requires,
+                ];
+            }
+        }
         $sections = [];
-        foreach ([...StarterPatterns::sections(), ...StarterPatterns::regionSections()] as $section) {
+        foreach ([...$sectionSources, ...StarterPatterns::regionSections()] as $section) {
             $block = $this->resolve($section['block']);
             if ($block !== null) {
                 $sections[$section['slug']] = [
@@ -50,19 +73,34 @@ final class PatternLibrary
                     'label' => $section['label'],
                     'category' => $section['category'],
                     'description' => $section['description'],
+                    'requires' => $section['requires'] ?? null,
                     'blocks' => [$block],
                     ...self::place($section['region'] ?? null),
                 ];
             }
         }
+        $pageSources = [...StarterPatterns::pages()];
+        foreach ($contributors as $contributor) {
+            foreach ($contributor->templates() as $template) {
+                $pageSources[] = [
+                    'slug' => $template->slug,
+                    'label' => $template->label,
+                    'category' => $template->category,
+                    'description' => $template->description,
+                    'sections' => $template->sections,
+                ];
+            }
+        }
         $pages = [];
-        foreach ([...StarterPatterns::pages(), ...StarterPatterns::regionTemplates()] as $page) {
+        foreach ([...$pageSources, ...StarterPatterns::regionTemplates()] as $page) {
             $blocks = [];
+            $requires = null;
             foreach ($page['sections'] as $slug) {
                 if (!isset($sections[$slug])) {
                     continue 2; // a page is offered whole or not at all
                 }
                 $blocks[] = $sections[$slug]['blocks'][0];
+                $requires ??= $sections[$slug]['requires'];
             }
             $pages[] = [
                 'slug' => $page['slug'],
@@ -70,6 +108,7 @@ final class PatternLibrary
                 'label' => $page['label'],
                 'category' => $page['category'] ?? 'Pages',
                 'description' => $page['description'],
+                'requires' => $requires,
                 'blocks' => $blocks,
                 ...self::place($page['region'] ?? null),
             ];
@@ -103,6 +142,7 @@ final class PatternLibrary
                 'label' => $row['name'],
                 'category' => $row['category'],
                 'description' => $row['description'] ?? '',
+                'requires' => null,
                 'blocks' => [$block],
                 'scope' => $row['scope'],
                 'region' => $row['region'],
