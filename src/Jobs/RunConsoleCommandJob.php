@@ -6,7 +6,9 @@ namespace Thallo\Core\Jobs;
 
 use Glueful\Bootstrap\ApplicationContext;
 use Glueful\Console\BaseCommand;
+use Glueful\Extensions\ExtensionManager;
 use Glueful\Queue\Job;
+use Psr\Container\ContainerInterface;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\ArrayInput;
 use Symfony\Component\Console\Output\BufferedOutput;
@@ -18,7 +20,9 @@ use Symfony\Component\Console\Output\BufferedOutput;
  *
  * The command is resolved by class, as the console itself resolves an extension's commands: from
  * the container when bound, else built with the booted container and context. A class that does
- * not exist, because its extension is not installed, is skipped rather than failed.
+ * not exist, because its extension is not installed, is skipped rather than failed; so is an
+ * extension's command while that extension is not enabled (Commerce is installed on every site and
+ * enabled on few), as its services are not bound and it could only fail.
  */
 final class RunConsoleCommandJob extends Job
 {
@@ -56,7 +60,7 @@ final class RunConsoleCommandJob extends Job
             return null;
         }
         $container = $this->context?->getContainer();
-        if ($container === null) {
+        if ($container === null || !$this->extensionEnabled($class, $container)) {
             return null;
         }
         if ($container->has($class)) {
@@ -68,5 +72,25 @@ final class RunConsoleCommandJob extends Job
         }
 
         return $command instanceof Command ? $command : null;
+    }
+
+    /**
+     * An extension's command (`Glueful\Extensions\<Name>\…`) runs only while a provider of that
+     * extension is registered. Any other command belongs to the application and always runs.
+     */
+    private function extensionEnabled(string $class, ContainerInterface $container): bool
+    {
+        if (preg_match('/^(Glueful\\\\Extensions\\\\[^\\\\]+\\\\)/', $class, $m) !== 1) {
+            return true;
+        }
+        if (!$container->has(ExtensionManager::class)) {
+            return true;
+        }
+        foreach (array_keys($container->get(ExtensionManager::class)->getProviders()) as $provider) {
+            if (str_starts_with($provider, $m[1])) {
+                return true;
+            }
+        }
+        return false;
     }
 }
