@@ -8,6 +8,7 @@ use Glueful\Database\Connection;
 use Thallo\Contracts\Layouts\LayoutSurface;
 use Thallo\Core\Content\Delivery\DeliveryVisibility;
 use Thallo\Core\Content\Repositories\ContentTypeRepository;
+use Thallo\Core\Settings\GeneralSettings;
 use Thallo\Core\Content\Schema\ContentTypeSchema;
 use Thallo\Core\Content\Schema\FieldDefinition;
 
@@ -29,6 +30,8 @@ final class EntrySurface implements LayoutSurface
     public function __construct(
         private readonly ContentTypeRepository $types,
         private readonly Connection $db,
+        /** Which types have listing pages: only theirs need "— single post" to tell the two apart. */
+        private readonly ?GeneralSettings $settings = null,
     ) {
     }
 
@@ -41,7 +44,10 @@ final class EntrySurface implements LayoutSurface
     {
         $type = $this->types->findBySlug($target);
         $name = (string) ($type['name'] ?? $target);
-        return "{$name} — single " . self::singular($name);
+        // A type with listing pages has two layouts, told apart by what each shows; one without has
+        // this one alone, named as the type: "Pages".
+        $listed = in_array($target, $this->settings?->listingTypes() ?? [], true);
+        return $listed ? "{$name} — single " . self::singular($name) : $name;
     }
 
     public function reach(string $target): string

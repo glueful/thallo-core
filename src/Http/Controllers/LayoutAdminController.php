@@ -70,6 +70,13 @@ final class LayoutAdminController
         foreach ($this->surfaces->all() as $surface) {
             foreach ($this->targets?->of($surface) ?? $surface->targets() as $target) {
                 $row = $this->layouts->find($surface->key(), $target['target']);
+                // A target its surface closes (a type without listing pages) is listed only while it
+                // keeps a layout, to be removed: otherwise there is nothing to design there — the
+                // setting that opens it lives in Settings › General.
+                $kept = $row !== null && $row['blocks'] !== null;
+                if (!$target['enabled'] && ($target['removable'] ?? false) && !$kept) {
+                    continue;
+                }
                 $saved[] = $row['updated_by'] ?? null;
                 $rows[] = [
                     'surface' => $surface->key(),
