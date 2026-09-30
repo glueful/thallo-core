@@ -16,7 +16,9 @@ use Thallo\Contracts\Layouts\LayoutSurfaceRegistry;
 use Thallo\Contracts\Style\StyleClassProvider;
 use Thallo\Core\Content\Layouts\LayoutRepository;
 use Thallo\Core\Content\Layouts\LayoutTargets;
+use Thallo\Core\Content\Layouts\LayoutSaver;
 use Thallo\Core\Content\Layouts\LayoutValidator;
+use Thallo\Core\Content\Repositories\ContentTypeRepository;
 use Thallo\Core\Content\Preview\LayoutPreviewStore;
 use Thallo\Core\Content\Preview\LayoutPreviewToken;
 use Thallo\Core\Content\Preview\PreviewMinter;
@@ -46,6 +48,8 @@ final class LayoutPreviewController
         private readonly ?StyleClassProvider $styleClasses = null,
         /** The targets as the site can use them; null reads the surface's own. */
         private readonly ?LayoutTargets $targets = null,
+        /** The target's content type, for its name and its fields' labels; null names none. */
+        private readonly ?ContentTypeRepository $types = null,
     ) {
     }
 
@@ -56,7 +60,10 @@ final class LayoutPreviewController
             . 'the starter when there is none) and its version as the session baseline, and picks the '
             . 'sample the stage renders it against: the one asked for, the newest published item, or '
             . 'a placeholder built in memory. The session names the surface\'s required blocks, its '
-            . 'palette and its loops (each loop\'s card field and the blocks only a card holds). A target '
+            . 'palette and its loops (each loop\'s card field and the blocks only a card holds), and the '
+            . 'target\'s binding rules — its fields and their labels, what each field block can show and '
+            . 'binds by default, and the content type\'s name — so the editor checks a section before it '
+            . 'lands. A target '
             . 'whose pages are off the site opens only while it keeps a saved layout, to remove it: '
             . '`closed` says why, and Save and apply refuse it. Requires `templates.manage`.',
         tags: ['Thallo Layouts'],
@@ -115,6 +122,7 @@ final class LayoutPreviewController
         ], $exp);
 
         $renderEnabled = app($this->context, CapabilityRegistry::class)->isEnabled('thallo.render');
+        $bindable = $surface->bindable($input->target);
         return Response::success([
             'token' => $token,
             'expires_at' => date('c', $exp),
@@ -129,6 +137,14 @@ final class LayoutPreviewController
             'required' => $surface->required($input->target),
             'palette' => $surface->palette(),
             'loops' => $surface->loops($input->target),
+            // The target's binding rules, so the editor checks a section before it lands (sections and
+            // templates design §4) with the server's own rules.
+            'bindable' => $bindable,
+            'field_labels' => $this->fieldLabels($input->surface, $input->target, $bindable),
+            'bindings' => LayoutValidator::BINDINGS,
+            'default_fields' => LayoutValidator::DEFAULT_FIELD,
+            'format_needs' => LayoutValidator::FORMAT_NEEDS,
+            'type_name' => $this->typeRow($input->surface, $input->target)['name'] ?? null,
             'sample' => $sample,
             'placeholder' => $sample === null,
             'label' => $surface->label($input->target),
@@ -213,6 +229,34 @@ final class LayoutPreviewController
             'applied_at' => $result['accepted_at'],
             'fragments' => null,
         ], 'Layout applied to the stage.');
+    }
+
+    /** @return array<string,mixed>|null the content type a target's pages are entries of */
+    private function typeRow(string $surface, string $target): ?array
+    {
+        $type = LayoutSaver::typeOf($surface, $target);
+        return $type === null ? null : $this->types?->findBySlug($type);
+    }
+
+    /**
+     * Each bindable field's label: the schema's, else its name made readable.
+     *
+     * @param array<string,string> $bindable
+     * @return array<string,string>
+     */
+    private function fieldLabels(string $surface, string $target, array $bindable): array
+    {
+        $labels = [];
+        foreach ((array) ($this->typeRow($surface, $target)['schema'] ?? []) as $field) {
+            if (is_array($field) && is_string($field['name'] ?? null) && is_string($field['label'] ?? null)) {
+                $labels[$field['name']] = $field['label'];
+            }
+        }
+        $out = [];
+        foreach (array_keys($bindable) as $name) {
+            $out[$name] = $labels[$name] ?? ucfirst(str_replace('_', ' ', $name));
+        }
+        return $out;
     }
 
     private static function retired(): Response

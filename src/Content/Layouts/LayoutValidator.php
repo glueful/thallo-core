@@ -26,7 +26,7 @@ use Thallo\Core\Content\Validation\ValidationException;
 final class LayoutValidator
 {
     /** Field block => the field types it can show (`text:rich` is a rich text field). */
-    private const BINDINGS = [
+    public const BINDINGS = [
         'entry_cover' => ['asset'],
         'entry_terms' => ['reference'],
         'entry_excerpt' => ['string', 'text'],
@@ -39,7 +39,7 @@ final class LayoutValidator
      * into the block where the type has that field (and the block can show it), so every binding a
      * layout relies on is explicit — a rename moves it and a delete is refused (spec §5.7).
      */
-    private const DEFAULT_FIELD = [
+    public const DEFAULT_FIELD = [
         'entry_content' => 'body',
         'entry_cover' => 'cover',
         'entry_excerpt' => 'excerpt',
@@ -47,7 +47,7 @@ final class LayoutValidator
     ];
 
     /** Entry field formats that need a field of their kind: a date read from a word fails the page. */
-    private const FORMAT_NEEDS = ['date' => ['datetime'], 'number' => ['number']];
+    public const FORMAT_NEEDS = ['date' => ['datetime'], 'number' => ['number']];
 
     private const SETTINGS = [
         'width' => ['contained', 'full'],
@@ -85,12 +85,9 @@ final class LayoutValidator
         bool $guard = true,
     ): array {
         $kind = $this->surfaces->get($surface);
-        if ($kind === null) {
-            throw new ValidationException(['surface' => "unknown layout surface '{$surface}'"]);
-        }
-        $row = (new LayoutTargets($this->blockTypes))->find($kind, $target);
-        if ($row === null || !$row['enabled']) {
-            throw new ValidationException(['target' => $row['reason'] ?? "'{$target}' cannot have a layout"]);
+        $reason = $this->targetError($surface, $target);
+        if ($kind === null || $reason !== null) {
+            throw new ValidationException([$kind === null ? 'surface' : 'target' => (string) $reason]);
         }
         $cleanSettings = self::settings($settings);
 
@@ -121,6 +118,71 @@ final class LayoutValidator
     }
 
     /**
+     * Why a target cannot have a layout — an unknown surface, a target the surface does not offer, or
+     * one that is closed — or null when it can.
+     */
+    public function targetError(string $surface, string $target): ?string
+    {
+        $kind = $this->surfaces->get($surface);
+        if ($kind === null) {
+            return "unknown layout surface '{$surface}'";
+        }
+        $row = (new LayoutTargets($this->blockTypes))->find($kind, $target);
+        if ($row === null || !$row['enabled']) {
+            return $row['reason'] ?? "'{$target}' cannot have a layout";
+        }
+        return null;
+    }
+
+    /**
+     * A part of a layout checked against a target (sections and templates design §3.2): the
+     * surface's palette and cards, the blocks validated as a save would, and every field a block
+     * binds — but none of the counts a whole layout owes (its required blocks, a blocks field placed
+     * once). The blocks come back normalised: every binding the server would choose is written. A
+     * block without an id gets one for the run only, so an id-less pattern tree comes back id-less.
+     *
+     * @param list<array<string,mixed>> $blocks
+     * @return array{blocks: list<array<string,mixed>>, errors: array<string,string>}
+     */
+    public function fragment(string $surface, string $target, array $blocks): array
+    {
+        $blocks = array_values($blocks);
+        $kind = $this->surfaces->get($surface);
+        $reason = $this->targetError($surface, $target);
+        if ($kind === null || $reason !== null) {
+            return ['blocks' => $blocks, 'errors' => [$kind === null ? 'surface' : 'target' => (string) $reason]];
+        }
+
+        $allowed = $this->allowedTypes($kind);
+        $errors = [];
+        foreach (self::walk($blocks) as $path => $block) {
+            $type = $block['type'] ?? null;
+            if (!is_string($type) || !isset($allowed[$type])) {
+                $label = is_string($type) ? $type : '?';
+                $errors["{$path}.type"] = "'{$label}' cannot be placed in a layout";
+            }
+        }
+        $errors += $this->cardErrors($kind, $target, $blocks);
+        if ($errors !== []) {
+            return ['blocks' => $blocks, 'errors' => $errors];
+        }
+
+        $added = [];
+        $withIds = self::temporaryIds($blocks, $added);
+        $schema = ContentTypeSchema::fromArray([['name' => 'blocks', 'type' => 'blocks']]);
+        try {
+            $clean = $this->fields->forLayouts()->validate($schema, ['blocks' => $withIds], true);
+        } catch (ValidationException $e) {
+            return ['blocks' => $blocks, 'errors' => $e->errors()];
+        }
+        $bindable = $kind->bindable($target);
+        $cleanBlocks = self::bindDefaults(array_values($clean['blocks'] ?? []), $bindable);
+        [$bindingErrors] = self::bindingErrors($cleanBlocks, $bindable);
+
+        return ['blocks' => self::withoutIds($cleanBlocks, $added), 'errors' => $bindingErrors];
+    }
+
+    /**
      * Every field a block names exists with a type it can show; each blocks field is placed at most
      * once; what the surface requires is placed.
      *
@@ -128,45 +190,14 @@ final class LayoutValidator
      */
     private function assertBindings(LayoutSurface $kind, string $target, array $blocks): void
     {
-        $bindable = $kind->bindable($target);
-        $errors = [];
+        [$errors, $contents] = self::bindingErrors($blocks, $kind->bindable($target));
         $placed = [];
-        foreach (self::walk($blocks) as $path => $block) {
-            $type = (string) $block['type'];
-            if (!isset(self::BINDINGS[$type])) {
+        foreach ($contents as ['path' => $path, 'field' => $field]) {
+            if (isset($placed[$field])) {
+                $errors["{$path}.data.field"] = "'{$field}' is already placed by another block";
                 continue;
             }
-            $data = is_array($block['data'] ?? null) ? $block['data'] : [];
-            // bindDefaults() has bound every default the type has; a block still without a field shows
-            // nothing — except Entry content, whose `body` the slot count still needs to judge.
-            $field = is_string($data['field'] ?? null) && $data['field'] !== ''
-                ? $data['field']
-                : ($type === 'entry_content' ? 'body' : null);
-            if ($field === null) {
-                continue;
-            }
-            $fieldType = $bindable[$field] ?? null;
-            if ($fieldType === null) {
-                $errors["{$path}.data.field"] = "this type has no field '{$field}'";
-                continue;
-            }
-            if (!in_array($fieldType, self::BINDINGS[$type], true)) {
-                $errors["{$path}.data.field"] = "'{$field}' cannot be shown by this block";
-                continue;
-            }
-            $format = is_string($data['format'] ?? null) ? $data['format'] : null;
-            $needs = $type === 'entry_field' && $format !== null ? (self::FORMAT_NEEDS[$format] ?? null) : null;
-            if ($needs !== null && !in_array($fieldType, $needs, true)) {
-                $errors["{$path}.data.format"] = "'{$field}' cannot be shown as a {$format}";
-                continue;
-            }
-            if ($type === 'entry_content') {
-                if (isset($placed[$field])) {
-                    $errors["{$path}.data.field"] = "'{$field}' is already placed by another block";
-                    continue;
-                }
-                $placed[$field] = true;
-            }
+            $placed[$field] = true;
         }
         foreach ($kind->required($target) as $required) {
             $field = $required['field'] ?? null;
@@ -468,6 +499,107 @@ final class LayoutValidator
             foreach ($data as $key => $value) {
                 if (is_array($value) && array_is_list($value) && isset($value[0]['type'])) {
                     $blocks[$i]['data'][$key] = self::bindDefaults($value, $bindable);
+                }
+            }
+        }
+        return $blocks;
+    }
+
+    /**
+     * Each binding block's own errors: a field the type lacks, one the block cannot show, an Entry
+     * field format its field cannot take. An unbound block binds nothing — except Entry content,
+     * which still counts as showing `body`. Also returns every Entry content placement that passed,
+     * for the counts a whole layout owes.
+     *
+     * @param list<array<string,mixed>> $blocks bound by {@see self::bindDefaults()} already
+     * @param array<string,string> $bindable field name => field type
+     * @return array{0: array<string,string>, 1: list<array{path: string, field: string}>}
+     */
+    private static function bindingErrors(array $blocks, array $bindable): array
+    {
+        $errors = [];
+        $contents = [];
+        foreach (self::walk($blocks) as $path => $block) {
+            $type = (string) $block['type'];
+            if (!isset(self::BINDINGS[$type])) {
+                continue;
+            }
+            $data = is_array($block['data'] ?? null) ? $block['data'] : [];
+            // bindDefaults() has bound every default the type has; a block still without a field shows
+            // nothing — except Entry content, whose `body` the slot count still needs to judge.
+            $field = is_string($data['field'] ?? null) && $data['field'] !== ''
+                ? $data['field']
+                : ($type === 'entry_content' ? 'body' : null);
+            if ($field === null) {
+                continue;
+            }
+            $fieldType = $bindable[$field] ?? null;
+            if ($fieldType === null) {
+                $errors["{$path}.data.field"] = "this type has no field '{$field}'";
+                continue;
+            }
+            if (!in_array($fieldType, self::BINDINGS[$type], true)) {
+                $errors["{$path}.data.field"] = "'{$field}' cannot be shown by this block";
+                continue;
+            }
+            $format = is_string($data['format'] ?? null) ? $data['format'] : null;
+            $needs = $type === 'entry_field' && $format !== null ? (self::FORMAT_NEEDS[$format] ?? null) : null;
+            if ($needs !== null && !in_array($fieldType, $needs, true)) {
+                $errors["{$path}.data.format"] = "'{$field}' cannot be shown as a {$format}";
+                continue;
+            }
+            if ($type === 'entry_content') {
+                $contents[] = ['path' => $path, 'field' => $field];
+            }
+        }
+        return [$errors, $contents];
+    }
+
+    /**
+     * Every block without an id given a temporary one (strict validation wants ids), recorded in
+     * `$added` so {@see self::withoutIds()} removes exactly those.
+     *
+     * @param list<mixed> $blocks
+     * @param array<string,true> $added
+     * @return list<mixed>
+     */
+    private static function temporaryIds(array $blocks, array &$added): array
+    {
+        foreach ($blocks as $i => $block) {
+            if (!is_array($block)) {
+                continue;
+            }
+            if (!is_string($block['id'] ?? null) || $block['id'] === '') {
+                $id = 'tmpfrag' . str_pad((string) (count($added) + 1), 5, '0', STR_PAD_LEFT);
+                $added[$id] = true;
+                $blocks[$i] = ['id' => $id] + $block;
+            }
+            foreach ((array) ($block['data'] ?? []) as $key => $value) {
+                if (is_array($value) && array_is_list($value) && isset($value[0]['type'])) {
+                    $blocks[$i]['data'][$key] = self::temporaryIds($value, $added);
+                }
+            }
+        }
+        return $blocks;
+    }
+
+    /**
+     * @param list<mixed> $blocks
+     * @param array<string,true> $added
+     * @return list<mixed>
+     */
+    private static function withoutIds(array $blocks, array $added): array
+    {
+        foreach ($blocks as $i => $block) {
+            if (!is_array($block)) {
+                continue;
+            }
+            if (isset($added[$block['id'] ?? ''])) {
+                unset($blocks[$i]['id']);
+            }
+            foreach ((array) ($block['data'] ?? []) as $key => $value) {
+                if (is_array($value) && array_is_list($value) && isset($value[0]['type'])) {
+                    $blocks[$i]['data'][$key] = self::withoutIds($value, $added);
                 }
             }
         }
