@@ -12,6 +12,7 @@ use Thallo\Contracts\Authorization\PermissionRequirementAuthority;
 use Thallo\Contracts\Layouts\LayoutSurfaceRegistry;
 use Thallo\Core\Content\Http\DTOs\SaveSectionData;
 use Thallo\Core\Content\Http\DTOs\UpdateSavedSectionData;
+use Thallo\Core\Content\Layouts\LayoutFieldLabels;
 use Thallo\Core\Content\Layouts\LayoutValidator;
 use Thallo\Core\Content\Patterns\PatternLibrary;
 use Thallo\Core\Content\Patterns\SavedSectionRepository;
@@ -54,6 +55,8 @@ final class SavedSectionController
         private readonly ?LayoutSurfaceRegistry $surfaces = null,
         /** A `layout` section's rules: its surface's, for the layout it is saved from. */
         private readonly ?LayoutValidator $layouts = null,
+        /** What the fields a `layout` section shows are called where it is saved from. */
+        private readonly ?LayoutFieldLabels $fieldLabels = null,
     ) {
     }
 
@@ -114,6 +117,11 @@ final class SavedSectionController
             $cleanBlock = (array) ($clean['blocks'][0] ?? []);
         }
         $block = self::withoutIds($cleanBlock);
+        // A layout section names its fields by the labels they have here: offered where a field is
+        // missing, the other type has no label for it.
+        $shows = $surface === null
+            ? null
+            : $this->fieldLabels?->ofBlocks($surface, (string) $input->target, [$block]);
         // As a page save: no class that is archived, or held by a job rewriting every document.
         try {
             $this->classGuard?->assertBlocksWritable([], [$block]);
@@ -134,6 +142,7 @@ final class SavedSectionController
             $region,
             ActorHelper::uuidFromRequest($request),
             $surface,
+            $shows,
         );
         return Response::created(['section' => $this->entry($id)], 'Section saved.');
     }

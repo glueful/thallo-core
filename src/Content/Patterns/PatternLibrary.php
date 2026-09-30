@@ -170,7 +170,7 @@ final class PatternLibrary
                 'slug' => $section->slug, 'kind' => 'section', 'label' => $section->label,
                 'category' => $section->category, 'description' => $section->description, 'requires' => null,
                 'blocks' => $checked['blocks'], 'scope' => 'layout', 'region' => null, 'surface' => $surface,
-                'settings' => null, 'saved' => false, 'id' => null,
+                'settings' => null, 'field_labels' => null, 'saved' => false, 'id' => null,
             ];
         }
         foreach ($templates as $template) {
@@ -189,7 +189,8 @@ final class PatternLibrary
                 'slug' => $template->slug, 'kind' => 'page', 'label' => $template->label, 'category' => 'Layouts',
                 'description' => $template->description, 'requires' => null,
                 'blocks' => self::withoutIds($clean['blocks']), 'scope' => 'layout', 'region' => null,
-                'surface' => $surface, 'settings' => $clean['settings'], 'saved' => false, 'id' => null,
+                'surface' => $surface, 'settings' => $clean['settings'], 'field_labels' => null, 'saved' => false,
+                'id' => null,
             ];
         }
         foreach ($this->saved?->all() ?? [] as $saved) {
@@ -285,12 +286,12 @@ final class PatternLibrary
         return $blocks;
     }
 
-    /** @return array{scope: string, region: ?string, surface: null, settings: null, saved: false, id: null} */
+    /** @return array{scope: string, region: ?string, surface: null, settings: null, field_labels: null, saved: false, id: null} */
     private static function place(?string $region): array
     {
         return [
             'scope' => $region === null ? 'page' : 'region', 'region' => $region, 'surface' => null,
-            'settings' => null, 'saved' => false, 'id' => null,
+            'settings' => null, 'field_labels' => null, 'saved' => false, 'id' => null,
         ];
     }
 
@@ -340,6 +341,7 @@ final class PatternLibrary
             'region' => $row['region'] ?? null,
             'surface' => $row['surface'] ?? null,
             'settings' => null,
+            'field_labels' => $row['field_labels'] ?? null,
             'saved' => true,
             'id' => $row['id'],
         ];

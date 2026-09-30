@@ -38,6 +38,11 @@ final class PatternData implements ResponseData
          * `footer`); null for every other pattern.
          */
         public readonly ?array $settings,
+        /**
+         * @var array<string,string>|null A section saved from a layout: the labels of the fields it
+         * shows, as the type it was saved from names them; null for every other pattern.
+         */
+        public readonly ?array $field_labels,
         /** True for a section this site saved from the stage; false for a shipped pattern. */
         public readonly bool $saved,
         /** A saved section's id, for renaming and deleting it; null for a shipped pattern. */

@@ -14,6 +14,7 @@ use Thallo\Contracts\Capability\CapabilityRegistry;
 use Thallo\Contracts\Layouts\LayoutSurface;
 use Thallo\Contracts\Layouts\LayoutSurfaceRegistry;
 use Thallo\Contracts\Style\StyleClassProvider;
+use Thallo\Core\Content\Layouts\LayoutFieldLabels;
 use Thallo\Core\Content\Layouts\LayoutRepository;
 use Thallo\Core\Content\Layouts\LayoutTargets;
 use Thallo\Core\Content\Layouts\LayoutSaver;
@@ -246,15 +247,10 @@ final class LayoutPreviewController
      */
     private function fieldLabels(string $surface, string $target, array $bindable): array
     {
-        $labels = [];
-        foreach ((array) ($this->typeRow($surface, $target)['schema'] ?? []) as $field) {
-            if (is_array($field) && is_string($field['name'] ?? null) && is_string($field['label'] ?? null)) {
-                $labels[$field['name']] = $field['label'];
-            }
-        }
+        $labels = $this->types === null ? [] : (new LayoutFieldLabels($this->types))->forTarget($surface, $target);
         $out = [];
         foreach (array_keys($bindable) as $name) {
-            $out[$name] = $labels[$name] ?? ucfirst(str_replace('_', ' ', $name));
+            $out[$name] = $labels[$name] ?? LayoutFieldLabels::readable($name);
         }
         return $out;
     }

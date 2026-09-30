@@ -50,8 +50,19 @@ final class SavedSectionRepository
     }
 
     private const COLUMNS = [
-        'id', 'name', 'category', 'description', 'scope', 'region', 'surface', 'block', 'lock_version',
+        'id', 'name', 'category', 'description', 'scope', 'region', 'surface', 'field_labels', 'block',
+        'lock_version',
     ];
+
+    /** @return array<string,string>|null a layout section's field labels; null when it keeps none */
+    private static function labels(mixed $raw): ?array
+    {
+        $decoded = is_string($raw) ? json_decode($raw, true) : $raw;
+        if (!is_array($decoded) || $decoded === []) {
+            return null;
+        }
+        return array_map('strval', array_filter($decoded, 'is_string'));
+    }
 
     /**
      * @param array<string,mixed> $row
@@ -72,6 +83,7 @@ final class SavedSectionRepository
             'scope' => in_array($scope, ['region', 'layout'], true) ? $scope : 'page',
             'region' => isset($row['region']) ? (string) $row['region'] : null,
             'surface' => isset($row['surface']) ? (string) $row['surface'] : null,
+            'field_labels' => self::labels($row['field_labels'] ?? null),
             'block' => $block,
             'lock_version' => (int) ($row['lock_version'] ?? 0),
         ];
@@ -86,6 +98,7 @@ final class SavedSectionRepository
      * @param array<string,mixed> $block the tree without ids
      * @param ?string $region the region's slug for a `region` section; null otherwise
      * @param ?string $surface the layout surface for a `layout` section; null otherwise
+     * @param array<string,string>|null $fieldLabels a layout section's bound fields' labels
      */
     public function create(
         string $name,
@@ -95,6 +108,7 @@ final class SavedSectionRepository
         ?string $region,
         ?string $by,
         ?string $surface = null,
+        ?array $fieldLabels = null,
     ): string {
         $id = Utils::generateNanoID();
         $now = gmdate('Y-m-d H:i:s');
@@ -106,6 +120,9 @@ final class SavedSectionRepository
             'scope' => $surface !== null ? 'layout' : ($region === null ? 'page' : 'region'),
             'region' => $surface !== null ? null : $region,
             'surface' => $surface,
+            'field_labels' => $fieldLabels === null || $fieldLabels === []
+                ? null
+                : json_encode($fieldLabels, JSON_THROW_ON_ERROR),
             'block' => json_encode($block, JSON_THROW_ON_ERROR),
             'created_by' => $by,
             'created_at' => $now,
