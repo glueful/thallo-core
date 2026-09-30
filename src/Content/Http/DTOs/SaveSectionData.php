@@ -11,7 +11,9 @@ use Glueful\Validation\Contracts\RequestData;
  * Request body for `POST /v1/admin/saved-sections`
  * ({@see \Thallo\Core\Content\Http\Controllers\SavedSectionController::store()}): the block to save
  * (validated as a page save would validate it), how the library names it, and where it belongs:
- * a page body (`scope` `page`, the default) or a region (`scope` `region` and its `region`).
+ * a page body (`scope` `page`, the default), a region (`scope` `region` and its `region`), or one
+ * kind of layout (`scope` `layout`, its `surface`, and the `target` of the layout it is saved from —
+ * checked against, never stored).
  */
 final class SaveSectionData implements RequestData
 {
@@ -29,6 +31,10 @@ final class SaveSectionData implements RequestData
         public readonly ?string $scope = null,
         #[Rule('string')]
         public readonly ?string $region = null,
+        #[Rule('string')]
+        public readonly ?string $surface = null,
+        #[Rule('string')]
+        public readonly ?string $target = null,
     ) {
     }
 }

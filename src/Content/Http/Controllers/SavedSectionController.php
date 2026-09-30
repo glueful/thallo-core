@@ -8,8 +8,11 @@ use Glueful\Http\Response;
 use Glueful\Routing\Attributes\ApiOperation;
 use Glueful\Routing\Attributes\ApiResponse;
 use Symfony\Component\HttpFoundation\Request;
+use Thallo\Contracts\Authorization\PermissionRequirementAuthority;
+use Thallo\Contracts\Layouts\LayoutSurfaceRegistry;
 use Thallo\Core\Content\Http\DTOs\SaveSectionData;
 use Thallo\Core\Content\Http\DTOs\UpdateSavedSectionData;
+use Thallo\Core\Content\Layouts\LayoutValidator;
 use Thallo\Core\Content\Patterns\PatternLibrary;
 use Thallo\Core\Content\Patterns\SavedSectionRepository;
 use Thallo\Core\Content\Regions\RegionDefinitions;
@@ -26,6 +29,12 @@ use Thallo\Core\Support\ActorHelper;
  * The library lists them with the shipped sections (`GET /patterns`); these save, rename and
  * delete them. A saved block is validated as a page save would validate it and stored without ids.
  * One saved from the header or footer belongs there: its region must take its block at the root.
+ * One saved from a layout belongs to that kind of layout (sections and templates design §5): it keeps
+ * its field blocks, checked and normalised against the layout it came from.
+ *
+ * Who may change one depends on where it belongs: a layout's needs `templates.manage` (the layouts'
+ * permission), a page's or region's `content.manage`. Saving asks for the scope given; renaming and
+ * deleting ask for the stored section's own.
  */
 final class SavedSectionController
 {
@@ -39,6 +48,12 @@ final class SavedSectionController
         private readonly PatternLibrary $library,
         private readonly FieldValidator $validator,
         private readonly ?StyleClassReferenceGuard $classGuard = null,
+        /** Who may change a section of a scope; null refuses every change. */
+        private readonly ?PermissionRequirementAuthority $authority = null,
+        /** The layout surfaces a `layout` section may name. */
+        private readonly ?LayoutSurfaceRegistry $surfaces = null,
+        /** A `layout` section's rules: its surface's, for the layout it is saved from. */
+        private readonly ?LayoutValidator $layouts = null,
     ) {
     }
 
@@ -48,38 +63,57 @@ final class SavedSectionController
         description: 'Saves one block — with everything inside it — to the Blocks tab\'s library. The '
             . 'block is validated as a page save would validate it and stored without ids. Body: '
             . '`name` (required, up to 120 characters), `block`, and optionally `category` (default '
-            . '"Saved"), `description`, and where it belongs: `scope` `page` (the default) or '
-            . '`region` with `region` `header` or `footer`, whose palette must take the block. '
-            . 'Requires `content.manage`.',
+            . '"Saved"), `description`, and where it belongs: `scope` `page` (the default), '
+            . '`region` with `region` `header` or `footer`, whose palette must take the block, or '
+            . '`layout` with its `surface` and the `target` of the layout it is saved from — checked '
+            . 'against that layout\'s rules, its field blocks kept with the bindings they have there. '
+            . 'Requires `templates.manage` for a layout\'s section, `content.manage` for any other.',
         tags: ['Thallo Admin'],
     )]
     #[ApiResponse(201, description: 'Saved; the library entry.')]
+    #[ApiResponse(403, description: 'The caller may not change sections of that scope.')]
     #[ApiResponse(
         422,
-        description: 'A missing name, a block a page save would refuse, or one its region does not take.',
+        description: 'A missing name, a block a page save would refuse, one its region does not take, or '
+            . 'one its layout does not.',
     )]
     public function store(SaveSectionData $input, Request $request): Response
     {
+        $scope = $input->scope === null || $input->scope === '' ? 'page' : $input->scope;
+        if (!$this->may($request, $scope)) {
+            return self::forbidden();
+        }
         [$labels, $errors] = $this->labels($input->name, $input->category, $input->description, true);
-        [$region, $placeErrors] = self::place($input->scope, $input->region, $input->block);
+        [$region, $surface, $placeErrors] = $this->place(
+            $scope,
+            $input->region,
+            $input->surface,
+            $input->target,
+            $input->block,
+        );
         $errors += $placeErrors;
         if ($errors !== []) {
             return Response::validation($errors);
         }
-        try {
-            $clean = $this->validator->validate(
-                ContentTypeSchema::fromArray([['name' => 'blocks', 'type' => 'blocks']]),
-                ['blocks' => [$input->block]],
-                true,
-            );
-        } catch (ValidationException $e) {
-            $errors = [];
-            foreach ($e->errors() as $path => $message) {
-                $errors[preg_replace('~\Ablocks\.0~', 'block', (string) $path)] = $message;
+        if ($surface !== null && $this->layouts !== null) {
+            $checked = $this->layouts->fragment($surface, (string) $input->target, [$input->block]);
+            if ($checked['errors'] !== []) {
+                return Response::validation(self::asBlockErrors($checked['errors']));
             }
-            return Response::validation($errors);
+            $cleanBlock = (array) ($checked['blocks'][0] ?? []);
+        } else {
+            try {
+                $clean = $this->validator->validate(
+                    ContentTypeSchema::fromArray([['name' => 'blocks', 'type' => 'blocks']]),
+                    ['blocks' => [$input->block]],
+                    true,
+                );
+            } catch (ValidationException $e) {
+                return Response::validation(self::asBlockErrors($e->errors()));
+            }
+            $cleanBlock = (array) ($clean['blocks'][0] ?? []);
         }
-        $block = self::withoutIds($clean['blocks'][0] ?? []);
+        $block = self::withoutIds($cleanBlock);
         // As a page save: no class that is archived, or held by a job rewriting every document.
         try {
             $this->classGuard?->assertBlocksWritable([], [$block]);
@@ -99,6 +133,7 @@ final class SavedSectionController
             $block,
             $region,
             ActorHelper::uuidFromRequest($request),
+            $surface,
         );
         return Response::created(['section' => $this->entry($id)], 'Section saved.');
     }
@@ -107,15 +142,20 @@ final class SavedSectionController
     #[ApiOperation(
         summary: 'Rename a saved section',
         description: 'Changes a saved section\'s `name`, `category` or `description`. Requires '
-            . '`content.manage`.',
+            . '`templates.manage` for a layout\'s section, `content.manage` for any other.',
         tags: ['Thallo Admin'],
     )]
     #[ApiResponse(200, description: 'Renamed; the library entry.')]
+    #[ApiResponse(403, description: 'The caller may not change sections of its scope.')]
     #[ApiResponse(404, description: 'No such saved section.')]
-    public function update(UpdateSavedSectionData $input, string $id): Response
+    public function update(UpdateSavedSectionData $input, string $id, Request $request): Response
     {
-        if (!$this->sections->exists($id)) {
+        $row = $this->sections->find($id);
+        if ($row === null) {
             return Response::notFound('No such saved section.');
+        }
+        if (!$this->may($request, $row['scope'])) {
+            return self::forbidden();
         }
         [$labels, $errors] = $this->labels($input->name, $input->category, $input->description, false);
         if ($errors !== []) {
@@ -128,45 +168,88 @@ final class SavedSectionController
     /** DELETE /v1/admin/saved-sections/{id} */
     #[ApiOperation(
         summary: 'Delete a saved section',
-        description: 'Removes a saved section from the library. Pages that inserted it keep their '
-            . 'copies. Requires `content.manage`.',
+        description: 'Removes a saved section from the library. Pages and layouts that inserted it keep '
+            . 'their copies. Requires `templates.manage` for a layout\'s section, `content.manage` for any '
+            . 'other.',
         tags: ['Thallo Admin'],
     )]
     #[ApiResponse(200, description: 'Deleted.')]
+    #[ApiResponse(403, description: 'The caller may not change sections of its scope.')]
     #[ApiResponse(404, description: 'No such saved section.')]
-    public function destroy(string $id): Response
+    public function destroy(string $id, Request $request): Response
     {
+        $row = $this->sections->find($id);
+        if ($row === null) {
+            return Response::notFound('No such saved section.');
+        }
+        if (!$this->may($request, $row['scope'])) {
+            return self::forbidden();
+        }
         return $this->sections->delete($id)
             ? Response::success(null, 'Section deleted.')
             : Response::notFound('No such saved section.');
     }
 
+    /** Whether the caller may change a section of `$scope`: a layout's is the layouts' permission. */
+    private function may(Request $request, string $scope): bool
+    {
+        $needs = $scope === 'layout' ? 'templates.manage' : 'content.manage';
+        return $this->authority?->allows($request, [$needs]) ?? false;
+    }
+
+    private static function forbidden(): Response
+    {
+        return Response::error('Forbidden', Response::HTTP_FORBIDDEN, ['code' => 'FORBIDDEN']);
+    }
+
     /**
-     * Where a section belongs: null for a page body, or the region's slug — whose palette must
-     * take the block at its root, as the region's own save would insist.
+     * @param array<string,string> $errors keyed by the one-block document's paths
+     * @return array<string,string> keyed by the saved block's (`block…`)
+     */
+    private static function asBlockErrors(array $errors): array
+    {
+        $out = [];
+        foreach ($errors as $path => $message) {
+            $out[(string) preg_replace('~\Ablocks\.0~', 'block', (string) $path)] = $message;
+        }
+        return $out;
+    }
+
+    /**
+     * Where a section belongs: a page body; the region's slug — whose palette must take the block at
+     * its root, as the region's own save would insist; or a layout surface this site has, with the
+     * target of the layout it is saved from.
      *
      * @param array<string,mixed> $block
-     * @return array{0: ?string, 1: array<string,string>}
+     * @return array{0: ?string, 1: ?string, 2: array<string,string>} the region, the surface, the errors
      */
-    private static function place(?string $scope, ?string $region, array $block): array
+    private function place(string $scope, ?string $region, ?string $surface, ?string $target, array $block): array
     {
-        $scope = $scope === null || $scope === '' ? 'page' : $scope;
         if ($scope === 'page') {
-            return [null, []];
+            return [null, null, []];
+        }
+        if ($scope === 'layout') {
+            if ($surface === null || $surface === '' || $this->surfaces?->get($surface) === null) {
+                return [null, null, ['surface' => "unknown layout surface '{$surface}'"]];
+            }
+            if ($target === null || $target === '') {
+                return [null, null, ['target' => 'is required for a layout\'s section']];
+            }
+            return [null, $surface, []];
         }
         if ($scope !== 'region') {
-            return [null, ['scope' => 'must be page or region']];
+            return [null, null, ['scope' => 'must be page, region or layout']];
         }
         $palette = RegionDefinitions::PALETTES[(string) $region] ?? null;
         if ($palette === null) {
-            return [null, ['region' => 'must be one of: ' . implode(', ', RegionDefinitions::slugs())]];
+            return [null, null, ['region' => 'must be one of: ' . implode(', ', RegionDefinitions::slugs())]];
         }
         $type = $block['type'] ?? null;
         if (!is_string($type) || !in_array($type, $palette, true)) {
             $label = is_string($type) ? $type : '?';
-            return [null, ['block.type' => "'{$label}' is not allowed in the {$region} region"]];
+            return [null, null, ['block.type' => "'{$label}' is not allowed in the {$region} region"]];
         }
-        return [(string) $region, []];
+        return [(string) $region, null, []];
     }
 
     /**
@@ -207,15 +290,11 @@ final class SavedSectionController
         return [$out, $errors];
     }
 
-    /** @return array<string,mixed>|null the section as the library lists it */
+    /** @return array<string,mixed>|null the section as the library lists it, from its stored row */
     private function entry(string $id): ?array
     {
-        foreach ($this->library->all() as $pattern) {
-            if (($pattern['id'] ?? null) === $id) {
-                return $pattern;
-            }
-        }
-        return null;
+        $row = $this->sections->find($id);
+        return $row === null ? null : $this->library->savedEntry($row);
     }
 
     /**

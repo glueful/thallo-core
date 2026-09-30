@@ -129,13 +129,16 @@ $router->group(['prefix' => '/v1/admin'], function (Router $router): void {
         $router->get('/patterns', [PatternController::class, 'index'])
         ->middleware('content_permission:content.view');
 
-        // Saved sections: a block saved from the stage into that library, reused as a copy.
+        // Saved sections: a block saved from the stage into that library, reused as a copy. Any editor
+        // reaches them; the controller decides by the section's scope (sections and templates design §5)
+        // — a layout's needs templates.manage, a page's or region's content.manage — reading a rename's
+        // or delete's scope from the stored section, not the request.
         $router->post('/saved-sections', [\Thallo\Core\Content\Http\Controllers\SavedSectionController::class, 'store'])
-            ->middleware('content_permission:content.manage');
+            ->middleware('content_permission:content.view');
         $router->patch('/saved-sections/{id}', [\Thallo\Core\Content\Http\Controllers\SavedSectionController::class, 'update'])
-            ->middleware('content_permission:content.manage');
+            ->middleware('content_permission:content.view');
         $router->delete('/saved-sections/{id}', [\Thallo\Core\Content\Http\Controllers\SavedSectionController::class, 'destroy'])
-            ->middleware('content_permission:content.manage');
+            ->middleware('content_permission:content.view');
 
         // "Set up documentation" (Settings › Import / Export): makes a content type and changes a
         // site setting, so it asks for what both of those ask for.
