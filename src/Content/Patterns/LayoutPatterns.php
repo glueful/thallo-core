@@ -55,7 +55,7 @@ final class LayoutPatterns
                 'The title with the date, and the categories above it when the type has them.',
                 static function (LayoutTarget $t): ?array {
                     $f = self::fields($t);
-                    if ($f['title'] === null) {
+                    if ($f['title'] === null || !$f['article']) {
                         return null;
                     }
                     return self::stack(array_values(array_filter([
@@ -86,10 +86,10 @@ final class LayoutPatterns
                 'Related posts',
                 'Article',
                 'A heading over three related entries, as cards.',
-                static fn (): array => B::band([
+                static fn (LayoutTarget $t): ?array => self::fields($t)['article'] ? B::band([
                     B::heading('Keep reading', 'h2', 'start'),
                     self::block('entry_related', ['count' => 3, 'style' => 'cards']),
-                ]),
+                ]) : null,
             ),
             new LayoutSection(
                 'entry-neighbours',
@@ -100,6 +100,17 @@ final class LayoutPatterns
                 static fn (): array => self::block('entry_neighbours', [
                     'previous_label' => 'Previous', 'next_label' => 'Next',
                 ]),
+            ),
+            new LayoutSection(
+                'entry-page-header-band',
+                'entry',
+                'Page header band',
+                'Page',
+                'The page’s title and a lead line in a tinted band.',
+                static function (LayoutTarget $t): ?array {
+                    $f = self::fields($t);
+                    return $f['article'] || $f['title'] === null ? null : self::pageBand();
+                },
             ),
             new LayoutSection(
                 'listing-header',
@@ -143,6 +154,9 @@ final class LayoutPatterns
                 'Classic article',
                 'Today’s single post: the title, the date and the cover above the content, related entries below.',
                 static function (LayoutTarget $t): ?array {
+                    if (!self::fields($t)['article']) {
+                        return null;
+                    }
                     $tree = Starters::forSchema(self::schema($t));
                     return $tree === [] ? null : $tree;
                 },
@@ -155,7 +169,7 @@ final class LayoutPatterns
                 static function (LayoutTarget $t): ?array {
                     $f = self::fields($t);
                     $content = self::content($f);
-                    if ($f['title'] === null && $content === null) {
+                    if (!$f['article'] || ($f['title'] === null && $content === null)) {
                         return null;
                     }
                     $header = array_values(array_filter([
@@ -184,7 +198,7 @@ final class LayoutPatterns
                 static function (LayoutTarget $t): ?array {
                     $f = self::fields($t);
                     $content = self::content($f);
-                    if ($f['title'] === null && $content === null) {
+                    if (!$f['article'] || ($f['title'] === null && $content === null)) {
                         return null;
                     }
                     return array_values(array_filter([
@@ -193,6 +207,50 @@ final class LayoutPatterns
                         $content,
                     ]));
                 },
+            ),
+            // A type that is not article-like — a page, a doc: nothing files or summarises it — has
+            // its own: no date, no related entries.
+            new LayoutTemplate(
+                'entry-page-standard',
+                'entry',
+                'Standard page',
+                'Today’s page: its title, then its body.',
+                static function (LayoutTarget $t): ?array {
+                    if (self::fields($t)['article']) {
+                        return null;
+                    }
+                    $tree = Starters::forSchema(self::schema($t));
+                    return $tree === [] ? null : $tree;
+                },
+            ),
+            new LayoutTemplate(
+                'entry-page-header',
+                'entry',
+                'Page header band',
+                'The title and a lead line in a tinted band, then the body at a reading width.',
+                static function (LayoutTarget $t): ?array {
+                    $f = self::fields($t);
+                    $content = self::content($f);
+                    if ($f['article'] || ($f['title'] === null && $content === null)) {
+                        return null;
+                    }
+                    return array_values(array_filter([
+                        $f['title'] === null ? null : self::pageBand(),
+                        $content === null ? null : self::centred([$content]),
+                    ]));
+                },
+            ),
+            new LayoutTemplate(
+                'entry-page-full',
+                'entry',
+                'Full width',
+                'The body alone, edge to edge — for a page built from sections, whose first carries its heading.',
+                static function (LayoutTarget $t): ?array {
+                    $f = self::fields($t);
+                    $content = self::content($f);
+                    return $f['article'] || $content === null ? null : [$content];
+                },
+                ['width' => 'full'],
             ),
             new LayoutTemplate(
                 'listing-card-grid',
@@ -351,6 +409,15 @@ final class LayoutPatterns
             ],
             'alignment' => ['content' => ['base' => B::choice('between')]],
         ])]]);
+    }
+
+    /** @return array<string,mixed> a page's title and a lead line, in a tinted band */
+    private static function pageBand(): array
+    {
+        return B::band([self::stack([
+            self::block('entry_title', ['level' => 'h1']),
+            B::text('<p>A sentence that tells the reader what this page covers.</p>', 'start', 'color.muted'),
+        ])], [], 'color.surface-2');
     }
 
     /** @return array<string,mixed> the term's title and its description, a small step apart */
