@@ -697,6 +697,12 @@ final class CoreServiceProvider extends ServiceProvider
                 'shared' => true,
                 'autowire' => true,
             ],
+            // Sections and templates design §3.1: packs push their page patterns here; slugs are
+            // unique across core and every pack, and templates name only page sections.
+            \Thallo\Contracts\Patterns\PatternContributorRegistry::class => [
+                'class' => \Thallo\Core\Content\Patterns\DefaultPatternContributorRegistry::class,
+                'shared' => true,
+            ],
             ContentTypeRepository::class => [
                 'class' => ContentTypeRepository::class,
                 'shared' => true,
