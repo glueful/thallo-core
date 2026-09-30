@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Thallo\Core\Content\Patterns;
 
+use Thallo\Contracts\Patterns\PatternBlocks;
+
 /**
  * The patterns Thallo ships: ready-made SECTIONS and starter PAGES made of them.
  *
@@ -32,7 +34,7 @@ final class StarterPatterns
                 'Centred hero',
                 'Hero',
                 'A headline, a supporting line and two buttons on the theme’s gradient.',
-                self::hero(
+                PatternBlocks::hero(
                     [
                         'headline' => 'Introducing Acme',
                         'title' => 'A clear headline that says what you do',
@@ -48,7 +50,7 @@ final class StarterPatterns
                 'Hero with highlights',
                 'Hero',
                 'The headline on one side, three short highlights on the other.',
-                self::hero(
+                PatternBlocks::hero(
                     [
                         'headline' => 'Why Acme',
                         'title' => 'Everything your team needs, in one place',
@@ -57,22 +59,22 @@ final class StarterPatterns
                         'orientation' => 'horizontal',
                         'heading_level' => 'h1',
                         // The hero's aside gives its children no gap of its own: a stack does.
-                        'aside' => [self::stack([
-                            self::feature(
+                        'aside' => [PatternBlocks::stack([
+                            PatternBlocks::feature(
                                 'zap',
                                 'Quick to start',
                                 'Set up in an afternoon, not a quarter.',
                                 'plain',
                                 'horizontal',
                             ),
-                            self::feature(
+                            PatternBlocks::feature(
                                 'shield-check',
                                 'Safe by default',
                                 'Sensible settings from the first day.',
                                 'plain',
                                 'horizontal',
                             ),
-                            self::feature(
+                            PatternBlocks::feature(
                                 'users',
                                 'Made for teams',
                                 'Roles, reviews and a shared history.',
@@ -89,7 +91,7 @@ final class StarterPatterns
                 'Dark hero',
                 'Hero',
                 'A dark band with one call to action, for a page that should open boldly.',
-                self::hero(
+                PatternBlocks::hero(
                     [
                         'title' => 'A bold statement on a dark ground',
                         'description' => 'One sentence that earns the click.',
@@ -104,7 +106,7 @@ final class StarterPatterns
                 'Page header',
                 'Hero',
                 'A quiet title band for an inner page: About, Pricing, Contact.',
-                self::hero(
+                PatternBlocks::hero(
                     [
                         'title' => 'Page title',
                         'description' => 'A sentence that tells the reader what this page covers.',
@@ -120,16 +122,20 @@ final class StarterPatterns
                 'Feature grid',
                 'Features',
                 'A heading and three feature cards in a row.',
-                self::band([
-                    self::header(
+                PatternBlocks::band([
+                    PatternBlocks::header(
                         'Features',
                         'Built for the way you work',
                         'Three things the reader should remember about what you offer.',
                     ),
-                    self::grid('3', [
-                        self::feature('layers', 'First benefit', 'Say what it does for the reader, not how it works.'),
-                        self::feature('sparkles', 'Second benefit', 'Keep each one to a sentence or two.'),
-                        self::feature('gauge', 'Third benefit', 'Three is easy to take in; six is a list.'),
+                    PatternBlocks::grid('3', [
+                        PatternBlocks::feature(
+                            'layers',
+                            'First benefit',
+                            'Say what it does for the reader, not how it works.',
+                        ),
+                        PatternBlocks::feature('sparkles', 'Second benefit', 'Keep each one to a sentence or two.'),
+                        PatternBlocks::feature('gauge', 'Third benefit', 'Three is easy to take in; six is a list.'),
                     ]),
                 ])
             ),
@@ -138,15 +144,15 @@ final class StarterPatterns
                 'Six features',
                 'Features',
                 'A heading and six plain features in two rows.',
-                self::band([
-                    self::header('Everything included', 'All the parts, none of the assembly', null),
-                    self::grid('3', [
-                        self::feature('pen-tool', 'Design', 'A short line about this part.', 'plain'),
-                        self::feature('code', 'Build', 'A short line about this part.', 'plain'),
-                        self::feature('rocket', 'Launch', 'A short line about this part.', 'plain'),
-                        self::feature('bar-chart-3', 'Measure', 'A short line about this part.', 'plain'),
-                        self::feature('life-buoy', 'Support', 'A short line about this part.', 'plain'),
-                        self::feature('lock', 'Security', 'A short line about this part.', 'plain'),
+                PatternBlocks::band([
+                    PatternBlocks::header('Everything included', 'All the parts, none of the assembly', null),
+                    PatternBlocks::grid('3', [
+                        PatternBlocks::feature('pen-tool', 'Design', 'A short line about this part.', 'plain'),
+                        PatternBlocks::feature('code', 'Build', 'A short line about this part.', 'plain'),
+                        PatternBlocks::feature('rocket', 'Launch', 'A short line about this part.', 'plain'),
+                        PatternBlocks::feature('bar-chart-3', 'Measure', 'A short line about this part.', 'plain'),
+                        PatternBlocks::feature('life-buoy', 'Support', 'A short line about this part.', 'plain'),
+                        PatternBlocks::feature('lock', 'Security', 'A short line about this part.', 'plain'),
                     ]),
                 ])
             ),
@@ -155,63 +161,81 @@ final class StarterPatterns
                 'Features beside text',
                 'Features',
                 'An introduction on the left, a stack of features on the right.',
-                self::band(
+                PatternBlocks::band(
                     [
-                        self::stack([
-                            self::heading('Why teams choose us', 'h2', 'start'),
-                            self::text(
+                        PatternBlocks::stack([
+                            PatternBlocks::heading('Why teams choose us', 'h2', 'start'),
+                            PatternBlocks::text(
                                 '<p>Use this side for the argument: the problem, and how you see it. The features '
                                     . 'beside it are the proof.</p>',
                                 'start',
                                 'color.muted',
                             ),
-                            self::button('See how it works', 'solid'),
+                            PatternBlocks::button('See how it works', 'solid'),
                             ], 'start'),
-                        self::stack([
-                            self::feature('check', 'A reason', 'One line of evidence.', 'plain', 'horizontal'),
-                            self::feature('check', 'A second reason', 'One line of evidence.', 'plain', 'horizontal'),
-                            self::feature('check', 'A third reason', 'One line of evidence.', 'plain', 'horizontal'),
+                        PatternBlocks::stack([
+                            PatternBlocks::feature('check', 'A reason', 'One line of evidence.', 'plain', 'horizontal'),
+                            PatternBlocks::feature(
+                                'check',
+                                'A second reason',
+                                'One line of evidence.',
+                                'plain',
+                                'horizontal',
+                            ),
+                            PatternBlocks::feature(
+                                'check',
+                                'A third reason',
+                                'One line of evidence.',
+                                'plain',
+                                'horizontal',
+                            ),
                         ]),
                     ],
-                    self::splitAtLg()
+                    PatternBlocks::splitAtLg()
                 )
             ),
-            self::section('steps', 'How it works', 'Features', 'Three numbered steps in a row.', self::band([
-                self::header('How it works', 'Up and running in three steps', null),
-                self::grid('3', [
-                    self::step('1', 'Sign up', 'Create your account in a minute.'),
-                    self::step('2', 'Set up', 'Bring your content and choose a look.'),
-                    self::step('3', 'Publish', 'Go live and share the link.'),
+            self::section('steps', 'How it works', 'Features', 'Three numbered steps in a row.', PatternBlocks::band([
+                PatternBlocks::header('How it works', 'Up and running in three steps', null),
+                PatternBlocks::grid('3', [
+                    PatternBlocks::step('1', 'Sign up', 'Create your account in a minute.'),
+                    PatternBlocks::step('2', 'Set up', 'Bring your content and choose a look.'),
+                    PatternBlocks::step('3', 'Publish', 'Go live and share the link.'),
                 ]),
             ])),
 
-            self::section('stats', 'Numbers', 'Social proof', 'Four figures in a row, each with a label.', self::band([
-                self::grid('4', [
-                    self::stat('10k+', 'Customers'),
-                    self::stat('99.9%', 'Uptime'),
-                    self::stat('24/7', 'Support'),
-                    self::stat('4.9/5', 'Average rating'),
+            self::section(
+                'stats',
+                'Numbers',
+                'Social proof',
+                'Four figures in a row, each with a label.',
+                PatternBlocks::band([
+                PatternBlocks::grid('4', [
+                    PatternBlocks::stat('10k+', 'Customers'),
+                    PatternBlocks::stat('99.9%', 'Uptime'),
+                    PatternBlocks::stat('24/7', 'Support'),
+                    PatternBlocks::stat('4.9/5', 'Average rating'),
                     ], '2'),
-                ], [], 'color.surface-2')),
+                ], [], 'color.surface-2')
+            ),
             self::section(
                 'testimonials',
                 'Testimonials',
                 'Social proof',
                 'A heading and three quotes from customers.',
-                self::band([
-                    self::header('Testimonials', 'What our customers say', null),
-                    self::grid('3', [
-                        self::quote(
+                PatternBlocks::band([
+                    PatternBlocks::header('Testimonials', 'What our customers say', null),
+                    PatternBlocks::grid('3', [
+                        PatternBlocks::quote(
                             '“It paid for itself in the first month. We should have switched sooner.”',
                             'Alex Morgan',
                             'Operations lead, Northwind',
                         ),
-                        self::quote(
+                        PatternBlocks::quote(
                             '“The team picked it up without training. That never happens.”',
                             'Sam Rivera',
                             'Founder, Brightside',
                         ),
-                        self::quote(
+                        PatternBlocks::quote(
                             '“Support answers in minutes and actually fixes the problem.”',
                             'Jordan Lee',
                             'CTO, Fieldnote',
@@ -225,14 +249,14 @@ final class StarterPatterns
                 'Pricing plans',
                 'Pricing',
                 'A heading and three plans, the middle one highlighted.',
-                self::band([
-                    self::header(
+                PatternBlocks::band([
+                    PatternBlocks::header(
                         'Pricing',
                         'Simple pricing, no surprises',
                         'Every plan includes the essentials. Change or cancel at any time.',
                     ),
-                    self::block('pricing_plans', ['orientation' => 'horizontal', 'plans' => [
-                        self::plan(
+                    PatternBlocks::block('pricing_plans', ['orientation' => 'horizontal', 'plans' => [
+                        PatternBlocks::plan(
                             'Starter',
                             'For trying things out.',
                             '$0',
@@ -240,7 +264,7 @@ final class StarterPatterns
                             'Start free',
                             false,
                         ),
-                        self::plan(
+                        PatternBlocks::plan(
                             'Team',
                             'For a growing team.',
                             '$29',
@@ -248,7 +272,7 @@ final class StarterPatterns
                             'Choose Team',
                             true,
                         ),
-                        self::plan(
+                        PatternBlocks::plan(
                             'Business',
                             'For the whole company.',
                             '$99',
@@ -260,19 +284,26 @@ final class StarterPatterns
                 ])
             ),
 
-            self::section('faq', 'FAQ', 'FAQ', 'A heading and five questions that open in place.', self::band([
-                self::header('FAQ', 'Questions, answered', null),
+            self::section('faq', 'FAQ', 'FAQ', 'A heading and five questions that open in place.', PatternBlocks::band([
+                PatternBlocks::header('FAQ', 'Questions, answered', null),
                 // The accordion takes no width of its own: a container gives it a readable measure.
-                self::block('container', ['element' => 'div', 'content' => [self::block('accordion', ['items' => [
-                    self::question('How do I get started?', 'Say what the first step is and how long it takes.'),
-                    self::question('Can I change plans later?', 'Explain what happens to their data and their bill.'),
-                    self::question('Is there a free trial?', 'State the length and whether a card is needed.'),
-                    self::question('How do I get support?', 'Name the channel and the hours.'),
-                    self::question('Can I cancel at any time?', 'Say yes or no first, then the detail.'),
+                PatternBlocks::block('container', ['element' => 'div', 'content' => [
+                    PatternBlocks::block('accordion', ['items' => [
+                    PatternBlocks::question(
+                        'How do I get started?',
+                        'Say what the first step is and how long it takes.',
+                    ),
+                    PatternBlocks::question(
+                        'Can I change plans later?',
+                        'Explain what happens to their data and their bill.',
+                    ),
+                    PatternBlocks::question('Is there a free trial?', 'State the length and whether a card is needed.'),
+                    PatternBlocks::question('How do I get support?', 'Name the channel and the hours.'),
+                    PatternBlocks::question('Can I cancel at any time?', 'Say yes or no first, then the detail.'),
                     ]])]], [
-                        'width' => ['base' => self::token('width.content')],
-                        'alignment' => ['self' => ['base' => self::choice('center')]],
-                ]),
+                        'width' => ['base' => PatternBlocks::token('width.content')],
+                        'alignment' => ['self' => ['base' => PatternBlocks::choice('center')]],
+                    ]),
             ])),
 
             self::section(
@@ -280,8 +311,8 @@ final class StarterPatterns
                 'Call to action',
                 'Call to action',
                 'A filled band with a line and two buttons, to close a page.',
-                self::band([
-                    self::cta(
+                PatternBlocks::band([
+                    PatternBlocks::cta(
                         'Ready to get started?',
                         'Join the teams already using Acme. It takes a minute to set up.',
                         'solid',
@@ -295,8 +326,8 @@ final class StarterPatterns
                 'Call to action, split',
                 'Call to action',
                 'The line on one side and the button on the other.',
-                self::band([
-                    self::cta(
+                PatternBlocks::band([
+                    PatternBlocks::cta(
                         'Have a project in mind?',
                         'Tell us about it and we will reply within a day.',
                         'outline',
@@ -311,24 +342,24 @@ final class StarterPatterns
                 'Our story',
                 'Content',
                 'Text on one side and three supporting cards on the other.',
-                self::band(
+                PatternBlocks::band(
                     [
-                        self::stack([
-                            self::heading('Our story', 'h2', 'start'),
-                            self::text(
+                        PatternBlocks::stack([
+                            PatternBlocks::heading('Our story', 'h2', 'start'),
+                            PatternBlocks::text(
                                 '<p>Tell the reader where you started and what you noticed that others had '
                                     . 'missed.</p><p>Then say what you believe, in a sentence someone could disagree '
                                     . 'with. It reads as conviction rather than copy.</p>',
                                 'start',
                             ),
                             ], 'start'),
-                        self::stack([
-                            self::card('compass', 'Our mission', 'What you are here to do, in one sentence.'),
-                            self::card('heart', 'Our values', 'How you behave when it costs you something.'),
-                            self::card('map-pin', 'Where we are', 'A city, a region, or “everywhere”.'),
+                        PatternBlocks::stack([
+                            PatternBlocks::card('compass', 'Our mission', 'What you are here to do, in one sentence.'),
+                            PatternBlocks::card('heart', 'Our values', 'How you behave when it costs you something.'),
+                            PatternBlocks::card('map-pin', 'Where we are', 'A city, a region, or “everywhere”.'),
                         ]),
                     ],
-                    self::splitAtLg()
+                    PatternBlocks::splitAtLg()
                 )
             ),
             self::section(
@@ -336,9 +367,9 @@ final class StarterPatterns
                 'Latest posts',
                 'Content',
                 'A heading and your three newest posts.',
-                self::band([
-                    self::header('Blog', 'Latest from the blog', null),
-                    self::block(
+                PatternBlocks::band([
+                    PatternBlocks::header('Blog', 'Latest from the blog', null),
+                    PatternBlocks::block(
                         'blog_posts',
                         ['type' => 'post', 'limit' => 3, 'order' => 'newest', 'columns' => '3', 'variant' => 'outline'],
                     ),
@@ -350,27 +381,27 @@ final class StarterPatterns
                 'Contact form',
                 'Contact',
                 'How to reach you on one side, a form on the other.',
-                self::band(
+                PatternBlocks::band(
                     [
-                        self::stack([
-                            self::heading('Get in touch', 'h2', 'start'),
-                            self::text(
+                        PatternBlocks::stack([
+                            PatternBlocks::heading('Get in touch', 'h2', 'start'),
+                            PatternBlocks::text(
                                 '<p>Say who will read the message and how soon they reply. People write more when they '
                                     . 'know someone is there.</p>',
                                 'start',
                                 'color.muted',
                             ),
-                            self::feature('mail', 'Email', 'hello@example.com', 'plain', 'horizontal'),
-                            self::feature('phone', 'Phone', '+1 555 010 0100', 'plain', 'horizontal'),
+                            PatternBlocks::feature('mail', 'Email', 'hello@example.com', 'plain', 'horizontal'),
+                            PatternBlocks::feature('phone', 'Phone', '+1 555 010 0100', 'plain', 'horizontal'),
                             ], 'start'),
-                        self::block('form', [
+                        PatternBlocks::block('form', [
                             'form_name' => 'Contact',
                             'delivery' => 'store_and_email',
                             'submit_label' => 'Send message',
                             'success_message' => 'Thank you. We will be in touch soon.',
                         ]),
                     ],
-                    self::splitAtLg()
+                    PatternBlocks::splitAtLg()
                 )
             ),
         ];
@@ -448,19 +479,19 @@ final class StarterPatterns
                 'header-announcement',
                 'Announcement bar',
                 'One short line above the header, on the accent colour.',
-                self::block('container', ['element' => 'div', 'content' => [
-                    self::text('<p><strong>New:</strong> a short announcement for every page.</p>', 'center'),
+                PatternBlocks::block('container', ['element' => 'div', 'content' => [
+                    PatternBlocks::text('<p><strong>New:</strong> a short announcement for every page.</p>', 'center'),
                 ]], [
                     'spacing' => ['padding' => [
-                        'top' => ['base' => self::token('spacing.xs')],
-                        'bottom' => ['base' => self::token('spacing.xs')],
+                        'top' => ['base' => PatternBlocks::token('spacing.xs')],
+                        'bottom' => ['base' => PatternBlocks::token('spacing.xs')],
                     ]],
                     'colors' => [
-                        'surface' => self::token('color.accent'),
-                        'text' => self::token('color.accent-contrast'),
+                        'surface' => PatternBlocks::token('color.accent'),
+                        'text' => PatternBlocks::token('color.accent-contrast'),
                     ],
-                    'radius' => self::token('radius.md'),
-                    'layout' => ['basis' => ['base' => self::choice('full')]],
+                    'radius' => PatternBlocks::token('radius.md'),
+                    'layout' => ['basis' => ['base' => PatternBlocks::choice('full')]],
                 ]),
             ),
             self::regionSection(
@@ -475,19 +506,23 @@ final class StarterPatterns
                 'footer-link-columns',
                 'Link columns',
                 'The logo and a line about the site, then three columns of links.',
-                self::block('container', ['element' => 'div', 'content' => [
-                    self::stack([self::logo(), self::text($tagline, 'start')]),
+                PatternBlocks::block('container', ['element' => 'div', 'content' => [
+                    PatternBlocks::stack([self::logo(), PatternBlocks::text($tagline, 'start')]),
                     self::links('Product', ['Features', 'Pricing', 'Changelog']),
                     self::links('Company', ['About', 'Blog', 'Contact']),
                     self::links('Resources', ['Help', 'Privacy', 'Terms']),
                 ]], ['layout' => [
-                    'display' => ['base' => self::choice('grid')],
-                    'columns' => ['base' => self::choice('1'), 'md' => self::choice('2'), 'lg' => self::choice('4')],
-                    'gap' => [
-                        'row' => ['base' => self::token('spacing.xl')],
-                        'column' => ['base' => self::token('spacing.xl')],
+                    'display' => ['base' => PatternBlocks::choice('grid')],
+                    'columns' => [
+                        'base' => PatternBlocks::choice('1'),
+                        'md' => PatternBlocks::choice('2'),
+                        'lg' => PatternBlocks::choice('4'),
                     ],
-                    'basis' => ['base' => self::choice('full')],
+                    'gap' => [
+                        'row' => ['base' => PatternBlocks::token('spacing.xl')],
+                        'column' => ['base' => PatternBlocks::token('spacing.xl')],
+                    ],
+                    'basis' => ['base' => PatternBlocks::choice('full')],
                 ]]),
             ),
             self::regionSection(
@@ -502,7 +537,7 @@ final class StarterPatterns
                 'footer-tagline-social',
                 'Tagline and social links',
                 'The logo, a line about the site and social links, centred.',
-                self::column([self::logo(), self::text($tagline, 'center'), self::social()]),
+                self::column([self::logo(), PatternBlocks::text($tagline, 'center'), self::social()]),
             ),
             self::regionSection(
                 'footer',
@@ -606,21 +641,21 @@ final class StarterPatterns
     private static function row(array $content, string $justify = 'between', bool $fill = true): array
     {
         $layout = [
-            'display' => ['base' => self::choice('flex')],
-            'direction' => ['base' => self::choice('row')],
-            'wrap' => ['base' => self::choice('wrap')],
-            'align_items' => ['base' => self::choice('center')],
+            'display' => ['base' => PatternBlocks::choice('flex')],
+            'direction' => ['base' => PatternBlocks::choice('row')],
+            'wrap' => ['base' => PatternBlocks::choice('wrap')],
+            'align_items' => ['base' => PatternBlocks::choice('center')],
             'gap' => [
-                'row' => ['base' => self::token('spacing.sm')],
-                'column' => ['base' => self::token('spacing.lg')],
+                'row' => ['base' => PatternBlocks::token('spacing.sm')],
+                'column' => ['base' => PatternBlocks::token('spacing.lg')],
             ],
         ];
         if ($fill) {
-            $layout['basis'] = ['base' => self::choice('full')];
+            $layout['basis'] = ['base' => PatternBlocks::choice('full')];
         }
-        return self::block('container', ['element' => 'div', 'content' => $content], [
+        return PatternBlocks::block('container', ['element' => 'div', 'content' => $content], [
             'layout' => $layout,
-            'alignment' => ['content' => ['base' => self::choice($justify)]],
+            'alignment' => ['content' => ['base' => PatternBlocks::choice($justify)]],
         ]);
     }
 
@@ -632,32 +667,32 @@ final class StarterPatterns
      */
     private static function column(array $content): array
     {
-        return self::block('container', ['element' => 'div', 'content' => $content], ['layout' => [
-            'display' => ['base' => self::choice('flex')],
-            'direction' => ['base' => self::choice('column')],
-            'align_items' => ['base' => self::choice('center')],
-            'gap' => ['row' => ['base' => self::token('spacing.sm')]],
-            'basis' => ['base' => self::choice('full')],
+        return PatternBlocks::block('container', ['element' => 'div', 'content' => $content], ['layout' => [
+            'display' => ['base' => PatternBlocks::choice('flex')],
+            'direction' => ['base' => PatternBlocks::choice('column')],
+            'align_items' => ['base' => PatternBlocks::choice('center')],
+            'gap' => ['row' => ['base' => PatternBlocks::token('spacing.sm')]],
+            'basis' => ['base' => PatternBlocks::choice('full')],
         ]]);
     }
 
     /** @return array<string,mixed> */
     private static function logo(): array
     {
-        return self::block('logo', ['size' => 'medium', 'link_home' => true]);
+        return PatternBlocks::block('logo', ['size' => 'medium', 'link_home' => true]);
     }
 
     /** The main menu — the one a fresh site is seeded with. */
     /** @return array<string,mixed> */
     private static function menu(): array
     {
-        return self::block('navigation', ['menu' => 'main']);
+        return PatternBlocks::block('navigation', ['menu' => 'main']);
     }
 
     /** @return array<string,mixed> */
     private static function regionButton(string $label): array
     {
-        return self::block(
+        return PatternBlocks::block(
             'button',
             ['label' => $label, 'url' => '#', 'variant' => 'solid', 'color' => 'primary', 'size' => 'md'],
         );
@@ -669,7 +704,7 @@ final class StarterPatterns
      */
     private static function links(string $title, array $labels): array
     {
-        return self::block('links', [
+        return PatternBlocks::block('links', [
             'title' => $title,
             'items' => array_map(static fn (string $label): array => ['label' => $label, 'url' => '#'], $labels),
         ]);
@@ -679,304 +714,19 @@ final class StarterPatterns
     /** @return array<string,mixed> */
     private static function copyright(): array
     {
-        return self::block('shortcode', ['name' => 'copyright', 'params' => []]);
+        return PatternBlocks::block('shortcode', ['name' => 'copyright', 'params' => []]);
     }
 
     /** @return array<string,mixed> */
     private static function social(): array
     {
         $link = static fn (string $brand, string $label, string $url): array
-            => self::block('social_link', ['icon' => 'brand:' . $brand, 'url' => $url, 'label' => $label]);
-        return self::block('social_links', ['items' => [
+            => PatternBlocks::block('social_link', ['icon' => 'brand:' . $brand, 'url' => $url, 'label' => $label]);
+        return PatternBlocks::block('social_links', ['items' => [
             $link('x', 'X', 'https://x.com'),
             $link('instagram', 'Instagram', 'https://instagram.com'),
             $link('github', 'GitHub', 'https://github.com'),
             $link('youtube', 'YouTube', 'https://youtube.com'),
         ]]);
-    }
-
-    /**
-     * @param array<string,mixed> $data
-     * @param array<string,mixed> $style
-     * @return array<string,mixed>
-     */
-    private static function block(string $type, array $data, array $style = []): array
-    {
-        return ['type' => $type, 'data' => $data, 'settings' => $style === [] ? [] : ['style' => $style]];
-    }
-
-    /** @return array{type:string,value:string} */
-    private static function token(string $value): array
-    {
-        return ['type' => 'token', 'value' => $value];
-    }
-
-    /** @return array{type:string,value:string} */
-    private static function choice(string $value): array
-    {
-        return ['type' => 'choice', 'value' => $value];
-    }
-
-    /**
-     * A section band, as the structure picker's Section preset builds it: vertical padding, the
-     * container width, a flex column with a gap.
-     *
-     * @param list<array<string,mixed>> $content
-     * @param array<string,mixed> $layout layout declarations over the band's own
-     * @return array<string,mixed>
-     */
-    private static function band(array $content, array $layout = [], ?string $surface = null): array
-    {
-        $style = [
-            'spacing' => ['padding' => [
-                'top' => ['base' => self::token('spacing.3xl')],
-                'bottom' => ['base' => self::token('spacing.3xl')],
-            ]],
-            'layout' => array_replace([
-                'content_width' => ['base' => self::token('width.container')],
-                'display' => ['base' => self::choice('flex')],
-                'direction' => ['base' => self::choice('column')],
-                'gap' => ['row' => ['base' => self::token('spacing.xl')]],
-            ], $layout),
-        ];
-        if ($surface !== null) {
-            $style['colors'] = ['surface' => self::token($surface)];
-        }
-        return self::block('container', ['element' => 'section', 'content' => $content], $style);
-    }
-
-    /** Two tracks from `lg` up, a column below it (the Section split preset's arrangement). */
-    /** @return array<string,mixed> */
-    private static function splitAtLg(): array
-    {
-        return [
-            'display' => ['base' => self::choice('flex'), 'lg' => self::choice('grid')],
-            'columns' => ['lg' => self::choice('2')],
-            'align_items' => ['lg' => self::choice('center')],
-            'gap' => [
-                'row' => ['base' => self::token('spacing.xl')],
-                'column' => ['lg' => self::token('spacing.2xl')],
-            ],
-        ];
-    }
-
-    /**
-     * @param list<array<string,mixed>> $content
-     * @return array<string,mixed>
-     */
-    private static function stack(array $content, ?string $align = null): array
-    {
-        $layout = [
-            'display' => ['base' => self::choice('flex')],
-            'direction' => ['base' => self::choice('column')],
-            'gap' => ['row' => ['base' => self::token('spacing.md')]],
-        ];
-        if ($align !== null) {
-            $layout['align_items'] = ['base' => self::choice($align)];
-        }
-        return self::block('container', ['element' => 'div', 'content' => $content], ['layout' => $layout]);
-    }
-
-    /**
-     * One column on a phone, `$md` from md, `$columns` from lg.
-     *
-     * @param list<array<string,mixed>> $content
-     * @return array<string,mixed>
-     */
-    private static function grid(string $columns, array $content, string $md = '2'): array
-    {
-        return self::block('container', ['element' => 'div', 'content' => $content], ['layout' => [
-            'display' => ['base' => self::choice('grid')],
-            'columns' => ['base' => self::choice('1'), 'md' => self::choice($md), 'lg' => self::choice($columns)],
-            'gap' => [
-                'row' => ['base' => self::token('spacing.lg')],
-                'column' => ['base' => self::token('spacing.lg')],
-            ],
-        ]]);
-    }
-
-    /** The section header group: an eyebrow, a heading and an optional lead, centred. */
-    /** @return array<string,mixed> */
-    private static function header(string $eyebrow, string $title, ?string $lead): array
-    {
-        $content = [
-            self::block('rich_text', ['body' => '<p>' . $eyebrow . '</p>'], [
-                'colors' => ['text' => self::token('color.accent')],
-                'typography' => ['weight' => ['base' => self::choice('semibold')]],
-                'alignment' => ['text' => ['base' => self::choice('center')]],
-            ]),
-            self::heading($title, 'h2', 'center'),
-        ];
-        if ($lead !== null) {
-            $content[] = self::block('rich_text', ['body' => '<p>' . $lead . '</p>'], [
-                'colors' => ['text' => self::token('color.muted')],
-                'typography' => ['size' => ['base' => self::token('typography.size.lg')]],
-                'width' => ['base' => self::token('width.content')],
-                'alignment' => [
-                    'text' => ['base' => self::choice('center')],
-                    'self' => ['base' => self::choice('center')],
-                ],
-            ]);
-        }
-        return self::block('container', ['element' => 'div', 'content' => $content], ['layout' => [
-            'display' => ['base' => self::choice('flex')],
-            'direction' => ['base' => self::choice('column')],
-            'gap' => ['row' => ['base' => self::token('spacing.sm')]],
-        ]]);
-    }
-
-    /** @return array<string,mixed> */
-    private static function heading(string $text, string $level, string $align): array
-    {
-        return self::block('heading', ['text' => $text, 'level' => $level], [
-            'alignment' => ['text' => ['base' => self::choice($align)]],
-        ]);
-    }
-
-    /** @return array<string,mixed> */
-    private static function text(string $html, string $align, ?string $color = null): array
-    {
-        $style = ['alignment' => ['text' => ['base' => self::choice($align)]]];
-        if ($color !== null) {
-            $style['colors'] = ['text' => self::token($color)];
-        }
-        return self::block('rich_text', ['body' => $html], $style);
-    }
-
-    /** @return array<string,mixed> */
-    private static function button(string $label, string $variant): array
-    {
-        return self::block(
-            'button',
-            ['label' => $label, 'url' => '#', 'variant' => $variant, 'color' => 'primary', 'size' => 'lg'],
-        );
-    }
-
-    /**
-     * @param array<string,mixed> $data
-     * @param list<string> $buttons the first is solid, the rest outlined
-     * @return array<string,mixed>
-     */
-    private static function hero(array $data, array $buttons): array
-    {
-        $links = [];
-        foreach ($buttons as $i => $label) {
-            $links[] = self::button($label, $i === 0 ? 'solid' : 'outline');
-        }
-        return self::block('hero', $data + ['links' => $links]);
-    }
-
-    /** @return array<string,mixed> */
-    private static function feature(
-        string $icon,
-        string $title,
-        string $description,
-        string $variant = 'outline',
-        string $orientation = 'vertical',
-    ): array {
-        return self::block('feature', compact('icon', 'title', 'description', 'variant', 'orientation'));
-    }
-
-    /** @return array<string,mixed> */
-    private static function step(string $number, string $title, string $description): array
-    {
-        return self::block('feature', [
-            'title' => $title,
-            'description' => $description,
-            'marker' => 'number',
-            'number' => $number,
-            'marker_background' => 'accent',
-            'marker_color' => 'accent-contrast',
-            'variant' => 'plain',
-            'orientation' => 'vertical',
-        ]);
-    }
-
-    /** @return array<string,mixed> */
-    private static function stat(string $figure, string $label): array
-    {
-        return self::stack([
-            self::block('heading', ['text' => $figure, 'level' => 'h3'], [
-                'alignment' => ['text' => ['base' => self::choice('center')]],
-                'typography' => ['size' => ['base' => self::token('typography.size.2xl')]],
-                'colors' => ['text' => self::token('color.accent')],
-            ]),
-            self::text('<p>' . $label . '</p>', 'center', 'color.muted'),
-        ]);
-    }
-
-    /** @return array<string,mixed> */
-    private static function quote(string $quote, string $name, string $role): array
-    {
-        return self::block('card', [
-            'variant' => 'soft',
-            'orientation' => 'vertical',
-            'description' => $quote,
-            'body' => [
-                self::block('rich_text', ['body' => '<p><strong>' . $name . '</strong><br />' . $role . '</p>']),
-            ],
-        ]);
-    }
-
-    /** @return array<string,mixed> */
-    private static function card(string $icon, string $title, string $description): array
-    {
-        return self::block('card', [
-            'icon' => $icon,
-            'title' => $title,
-            'description' => $description,
-            'variant' => 'outline',
-            'orientation' => 'horizontal',
-            'body' => [],
-        ]);
-    }
-
-    /** @return array<string,mixed> */
-    private static function plan(
-        string $title,
-        string $description,
-        string $price,
-        string $features,
-        string $button,
-        bool $highlight,
-    ): array {
-        return self::block('pricing_plan', [
-            'title' => $title,
-            'description' => $description,
-            'price' => $price,
-            'billing_cycle' => '/month',
-            'features' => $features,
-            'button_label' => $button,
-            'button_url' => '#',
-            'button_variant' => $highlight ? 'solid' : 'outline',
-            'variant' => 'outline',
-            'highlight' => $highlight,
-            'orientation' => 'vertical',
-        ] + ($highlight ? ['badge' => 'Most popular'] : []));
-    }
-
-    /** @return array<string,mixed> */
-    private static function question(string $question, string $answer): array
-    {
-        return self::block('accordion_item', ['question' => $question, 'answer' => '<p>' . $answer . '</p>']);
-    }
-
-    /**
-     * @param list<string> $buttons
-     * @return array<string,mixed>
-     */
-    private static function cta(
-        string $title,
-        string $description,
-        string $variant,
-        string $orientation,
-        array $buttons,
-    ): array {
-        $links = [];
-        foreach ($buttons as $i => $label) {
-            // On a filled band the first button inverts to stay visible; the theme handles it.
-            $links[] = self::button($label, $i === 0 ? 'solid' : 'outline');
-        }
-        return self::block('cta', compact('title', 'description', 'variant', 'orientation', 'links'));
     }
 }
