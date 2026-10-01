@@ -17,6 +17,7 @@ use Thallo\Core\Content\Console\ConvertSettingsCommand;
 use Thallo\Core\Content\Style\Conversion\DecisionsFile;
 use Thallo\Core\Content\Style\Conversion\SettingsConversion;
 use Thallo\Contracts\Style\StyleCompileFailed;
+use Thallo\Core\Setup\DefaultLanguage;
 use Thallo\Core\Setup\InstallRoleGrants;
 use Thallo\Core\Setup\SetupService;
 use Thallo\Core\Setup\Doctor\Check;
@@ -153,6 +154,17 @@ final class ProvisionCommand extends BaseCommand
             ));
         } catch (\Throwable $e) {
             $this->warning('Install role grants skipped (' . $e->getMessage() . ').');
+        }
+
+        // The default language: a real row in Settings › Languages where none is the default yet
+        // (an install, or an upgrade from when `en` was only a fallback). Idempotent.
+        try {
+            $language = $this->getContainer()->get(DefaultLanguage::class)->ensure();
+            if ($language !== null) {
+                $this->line("Default language: {$language}.");
+            }
+        } catch (\Throwable $e) {
+            $this->warning('Default language skipped (' . $e->getMessage() . ').');
         }
 
         // Starter block types: seed any the library has that this instance lacks (a starter

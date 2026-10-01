@@ -15,6 +15,7 @@ use Thallo\Core\Capabilities\ExtensionCapabilityAvailabilityResolver;
 use Thallo\Core\Payments\Tenancy\PaymentAdoptionContributor;
 use Thallo\Core\Payments\Tenancy\PaymentAdoptionGateWrapper;
 use Thallo\Core\Payments\Tenancy\ThalloPayviaTenantResolver;
+use Thallo\Core\Setup\DefaultLanguage;
 use Thallo\Core\Setup\InstallRoleGrants;
 use Thallo\Core\Setup\SetupService;
 use Thallo\Core\Content\Delivery\DeliveryRepository;
@@ -763,6 +764,11 @@ final class CoreServiceProvider extends ServiceProvider
             ],
             InstallRoleGrants::class => [
                 'class'    => InstallRoleGrants::class,
+                'shared'   => true,
+                'autowire' => true,
+            ],
+            DefaultLanguage::class => [
+                'class'    => DefaultLanguage::class,
                 'shared'   => true,
                 'autowire' => true,
             ],
