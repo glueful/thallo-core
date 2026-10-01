@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Thallo\Core\Setup;
 
+use Thallo\Core\Capabilities\CapabilityStateStore;
 use Thallo\Core\Content\Starter\Kinds\BlockTypeKind;
 use Thallo\Core\Content\Starter\Kinds\ContentTypeKind;
 use Thallo\Core\Content\Starter\Kinds\RegionKind;
@@ -27,6 +28,13 @@ use Thallo\Tenancy\Tenant\SingleStoreTenant;
  */
 final class SetupService
 {
+    /**
+     * Off on a fresh install, switched on in Settings › Capabilities when a site wants them:
+     * Collections is a developer's data API, and Subscriptions bills workspaces, which a new site
+     * does not have. Written as switches, so a site upgraded from before keeps what it had.
+     */
+    private const OFF_ON_FIRST_INSTALL = ['thallo.collections', 'thallo.subscriptions'];
+
     public function __construct(
         private readonly Connection $db,
         private readonly UserRepository $users,
@@ -38,6 +46,7 @@ final class SetupService
         private readonly SingleStoreTenant $singleStore,
         private readonly InstallRoleGrants $roleGrants,
         private readonly BlockTypeKind $blockTypes,
+        private readonly CapabilityStateStore $capabilities,
     ) {
     }
 
@@ -64,7 +73,8 @@ final class SetupService
      *      /post/categories/{slug} archives work) content types, and writes
      *      the `listing_types` setting (post) so listings/archives resolve —
      *      a fresh instance is immediately editable AND renderable.
-     *   6. Writes the `installed` marker to settings.
+     *   6. Switches Collections and Subscriptions off ({@see self::OFF_ON_FIRST_INSTALL}).
+     *   7. Writes the `installed` marker to settings.
      *
      * @throws \RuntimeException  When the instance is already installed.
      * @throws \InvalidArgumentException When user creation fails validation.
@@ -129,6 +139,10 @@ final class SetupService
             // preview bar's Edit/Design links work with zero configuration.
             if (is_string($adminUrl) && preg_match('#\Ahttps?://#i', $adminUrl) === 1) {
                 $this->put('admin_url', rtrim($adminUrl, '/'));
+            }
+
+            foreach (self::OFF_ON_FIRST_INSTALL as $capability) {
+                $this->capabilities->put($capability, false);
             }
 
             $this->put('installed', '1');
