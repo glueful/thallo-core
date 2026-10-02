@@ -18,6 +18,7 @@ use Thallo\Core\Content\Style\Conversion\DecisionsFile;
 use Thallo\Core\Content\Style\Conversion\SettingsConversion;
 use Thallo\Contracts\Style\StyleCompileFailed;
 use Thallo\Core\Setup\DefaultLanguage;
+use Thallo\Core\Setup\FeatureProvisioning;
 use Thallo\Core\Setup\InstallRoleGrants;
 use Thallo\Core\Setup\SetupService;
 use Thallo\Core\Setup\Doctor\Check;
@@ -156,6 +157,18 @@ final class ProvisionCommand extends BaseCommand
             $this->warning('Install role grants skipped (' . $e->getMessage() . ').');
         }
 
+        // A feature left preparing (a deploy-time `--prepare`, an interrupted turn-on) finishes in
+        // a child process: this process booted before any engine step, so it never verifies one.
+        try {
+            $exit = $this->getContainer()->get(FeatureProvisioning::class)
+                ->resumeOpenActivations(fn (string $line) => $this->line($line));
+            if ($exit !== null && $exit !== 0) {
+                $this->warning('A feature did not finish turning on — see `php glueful thallo:features:status`.');
+            }
+        } catch (\Throwable $e) {
+            $this->warning('Features not resumed (' . $e->getMessage() . ').');
+        }
+
         // The default language: a real row in Settings › Languages where none is the default yet
         // (an install, or an upgrade from when `en` was only a fallback). Idempotent.
         try {
@@ -204,6 +217,14 @@ final class ProvisionCommand extends BaseCommand
             $this->warning(
                 'Extension cache not rebuilt (' . $e->getMessage() . ') — run `php glueful extensions:cache`.',
             );
+        }
+
+        // A package Thallo requires that is missing from the enabled list is put back.
+        try {
+            $this->getContainer()->get(FeatureProvisioning::class)
+                ->repairRequiredProviders(fn (string $line) => $this->line($line));
+        } catch (\Throwable $e) {
+            $this->warning('Required packages not checked (' . $e->getMessage() . ').');
         }
 
         // The admin bundle ships in core/resources/admin and is served from there by PHP; a copy

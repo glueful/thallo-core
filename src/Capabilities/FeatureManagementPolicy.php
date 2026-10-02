@@ -76,6 +76,18 @@ final class FeatureManagementPolicy
         return $capability === self::TENANCY_CAPABILITY ? 'workspaces' : 'simple';
     }
 
+    /** The feature's name for messages ("Commerce"), or null when it has no activation flow. */
+    public function labelOf(string $capability): ?string
+    {
+        return self::ENGINES[$capability]['label'] ?? null;
+    }
+
+    /** @return array<string, class-string> package => provider, for the packages Thallo can't run without */
+    public function requiredProviders(): array
+    {
+        return self::REQUIRED_PACKAGES;
+    }
+
     /** @return array{package: string, provider: class-string}|null */
     public function engineOf(string $capability): ?array
     {

@@ -13,7 +13,9 @@ use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 use Thallo\Contracts\Capability\CapabilityRegistry;
+use Thallo\Core\Capabilities\Activation\ActivationStore;
 use Thallo\Core\Capabilities\CapabilityStateStore;
+use Thallo\Core\Capabilities\FeatureManagementPolicy;
 
 /**
  * The capability switchboard from a shell, as Extensions › Capabilities shows it: each capability
@@ -71,6 +73,17 @@ final class CapabilitiesCommand extends BaseCommand
             $this->error("No registered capability named {$id}. Run thallo:capabilities to list them.");
             return self::FAILURE;
         }
+        // A feature with an activation flow turns on through it (engine, blocks, grants, then the
+        // switch); turning it off supersedes any outstanding runner and stores it off in one write.
+        $policy = $this->getService(FeatureManagementPolicy::class);
+        $label = $policy->labelOf($id);
+        if ($label !== null && $enabled) {
+            $this->error(
+                "Turn {$label} on with `php glueful thallo:features:enable {$id}`: it prepares the store first."
+            );
+            return self::FAILURE;
+        }
+
         $availability = $registry->availability($id);
         if ($enabled && !$availability->available) {
             $this->error("Cannot enable {$id}: " . ($availability->reason ?? 'its owning engine is unavailable.'));
@@ -81,7 +94,11 @@ final class CapabilitiesCommand extends BaseCommand
         }
 
         $before = $registry->isEnabled($id);
-        $this->getService(CapabilityStateStore::class)->put($id, $enabled);
+        if ($label !== null) {
+            $this->getService(ActivationStore::class)->supersede($id, 'cli');
+        } else {
+            $this->getService(CapabilityStateStore::class)->put($id, $enabled);
+        }
         if (($enabled && $availability->available) !== $before) {
             (new RouteCache($this->getContext()))->clear();
             RouteManifest::reset();

@@ -2631,6 +2631,31 @@ final class CoreServiceProvider extends ServiceProvider
                 'shared' => true,
                 'autowire' => true,
             ],
+            \Thallo\Core\Capabilities\Console\FeaturesEnableCommand::class => [
+                'class' => \Thallo\Core\Capabilities\Console\FeaturesEnableCommand::class,
+                'shared' => true,
+                'autowire' => true,
+            ],
+            \Thallo\Core\Capabilities\Console\FeaturesResumeCommand::class => [
+                'class' => \Thallo\Core\Capabilities\Console\FeaturesResumeCommand::class,
+                'shared' => true,
+                'autowire' => true,
+            ],
+            \Thallo\Core\Capabilities\Console\FeaturesStatusCommand::class => [
+                'class' => \Thallo\Core\Capabilities\Console\FeaturesStatusCommand::class,
+                'shared' => true,
+                'autowire' => true,
+            ],
+            \Thallo\Core\Capabilities\Console\FreshProcess::class => [
+                'class' => \Thallo\Core\Capabilities\Console\FreshProcess::class,
+                'shared' => true,
+                'autowire' => true,
+            ],
+            \Thallo\Core\Setup\FeatureProvisioning::class => [
+                'class' => \Thallo\Core\Setup\FeatureProvisioning::class,
+                'shared' => true,
+                'autowire' => true,
+            ],
             PolicyManifestCommand::class => [
                 'class' => PolicyManifestCommand::class,
                 'shared' => true,
@@ -2809,9 +2834,26 @@ final class CoreServiceProvider extends ServiceProvider
     public static function makeEngineActivation(
         ContainerInterface $container,
     ): \Thallo\Core\Capabilities\Activation\EngineActivation {
+        $context = $container->get(ApplicationContext::class);
+        $config = $writable = $writeCache = null;
+        // Test seams for the CLI tests' `php glueful` processes, honoured only under APP_ENV=testing:
+        // a temp enabled list, read-only application files, and no extension cache rebuild.
+        if ($context->getEnvironment() === 'testing') {
+            $config = getenv('THALLO_TEST_EXTENSIONS_CONFIG') ?: null;
+            if (getenv('THALLO_TEST_APP_FILES_READONLY') === '1') {
+                $writable = static fn (): bool => false;
+            }
+            if (getenv('THALLO_TEST_SKIP_CACHE_REBUILD') === '1') {
+                $writeCache = static function (): void {
+                };
+            }
+        }
         return new \Thallo\Core\Capabilities\Activation\EngineActivation(
-            $container->get(ApplicationContext::class),
+            $context,
             $container->get(\Thallo\Contracts\Extensions\ExtensionStateCoordinator::class),
+            $config,
+            $writable,
+            $writeCache,
         );
     }
 
@@ -3044,6 +3086,9 @@ final class CoreServiceProvider extends ServiceProvider
             \Thallo\Core\Content\Console\ListBlockTypesCommand::class,
             \Thallo\Core\Content\Console\PruneFormSubmissionsCommand::class,
             \Thallo\Core\Capabilities\Console\CapabilitiesCommand::class,
+            \Thallo\Core\Capabilities\Console\FeaturesEnableCommand::class,
+            \Thallo\Core\Capabilities\Console\FeaturesResumeCommand::class,
+            \Thallo\Core\Capabilities\Console\FeaturesStatusCommand::class,
             \Thallo\Core\Content\Console\DocsSetupCommand::class,
             PolicyManifestCommand::class,
             SeedBlockTypesCommand::class,

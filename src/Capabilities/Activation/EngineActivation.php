@@ -52,7 +52,7 @@ final class EngineActivation
         }
 
         return $this->lock->within(function () use ($provider): array {
-            $already = $this->isEnabled($provider);
+            $already = $this->isListed($provider);
             if (!$already) {
                 (new ExtensionStateWriter())->enable($this->enabledListPath(), $provider);
             }
@@ -65,10 +65,26 @@ final class EngineActivation
         });
     }
 
+    /**
+     * Puts a provider back in the enabled list and rebuilds the cache, under the lock (provision's
+     * repair of a required provider). False when it was already listed.
+     */
+    public function ensureListed(string $provider): bool
+    {
+        return $this->lock->within(function () use ($provider): bool {
+            if ($this->isListed($provider)) {
+                return false;
+            }
+            (new ExtensionStateWriter())->enable($this->enabledListPath(), $provider);
+            $this->rebuildCache();
+            return true;
+        });
+    }
+
     /** Listed in the enabled list and its schema ready: nothing for the engine step to do. */
     public function isPrepared(string $package, string $provider): bool
     {
-        if (!$this->isEnabled($provider)) {
+        if (!$this->isListed($provider)) {
             return false;
         }
         foreach (app($this->context, SchemaReadiness::class)->forPackage($package) as $result) {
@@ -87,7 +103,8 @@ final class EngineActivation
         return app($this->context, HostCapability::class)->forToggle() === null;
     }
 
-    private function isEnabled(string $provider): bool
+    /** In the enabled list as it is now (the seam's file in tests). */
+    public function isListed(string $provider): bool
     {
         if ($this->configPath !== null) {
             $config = require $this->configPath;
