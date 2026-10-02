@@ -135,18 +135,38 @@ final class ActivationStore
         });
     }
 
-    public function failStep(ActivationLease $lease, string $step, string $error, ?string $remedy): ActivationRecord
-    {
-        return $this->withinFenced($lease, function () use ($lease, $step, $error, $remedy): ActivationRecord {
+    /**
+     * Records a step failed (the operation stays open, resumable), merging $resultPatch into the
+     * result.
+     *
+     * @param array<string, mixed> $resultPatch
+     */
+    public function failStep(
+        ActivationLease $lease,
+        string $step,
+        string $error,
+        ?string $remedy,
+        array $resultPatch = [],
+    ): ActivationRecord {
+        $record = function () use ($lease, $step, $error, $remedy, $resultPatch): ActivationRecord {
             $this->db->getPDO()->prepare(
                 'UPDATE capability_activations
-                    SET status = ?, failed_step = ?, error = ?, remedy = ?, updated_at = NOW()
+                    SET status = ?, failed_step = ?, error = ?, remedy = ?, result = result || ?::jsonb,
+                        updated_at = NOW()
                   WHERE capability = ?'
-            )->execute([ActivationStatus::FAILED, $step, $error, $remedy, $lease->capability]);
+            )->execute([
+                ActivationStatus::FAILED,
+                $step,
+                $error,
+                $remedy,
+                (string) json_encode((object) $resultPatch),
+                $lease->capability,
+            ]);
             $detail = ['step' => $step, 'error' => $error];
             $this->event($lease->capability, $lease->generation, 'step_failed', $detail, '');
             return $this->mustFind($lease->capability);
-        });
+        };
+        return $this->withinFenced($lease, $record);
     }
 
     /** Records a workspace's readiness (ready|failed), or drops it (null). Fenced. */

@@ -2379,6 +2379,14 @@ final class CoreServiceProvider extends ServiceProvider
                 'shared' => true,
                 'autowire' => true,
             ],
+            \Thallo\Core\Capabilities\Activation\EngineActivation::class => [
+                'factory' => [self::class, 'makeEngineActivation'],
+                'shared' => true,
+            ],
+            \Thallo\Core\Capabilities\Activation\ActivationRunner::class => [
+                'factory' => [self::class, 'makeActivationRunner'],
+                'shared' => true,
+            ],
             \Thallo\Contracts\Extensions\ExtensionStateCoordinator::class => [
                 'class' => \Thallo\Core\Capabilities\Activation\ExtensionStateLock::class,
                 'shared' => true,
@@ -2790,6 +2798,29 @@ final class CoreServiceProvider extends ServiceProvider
             [],
             new ExtensionCapabilityAvailabilityResolver($context),
             static fn (string $id): ?bool => $switchboard->explicitFrom($snapshot->rows, $id),
+        );
+    }
+
+    public static function makeEngineActivation(
+        ContainerInterface $container,
+    ): \Thallo\Core\Capabilities\Activation\EngineActivation {
+        return new \Thallo\Core\Capabilities\Activation\EngineActivation(
+            $container->get(ApplicationContext::class),
+            $container->get(\Thallo\Contracts\Extensions\ExtensionStateCoordinator::class),
+        );
+    }
+
+    public static function makeActivationRunner(
+        ContainerInterface $container,
+    ): \Thallo\Core\Capabilities\Activation\ActivationRunner {
+        return new \Thallo\Core\Capabilities\Activation\ActivationRunner(
+            $container->get(\Thallo\Core\Capabilities\Activation\ActivationStore::class),
+            $container->get(CapabilityStateStore::class),
+            $container->get(\Thallo\Core\Capabilities\FeatureManagementPolicy::class),
+            $container->get(\Thallo\Core\Capabilities\Activation\CapabilityBlockSeeder::class),
+            $container->get(\Thallo\Core\Setup\InstallRoleGrants::class),
+            $container->get(\Thallo\Core\Capabilities\Activation\EngineActivation::class),
+            $container,
         );
     }
 
