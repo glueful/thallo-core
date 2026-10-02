@@ -86,13 +86,10 @@ trait ContinuesActivations
         $blocks = (int) ($record->result['blocks_created'] ?? 0);
         $grants = (array) ($record->result['grants'] ?? []);
         $granted = array_sum(array_map('intval', $grants));
-        return sprintf(
-            '%s is on. Added %d %s; granted %d new %s to the install roles.',
-            $label,
-            $blocks,
-            $blocks === 1 ? 'block' : 'blocks',
-            $granted,
-            $granted === 1 ? 'permission' : 'permissions',
-        );
+        $summary = sprintf('%s is on. Added %d %s', $label, $blocks, $blocks === 1 ? 'block' : 'blocks');
+        if ($granted > 0) {
+            $summary .= sprintf(' and granted %d new %s', $granted, $granted === 1 ? 'permission' : 'permissions');
+        }
+        return $summary . '.';
     }
 }
