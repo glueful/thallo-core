@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Thallo\Core\Capabilities;
 
 use Glueful\Bootstrap\ApplicationContext;
+use Glueful\Database\Connection;
 use Thallo\Contracts\Settings\SystemChannel;
+use Thallo\Tenancy\System\SystemFlags;
 
 /**
  * The ONE system-scoped capability switchboard (spec B3): requested state lives in the unscoped
@@ -31,6 +33,28 @@ final class CapabilityStateStore
     ) {
     }
 
+    /** The existing read rules (canonical key → legacy search row → config map) over given rows. */
+    public function explicitFrom(array $rows, string $id): ?bool
+    {
+        $raw = $rows[self::PREFIX . $id . '.enabled'] ?? null;
+        if ($raw !== null) {
+            return $this->decode((string) $raw);
+        }
+        if ($id === self::SEARCH_ID && isset($rows[self::LEGACY_SEARCH_KEY])) {
+            return $this->decode((string) $rows[self::LEGACY_SEARCH_KEY]);
+        }
+        return $this->fromConfig($id);
+    }
+
+    /** A direct read, never memoised: what the switchboard says now, not when this request booted. */
+    public function fresh(string $id): ?bool
+    {
+        if ($this->system instanceof SystemFlags) {
+            $this->system->clearCache();
+        }
+        return $this->explicit($id);
+    }
+
     public function requested(string $id): bool
     {
         return $this->explicit($id) ?? true;
@@ -53,6 +77,11 @@ final class CapabilityStateStore
         } catch (\Throwable) {
             // Pre-provision boot (system table absent, DB unreachable): the config map stands.
         }
+        return $this->fromConfig($id);
+    }
+
+    private function fromConfig(string $id): ?bool
+    {
         $map = (array) config($this->context, 'thallo.capabilities', []);
         if (!array_key_exists($id, $map)) {
             return null;
@@ -60,20 +89,31 @@ final class CapabilityStateStore
         return $map[$id] === true;
     }
 
+    /**
+     * Writes the switch and advances the capability-state version in one transaction (joining the
+     * caller's, when there is one): a state change and the version that keys route tables never
+     * diverge, and a crash before commit moves neither.
+     */
     public function put(string $id, bool $enabled): void
     {
-        $key = self::PREFIX . $id . '.enabled';
-        $value = $enabled ? 'true' : 'false';
-        $this->system->put($key, $value);
-        if ($this->system->get($key) !== $value) {
-            throw new \RuntimeException(
-                "Capability switchboard write for {$id} did not persist — refusing to report success."
-            );
-        }
-        if ($id === self::SEARCH_ID) {
-            // Cutover: the canonical key now answers, so the legacy row must stop existing.
-            $this->system->forget(self::LEGACY_SEARCH_KEY);
-        }
+        $container = $this->context->getContainer();
+        $db = $container->get(Connection::class);
+        $version = $container->get(CapabilityStateVersion::class);
+        $db->transaction(function () use ($id, $enabled, $version): void {
+            $key = self::PREFIX . $id . '.enabled';
+            $value = $enabled ? 'true' : 'false';
+            $this->system->put($key, $value);
+            if ($this->system->get($key) !== $value) {
+                throw new \RuntimeException(
+                    "Capability switchboard write for {$id} did not persist — refusing to report success."
+                );
+            }
+            if ($id === self::SEARCH_ID) {
+                // Cutover: the canonical key now answers, so the legacy row must stop existing.
+                $this->system->forget(self::LEGACY_SEARCH_KEY);
+            }
+            $version->advance();
+        });
     }
 
     private function decode(string $raw): bool

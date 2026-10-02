@@ -2364,6 +2364,17 @@ final class CoreServiceProvider extends ServiceProvider
                 'shared' => true,
                 'autowire' => true,
             ],
+            \Thallo\Core\Capabilities\CapabilityStateVersion::class => [
+                'class' => \Thallo\Core\Capabilities\CapabilityStateVersion::class,
+                'shared' => true,
+                'autowire' => true,
+            ],
+            // One snapshot of the switches and the state version per container (context): the
+            // registry decides from it, and the route-signature input is its version.
+            \Thallo\Core\Capabilities\CapabilityStateSnapshot::class => [
+                'factory' => [self::class, 'makeCapabilityStateSnapshot'],
+                'shared' => true,
+            ],
             // The update notice (decision 11): Packagist's public metadata behind the ReleaseFeed
             // seam, the checker wired from config and Composer's installed-version registry.
             ReleaseFeed::class => [
@@ -2746,11 +2757,21 @@ final class CoreServiceProvider extends ServiceProvider
         // pre-provision boots, so this factory stays safe during CLI boots before the system
         // table exists.
         $switchboard = $container->get(CapabilityStateStore::class);
+        $snapshot = $container->get(\Thallo\Core\Capabilities\CapabilityStateSnapshot::class);
 
         return new DefaultCapabilityRegistry(
             [],
             new ExtensionCapabilityAvailabilityResolver($context),
-            static fn (string $id): ?bool => $switchboard->explicit($id),
+            static fn (string $id): ?bool => $switchboard->explicitFrom($snapshot->rows, $id),
+        );
+    }
+
+    public static function makeCapabilityStateSnapshot(
+        ContainerInterface $container,
+    ): \Thallo\Core\Capabilities\CapabilityStateSnapshot {
+        return \Thallo\Core\Capabilities\CapabilityStateSnapshot::take(
+            $container->get(\Glueful\Database\Connection::class),
+            PHP_SAPI === 'cli',
         );
     }
 

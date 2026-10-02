@@ -24,6 +24,10 @@ final class RawPdoWriteAudit implements StaticWriteAudit
     ];
 
     private const SYSTEM_READERS = [
+        // thallo_system_flags is unscoped system state, never tenant data: the capability switches
+        // and their version (read by the snapshot, advanced by the version).
+        'core/src/Capabilities/CapabilityStateSnapshot.php',
+        'core/src/Capabilities/CapabilityStateVersion.php',
         'packages/thallo-analytics/src/Query/AnalyticsQuery.php',
         'core/src/Content/Repositories/VersionRepository.php',
         'packages/thallo-render/src/Templates/TemplateRepository.php',
