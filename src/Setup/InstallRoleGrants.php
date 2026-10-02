@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Thallo\Core\Setup;
 
+use Glueful\Database\Connection;
+use Thallo\Tenancy\System\SystemFlags;
 use Thallo\Contracts\Settings\SystemChannel;
 use Glueful\Bootstrap\ApplicationContext;
 use Glueful\Extensions\Aegis\Repositories\PermissionRepository;
@@ -59,15 +61,43 @@ final class InstallRoleGrants
     {
         $before = $this->permissionSlugs();
         $declared = $this->syncCatalog();
-        $ledger = $this->ledger();
 
-        $granted = [];
-        foreach (self::ROLE_EXCLUSIONS as $role => $except) {
-            [$granted[$role], $ledger[$role]] = $this->grantNew($role, $except, $ledger[$role] ?? null, $before);
-        }
-        $this->channel()->put(self::LEDGER_KEY, (string) json_encode($ledger, JSON_THROW_ON_ERROR));
+        // The decision and its record are one serialized transaction: under the grants lock the
+        // ledger is read fresh, the grants are made and the ledger is written back. Two runs (two
+        // provisions, an activation and a provision) can't overwrite each other's ledger entries,
+        // and a run can't act on a ledger read before another run's grants and an operator's
+        // revocation. An activation calls this inside its fenced row lock, so its ownership is held
+        // through the whole transaction (lock order: activation row, then this lock).
+        $db = $this->context->getContainer()->get(Connection::class);
+        $granted = $db->transaction(function () use ($db, $before): array {
+            $db->getPDO()->exec("SELECT pg_advisory_xact_lock(hashtext('thallo:install-role-grants'))");
+            $channel = $this->channel();
+            if ($channel instanceof SystemFlags) {
+                $channel->clearCache();
+            }
+            $ledger = $this->ledger();
+            $this->pauseForTestsAfterLedgerRead();
+
+            $granted = [];
+            foreach (self::ROLE_EXCLUSIONS as $role => $except) {
+                [$granted[$role], $ledger[$role]] = $this->grantNew($role, $except, $ledger[$role] ?? null, $before);
+            }
+            $channel->put(self::LEDGER_KEY, (string) json_encode($ledger, JSON_THROW_ON_ERROR));
+            return $granted;
+        });
 
         return new InstallRoleGrantsReport($declared, $granted);
+    }
+
+    /** Test seam (APP_ENV=testing only): pause right after the ledger read, holding the lock. */
+    private function pauseForTestsAfterLedgerRead(): void
+    {
+        if ($this->context->getEnvironment() !== 'testing' || getenv('THALLO_TEST_PAUSE_AFTER_LEDGER_READ') !== '1') {
+            return;
+        }
+        fwrite(STDOUT, "ledger-read\n");
+        fflush(STDOUT);
+        fgets(STDIN);
     }
 
     /** @return array<string, list<string>> */
