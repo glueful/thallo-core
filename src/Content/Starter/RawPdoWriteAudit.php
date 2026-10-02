@@ -28,6 +28,8 @@ final class RawPdoWriteAudit implements StaticWriteAudit
         // and their version (read by the snapshot, advanced by the version).
         'core/src/Capabilities/CapabilityStateSnapshot.php',
         'core/src/Capabilities/CapabilityStateVersion.php',
+        // capability_activations and its events: system tables, never tenant data.
+        'core/src/Capabilities/Activation/ActivationStore.php',
         'packages/thallo-analytics/src/Query/AnalyticsQuery.php',
         'core/src/Content/Repositories/VersionRepository.php',
         'packages/thallo-render/src/Templates/TemplateRepository.php',

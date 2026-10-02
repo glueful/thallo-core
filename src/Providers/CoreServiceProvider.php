@@ -2364,6 +2364,11 @@ final class CoreServiceProvider extends ServiceProvider
                 'shared' => true,
                 'autowire' => true,
             ],
+            \Thallo\Core\Capabilities\Activation\ActivationStore::class => [
+                'class' => \Thallo\Core\Capabilities\Activation\ActivationStore::class,
+                'shared' => true,
+                'autowire' => true,
+            ],
             \Thallo\Core\Capabilities\CapabilityStateVersion::class => [
                 'class' => \Thallo\Core\Capabilities\CapabilityStateVersion::class,
                 'shared' => true,
