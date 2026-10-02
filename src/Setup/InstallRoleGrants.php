@@ -28,9 +28,10 @@ use Glueful\Permissions\Catalog\PermissionRegistry;
  * Each permission is offered to a role once. A ledger in the system channel records what each
  * role has been offered, so a later provision grants only permissions that are new since, and a
  * revocation made in between — by an operator or a migration — stays revoked. With no ledger yet:
- * a role that holds nothing (a fresh install) is offered everything; a role that holds grants (a
- * site upgrading into the ledger) takes every permission that existed before this run's catalog
- * sync as already offered, and is granted only what the sync added. ROLE_EXCLUSIONS still withhold
+ * a site not installed yet (a fresh install, whatever Aegis seeded its roles with) or a role that
+ * holds nothing is offered everything; an installed site's role that holds grants (a site upgrading
+ * into the ledger) takes every permission that existed before this run's catalog sync as already
+ * offered, and is granted only what the sync added. ROLE_EXCLUSIONS still withhold
  * a permission from a role outright.
  */
 final class InstallRoleGrants
@@ -84,6 +85,11 @@ final class InstallRoleGrants
             }
         }
         return $ledger;
+    }
+
+    private function installed(): bool
+    {
+        return $this->channel()->get('installed') === '1';
     }
 
     private function channel(): SystemChannel
@@ -180,9 +186,12 @@ final class InstallRoleGrants
         foreach ($rolePermissions->getRolePermissions($roleUuid) as $rp) {
             $held[$rp->getPermissionUuid()] = true;
         }
-        // No record yet: a role holding nothing is a fresh install and is offered everything; a
-        // role holding grants has, in effect, been offered whatever existed before this run.
-        $offered ??= $held === [] ? [] : $before;
+        // No record yet: a site not installed yet is a fresh install and is offered everything —
+        // even though Aegis's own migration seeded the roles with its permissions, so they hold
+        // grants already (reading that as an upgrade recorded every migration-seeded permission as
+        // offered and granted none). An installed site's role holding grants has, in effect,
+        // been offered whatever existed before this run.
+        $offered ??= $held === [] || !$this->installed() ? [] : $before;
         $offeredSet = array_fill_keys($offered, true);
 
         $granted = 0;
