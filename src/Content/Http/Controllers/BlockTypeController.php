@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Thallo\Core\Content\Http\Controllers;
 
+use Thallo\Core\Content\Blocks\ContributedBlockTypeReconciler;
 use Thallo\Contracts\Style\BlockTemplateTargetCheck;
 use Thallo\Contracts\Style\StyleTargets;
 use Thallo\Core\Content\Blocks\BlockFactory;
@@ -42,6 +43,7 @@ final class BlockTypeController
         private readonly BlockFactory $factory,
         /** The renderer's word on a block's template; null when nothing renders (no render pack). */
         private readonly ?BlockTemplateTargetCheck $templateCheck = null,
+        private readonly ?ContributedBlockTypeReconciler $reconciler = null,
     ) {
     }
 
@@ -119,6 +121,15 @@ final class BlockTypeController
     #[ApiResponse(200, schema: BlockTypeListData::class, description: 'All block types, active first.')]
     public function index(Request $request): Response
     {
+        // A pack switched on since the last seed gets its blocks before they are listed. The
+        // begin-request hook does this too, but a production install's compiled container has no
+        // request lifecycle, so the hook never fires there; the palette and Settings › Block types
+        // both load this list. One cached flag read when nothing changed; never fails the list.
+        try {
+            $this->reconciler?->reconcile();
+        } catch (\Throwable) {
+            // Seeding is a convenience; `thallo:provision` remains the repair.
+        }
         $hidden = $this->starters->hiddenSlugs();
         $listed = $hidden === []
             ? $this->blockTypes->all()

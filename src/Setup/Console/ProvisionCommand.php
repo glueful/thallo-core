@@ -307,6 +307,7 @@ final class ProvisionCommand extends BaseCommand
                 $this->getService(RouteCache::class),
                 $this->getService(CacheStore::class),
                 $this->getService(ApplicationContext::class)->getBasePath() . '/storage/cache/twig',
+                $this->getService(ApplicationContext::class)->getBasePath() . '/storage/cache/container',
             ))->clear();
             $this->line('Caches cleared: ' . implode(', ', $cleared) . '.');
         } catch (\Throwable $e) {

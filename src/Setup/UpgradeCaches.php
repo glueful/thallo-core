@@ -14,8 +14,11 @@ use Glueful\Routing\RouteCache;
  * page cache, and the compiled templates. Twig reuses a compiled template while the template file
  * is not newer than it, and a release archive stamps every file with its commit's time — in the
  * past — so a template compiled on the old install after that moment kept serving the old markup.
- * Provision drops all three, so `composer update && php glueful thallo:provision` is the whole
- * upgrade; `route:cache:clear` and `render:cache:clear` remain for a deploy that skips it.
+ * And the compiled container: production boots one named by the service DEFINITIONS, not by the
+ * constructors behind them, so a release that adds a constructor argument (and no service) kept
+ * the old name and the old wiring. Provision drops all four, so `composer update && php glueful
+ * thallo:provision` is the whole upgrade; `route:cache:clear` and `render:cache:clear` remain for
+ * a deploy that skips it.
  */
 final class UpgradeCaches
 {
@@ -24,6 +27,8 @@ final class UpgradeCaches
         private readonly CacheStore $cache,
         /** The compiled-template directory (storage/cache/twig); null leaves it alone. */
         private readonly ?string $compiledTemplates = null,
+        /** The compiled-container directory (storage/cache/container); null leaves it alone. */
+        private readonly ?string $compiledContainer = null,
     ) {
     }
 
@@ -37,6 +42,10 @@ final class UpgradeCaches
         if ($this->compiledTemplates !== null && is_dir($this->compiledTemplates)) {
             self::emptyDirectory($this->compiledTemplates);
             $cleared[] = 'compiled templates';
+        }
+        if ($this->compiledContainer !== null && is_dir($this->compiledContainer)) {
+            self::emptyDirectory($this->compiledContainer);
+            $cleared[] = 'compiled container';
         }
 
         return $cleared;
