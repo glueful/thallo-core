@@ -63,7 +63,14 @@ final class Doctor
         $checks[] = $this->logExposureCheck();
         $checks[] = $this->keysCheck();
         $environment = $this->environmentCheck();
-        $assetRouting = $this->assetRoutingCheck();
+        // A web server that is not serving public/ fails every path below for that one reason:
+        // say it once, and do not send the operator after asset rules.
+        $documentRoot = $this->documentRootCheck();
+        $servesPublic = $documentRoot === null || $documentRoot->status === Check::OK;
+        if ($documentRoot !== null) {
+            $checks[] = $documentRoot;
+        }
+        $assetRouting = $servesPublic ? $this->assetRoutingCheck() : null;
         if ($assetRouting !== null) {
             $checks[] = $assetRouting;
         }
@@ -72,7 +79,7 @@ final class Doctor
         if ($vocabulary !== null) {
             $checks[] = $this->styleArtifactCheck($vocabulary);
         }
-        $apiRouting = $this->apiRoutingCheck();
+        $apiRouting = $servesPublic ? $this->apiRoutingCheck() : null;
         if ($apiRouting !== null) {
             $checks[] = $apiRouting;
         }
@@ -182,6 +189,41 @@ final class Doctor
             "APP_ENV={$appEnv} but BASE_URL points at a public host ({$host}) — set APP_ENV=production"
             . ' (php glueful system:production) before going live.',
         );
+    }
+
+    /**
+     * The web server's document root must be the project's `public/` folder: the front controller
+     * (`index.php`) and the admin bundle provision publishes (`public/admin/`) live there. A root
+     * left at the project folder, or at a panel's empty default, answers `/` with 403 (a folder
+     * with no index file) and `/admin/` with 404, and nginx never hands a request to PHP. Probe the
+     * admin on the public BASE_URL. Null when there is no public BASE_URL, the admin is switched
+     * off (ADMIN_ENABLED=false, so a 404 there is expected), or the host is unreachable.
+     */
+    private function documentRootCheck(): ?Check
+    {
+        $base = $this->publicBaseUrl();
+        if ($base === null) {
+            return null;
+        }
+        $enabled = (new EnvWriter($this->basePath . '/.env'))->get('ADMIN_ENABLED');
+        if ($enabled !== null && in_array(strtolower(trim((string) $enabled)), ['false', '0', 'off', 'no'], true)) {
+            return null;
+        }
+
+        $status = ($this->httpProbe ?? self::defaultHttpProbe(...))($base . '/admin/');
+        if ($status === null) {
+            return null;
+        }
+        if ($status === 403 || $status === 404) {
+            return Check::warn(
+                'document-root',
+                "{$base}/admin/ answers {$status} — the web server is not serving Thallo's public folder, so "
+                . "no request reaches PHP. Point its document root (nginx `root`) at {$this->basePath}/public, "
+                . 'then reload it (docs/production.md).',
+            );
+        }
+
+        return Check::ok('document-root', 'The web server serves the public folder.');
     }
 
     /**

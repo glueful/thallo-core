@@ -331,8 +331,35 @@ final class ProvisionCommand extends BaseCommand
         if (($warning = self::baseUrlWarning($env->get('BASE_URL'))) !== null) {
             $this->warning($warning);
         }
+        // The checks that need the site (is the web server serving public/, do the PHP-served
+        // paths reach PHP) run again now that .env holds the BASE_URL: on a fresh install the
+        // preflight ran before it existed. Said here, under the link the operator opens next.
+        foreach (self::closingWarnings(new Doctor($basePath, PHP_VERSION, get_loaded_extensions())) as $warning) {
+            $this->warning($warning);
+        }
         $this->line('');
         return self::SUCCESS;
+    }
+
+    /** @return list<string> the closing checks' warnings, once the install's .env is written */
+    public static function closingWarnings(Doctor $doctor): array
+    {
+        return self::warningsIn($doctor->preflight());
+    }
+
+    /**
+     * @param list<Check> $checks
+     * @return list<string>
+     */
+    public static function warningsIn(array $checks): array
+    {
+        $warnings = [];
+        foreach ($checks as $check) {
+            if ($check->status === Check::WARN) {
+                $warnings[] = "{$check->name}: {$check->message}";
+            }
+        }
+        return $warnings;
     }
 
     /**
