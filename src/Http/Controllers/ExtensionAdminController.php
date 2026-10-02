@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Thallo\Core\Http\Controllers;
 
+use Thallo\Contracts\Extensions\ExtensionStateCoordinator;
+use Thallo\Core\Capabilities\FeatureManagementPolicy;
 use Thallo\Core\Support\ReadmeRenderer;
 use Glueful\Bootstrap\ApplicationContext;
 use Glueful\Database\Exceptions\LockContentionException;
@@ -298,9 +300,11 @@ class ExtensionAdminController
         // surface keeps only HTTP concerns: authority, protected refusal, host writability.
         try {
             $executor = $this->schemaExecutor();
-            $operation = $enable
-                ? $executor->enable($name, 'admin-api')
-                : $executor->disable($name, 'admin-api');
+            $operation = $this->withinExtensionStateLock(
+                static fn (): ExtensionOperation => $enable
+                    ? $executor->enable($name, 'admin-api')
+                    : $executor->disable($name, 'admin-api'),
+            );
         } catch (SchemaNotBootstrappedException | UndeclaredSchemaException | LockContentionException $e) {
             return Response::error($e->getMessage(), 409);
         } catch (\RuntimeException $e) {
@@ -331,6 +335,27 @@ class ExtensionAdminController
                 . "re-run 'php glueful extensions:cache'.")
             : ($enable ? 'Extension enabled.' : 'Extension disabled.');
         return Response::success($payload, $message);
+    }
+
+    /**
+     * Interim, until Thallo requires glueful/framework ^1.88 (feature activation plan Task 11):
+     * the toggle holds the extension-state lock around the executor call, so it can't overwrite
+     * an activation's edit to the enabled list. Before 1.88 the executor takes no extension-state
+     * lock of its own, so this wrapper is the only coordination and creates no lock-order
+     * inversion. From 1.88 the executor takes its migration locks and then that lock itself, and
+     * holding it here first would invert that order, so Task 11 removes this wrapper.
+     *
+     * @template T
+     * @param callable(): T $sequence
+     * @return T
+     */
+    private function withinExtensionStateLock(callable $sequence): mixed
+    {
+        $container = $this->context->getContainer();
+        if (!$container->has(ExtensionStateCoordinator::class)) {
+            return $sequence();
+        }
+        return $container->get(ExtensionStateCoordinator::class)->within($sequence);
     }
 
     /** Overridable seam: the executor comes from the app container in production. */
@@ -374,6 +399,7 @@ class ExtensionAdminController
         $enabled = array_fill_keys(EnabledProviders::from($this->context), true);
         $meta = app($this->context, ExtensionManager::class)->listMeta();
         $info = $this->composerInfo();
+        $policy = new FeatureManagementPolicy();
 
         $out = [];
         foreach ($candidates as $name => $candidate) {
@@ -385,6 +411,7 @@ class ExtensionAdminController
                 ?? (is_string($m['description'] ?? null) ? $m['description'] : null);
             $isEnabled = isset($enabled[$candidate->provider]);
             [$schemaState, $schemaReasons] = $this->schemaState((string) $name);
+            $management = $policy->managementOf((string) $name);
             $out[] = [
                 'name' => (string) $name,
                 'provider' => $candidate->provider,
@@ -395,7 +422,8 @@ class ExtensionAdminController
                 'enabled' => $isEnabled,
                 'schema_state' => $schemaState,
                 'schema_reasons' => $schemaReasons,
-                'cli_command' => $this->cliCommand($schemaState, (string) $name, $isEnabled),
+                'cli_command' => $this->cliCommand($schemaState, (string) $name, $isEnabled, $management),
+                'management' => $management,
             ];
         }
 
@@ -463,11 +491,24 @@ class ExtensionAdminController
         return ['ready', []];
     }
 
-    /** The CLI equivalent an operator can run for this row's state. */
-    private function cliCommand(string $schemaState, string $package, bool $enabled): string
+    /**
+     * The CLI equivalent an operator can run for this row's state: a managed engine turns on
+     * through its feature, and a required package has none.
+     *
+     * @param array{class: string, capability: ?string, reason: ?string, link: ?string} $management
+     */
+    private function cliCommand(string $schemaState, string $package, bool $enabled, array $management): ?string
     {
         if ($schemaState === 'divergent') {
             return 'php glueful migrate:verify';
+        }
+        if ($management['class'] === FeatureManagementPolicy::REQUIRED) {
+            return null;
+        }
+        if ($management['class'] === FeatureManagementPolicy::MANAGED) {
+            return $management['capability'] === null
+                ? null
+                : "php glueful thallo:features:enable {$management['capability']}";
         }
         return $enabled
             ? "php glueful extensions:disable {$package}"

@@ -34,6 +34,8 @@ final class RawPdoWriteAudit implements StaticWriteAudit
         'core/src/Capabilities/Activation/BlockInsert.php',
         // The install-role grants lock (pg_advisory_xact_lock); the grants go through Aegis.
         'core/src/Setup/InstallRoleGrants.php',
+        // The extension-state lock (a session advisory lock; no data read or written).
+        'core/src/Capabilities/Activation/ExtensionStateLock.php',
         'packages/thallo-analytics/src/Query/AnalyticsQuery.php',
         'core/src/Content/Repositories/VersionRepository.php',
         'packages/thallo-render/src/Templates/TemplateRepository.php',

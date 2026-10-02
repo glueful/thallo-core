@@ -2379,6 +2379,11 @@ final class CoreServiceProvider extends ServiceProvider
                 'shared' => true,
                 'autowire' => true,
             ],
+            \Thallo\Contracts\Extensions\ExtensionStateCoordinator::class => [
+                'class' => \Thallo\Core\Capabilities\Activation\ExtensionStateLock::class,
+                'shared' => true,
+                'autowire' => true,
+            ],
             \Thallo\Core\Capabilities\CapabilityStateVersion::class => [
                 'class' => \Thallo\Core\Capabilities\CapabilityStateVersion::class,
                 'shared' => true,
@@ -2747,6 +2752,13 @@ final class CoreServiceProvider extends ServiceProvider
                     'visibility' => 'private',
                 ],
             ],
+        ]);
+
+        // Packages Thallo requires, and engines a feature manages, refuse the generic switch: the
+        // admin toggle, extensions:enable/disable and the protected migration lane all read
+        // extensions.protected. Defaults merge under the operator's own entries, which win.
+        $this->mergeConfig('extensions', [
+            'protected' => (new \Thallo\Core\Capabilities\FeatureManagementPolicy())->protectedProviders(),
         ]);
 
         // DI bindings are contributed declaratively via services(). The first-run commands
