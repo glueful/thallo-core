@@ -2565,6 +2565,11 @@ final class CoreServiceProvider extends ServiceProvider
                 'shared' => true,
                 'autowire' => true,
             ],
+            \Thallo\Core\Http\Controllers\CapabilityActivationController::class => [
+                'class' => \Thallo\Core\Http\Controllers\CapabilityActivationController::class,
+                'shared' => true,
+                'autowire' => true,
+            ],
             ScheduledTasksController::class => [
                 'class' => ScheduledTasksController::class,
                 'shared' => true,

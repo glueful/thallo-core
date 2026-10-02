@@ -51,6 +51,7 @@ final class FeatureManagementPolicy
     ];
 
     private const TENANCY_PACKAGE = 'glueful/tenancy';
+    private const TENANCY_CAPABILITY = 'thallo.tenancy';
     private const TENANCY_PROVIDER = 'Glueful\\Extensions\\Tenancy\\TenancyServiceProvider';
     private const TENANCY_REASON = 'Workspace enforcement is managed by the tenancy enablement flow — '
         . 'use Settings › Workspaces, not the generic extension toggle.';
@@ -61,6 +62,18 @@ final class FeatureManagementPolicy
         $ids = array_keys(self::ENGINES);
         sort($ids);
         return $ids;
+    }
+
+    /**
+     * How a capability is switched on the Features page: `activation` (the activation flow),
+     * `workspaces` (Settings › Workspaces) or `simple` (a plain switch).
+     */
+    public function capabilityManagement(string $capability): string
+    {
+        if (isset(self::ENGINES[$capability])) {
+            return 'activation';
+        }
+        return $capability === self::TENANCY_CAPABILITY ? 'workspaces' : 'simple';
     }
 
     /** @return array{package: string, provider: class-string}|null */

@@ -19,6 +19,7 @@ use Thallo\Core\Http\Controllers\ApiKeyAdminController;
 use Thallo\Core\Http\Controllers\AssignableRolesController;
 use Thallo\Core\Http\Controllers\CacheAdminController;
 use Thallo\Core\Http\Controllers\CapabilityAdminController;
+use Thallo\Core\Http\Controllers\CapabilityActivationController;
 use Thallo\Core\Http\Controllers\ExtensionAdminController;
 use Thallo\Core\Http\Controllers\FormSubmissionsController;
 use Thallo\Core\Http\Controllers\GeneralSettingsController;
@@ -538,6 +539,14 @@ $router->group(['prefix' => '/v1/admin'], function (Router $router): void {
         $router->get('/capabilities/manage', [CapabilityAdminController::class, 'manage'])
             ->middleware('content_permission:system.access');
         $router->put('/capabilities/{id}', [CapabilityAdminController::class, 'update'])
+            ->middleware('content_permission:system.access');
+        // Turning on a feature with an activation flow (Commerce, Subscriptions): start, continue
+        // in a freshly booted request, or cancel a generation.
+        $router->post('/capabilities/{id}/activation', [CapabilityActivationController::class, 'start'])
+            ->middleware('content_permission:system.access');
+        $router->post('/capabilities/{id}/activation/continue', [CapabilityActivationController::class, 'continue'])
+            ->middleware('content_permission:system.access');
+        $router->delete('/capabilities/{id}/activation', [CapabilityActivationController::class, 'cancel'])
             ->middleware('content_permission:system.access');
 
     // Utilities — system ops tools (Health, Cache, Scheduled tasks). All gated by system.access.
