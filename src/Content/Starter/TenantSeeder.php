@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Thallo\Core\Content\Starter;
 
+use Thallo\Core\Capabilities\Activation\CapabilityBlockSeeder;
 use Thallo\Core\Settings\GeneralSettings;
 use Thallo\Core\Settings\SettingsStore;
 use Glueful\Bootstrap\ApplicationContext;
@@ -25,6 +26,7 @@ final class TenantSeeder implements TenantSeedActivator, TenantSeedRepair
         private readonly GeneralSettings $settings,
         private readonly SettingsStore $store,
         private readonly ?StarterSeedFailpoint $failpoint = null,
+        private readonly ?CapabilityBlockSeeder $capabilityBlocks = null,
     ) {
     }
 
@@ -67,25 +69,35 @@ final class TenantSeeder implements TenantSeedActivator, TenantSeedRepair
                     $this->settings->defaultLocale(),
                     $ownerUserUuid,
                 );
-                foreach ($this->definitions->kinds() as $kind) {
-                    foreach ($kind->definitions() as $definition) {
-                        if ($this->provenance->findBySource($kind->kind(), $definition->sourceId) !== null) {
-                            continue;
-                        }
-                        try {
-                            $result = $kind->apply($definition, $seed);
-                            if ($result === StarterApplyResult::Applied) {
-                                $this->provenance->recordApplied(
-                                    $kind->kind(),
-                                    $definition->definitionKey,
-                                    $definition->sourceId,
-                                    $kind->fingerprint($definition),
-                                );
+                $writeKinds = function () use ($seed): void {
+                    foreach ($this->definitions->kinds() as $kind) {
+                        foreach ($kind->definitions() as $definition) {
+                            if ($this->provenance->findBySource($kind->kind(), $definition->sourceId) !== null) {
+                                continue;
                             }
-                        } catch (\Throwable $e) {
-                            throw new StarterSeedException($kind->kind() . ':' . $definition->sourceId, $e);
+                            try {
+                                $result = $kind->apply($definition, $seed);
+                                if ($result === StarterApplyResult::Applied) {
+                                    $this->provenance->recordApplied(
+                                        $kind->kind(),
+                                        $definition->definitionKey,
+                                        $definition->sourceId,
+                                        $kind->fingerprint($definition),
+                                    );
+                                }
+                            } catch (\Throwable $e) {
+                                throw new StarterSeedException($kind->kind() . ':' . $definition->sourceId, $e);
+                            }
                         }
                     }
+                };
+                // The activation share locks come first, before any kind writes a block (one lock
+                // order with an activation's finalization), and the capabilities on or preparing
+                // are seeded from their explicit contributions after the kinds.
+                if ($this->capabilityBlocks !== null) {
+                    $this->capabilityBlocks->withinWorkspaceSeed((string) $tenant['uuid'], $writeKinds);
+                } else {
+                    $writeKinds();
                 }
                 if ($tenant['status'] === 'provisioning') {
                     $this->administration->markActive($this->context, (string) $tenant['uuid']);
