@@ -2874,8 +2874,8 @@ final class CoreServiceProvider extends ServiceProvider
     public static function makeCapabilityStateSnapshot(
         ContainerInterface $container,
     ): \Thallo\Core\Capabilities\CapabilityStateSnapshot {
-        return \Thallo\Core\Capabilities\CapabilityStateSnapshot::take(
-            $container->get(\Glueful\Database\Connection::class),
+        return \Thallo\Core\Capabilities\CapabilityStateSnapshot::resolve(
+            static fn (): \Glueful\Database\Connection => $container->get(\Glueful\Database\Connection::class),
             PHP_SAPI === 'cli',
         );
     }

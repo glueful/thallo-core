@@ -52,8 +52,8 @@ final class CapabilityBlockSeeder
 
     /**
      * Every active workspace (workspaces on), or the current store. Each workspace's readiness is
-     * recorded through $lease (fenced) when one is given; a workspace that no longer exists is
-     * dropped. Without a lease, a failure is rethrown after the rest have been tried.
+     * recorded through $lease (fenced) when one is given; a workspace that no longer exists, or is no
+     * longer active, is dropped. Without a lease, a failure is rethrown after the rest have been tried.
      *
      * @param list<string> $only Retry: only these workspaces
      * @return array<string, list<string>> workspace => created slugs, for the workspaces that succeeded
@@ -87,7 +87,10 @@ final class CapabilityBlockSeeder
             } else {
                 $admin = $container->get(TenantAdministration::class);
                 foreach ($only as $tenant) {
-                    if ($admin->getTenant($this->context, $tenant) === null) {
+                    // Gone, or no longer active (suspended): the seed reaches active workspaces only,
+                    // so Retry drops it rather than failing on it until someone reactivates it.
+                    $row = $admin->getTenant($this->context, $tenant);
+                    if ($row === null || ($row['status'] ?? 'active') !== 'active') {
                         if ($lease !== null) {
                             $this->store->markWorkspace($lease, $tenant, null);
                         }

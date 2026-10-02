@@ -14,8 +14,9 @@ use Thallo\Core\Capabilities\CapabilityStateStore;
  *
  * The capability's switch is only ever written here or under a fence: starting a new generation
  * publishes it off, superseding publishes it off, and a runner publishes it on only inside
- * withinFenced(). A runner's writes are fenced on generation, lease-owner token and a live lease,
- * so a runner whose lease was taken over, or whose generation was superseded, changes nothing.
+ * withinFenced(). A runner's writes are fenced on generation and lease-owner token (an expired lease
+ * only lets another runner take over, and a takeover writes a new token), so a runner whose lease
+ * was taken over, or whose generation was superseded, changes nothing.
  */
 final class ActivationStore
 {
@@ -91,8 +92,8 @@ final class ActivationStore
     }
 
     /**
-     * Runs $fn in one transaction holding the row lock, after checking the fence (generation,
-     * owner token, live lease), then extends the lease. Throws ActivationSuperseded before $fn runs
+     * Runs $fn in one transaction holding the row lock, after checking the fence (generation and
+     * owner token), then extends the lease. Throws ActivationSuperseded before $fn runs
      * when the fence fails.
      *
      * @template T
@@ -267,11 +268,15 @@ final class ActivationStore
         return $row;
     }
 
+    /**
+     * The fence is the generation and the owner token. The lease's expiry decides only whether
+     * another runner may take over (acquire); a takeover always writes a new token, so a step that
+     * outlived its lease without one (a long migration) still records, and renews the lease.
+     */
     private function assertFence(ActivationLease $lease): void
     {
         $stmt = $this->db->getPDO()->prepare(
-            'SELECT generation, owner_token, (lease_expires_at IS NOT NULL AND lease_expires_at >= NOW()) AS live
-               FROM capability_activations WHERE capability = ? FOR UPDATE'
+            'SELECT generation, owner_token FROM capability_activations WHERE capability = ? FOR UPDATE'
         );
         $stmt->execute([$lease->capability]);
         $row = $stmt->fetch(\PDO::FETCH_ASSOC);
@@ -279,7 +284,6 @@ final class ActivationStore
             $row === false
             || (int) $row['generation'] !== $lease->generation
             || (string) ($row['owner_token'] ?? '') !== $lease->ownerToken
-            || !(bool) $row['live']
         ) {
             throw new ActivationSuperseded(
                 "Activation {$lease->capability} #{$lease->generation}: this runner no longer holds it."
