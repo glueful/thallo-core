@@ -111,6 +111,12 @@ return [
         // 'thallo.forms' => false,
     ],
 
+    // Extra packages this site can't run without, on top of the ones Thallo itself requires
+    // (glueful/aegis, glueful/users), which no configuration can remove. A required package has no
+    // switch in Extensions › Installed, the generic extension commands refuse it, and provision
+    // puts it back if it is removed from config/extensions.php. Composer package names.
+    'required_packages' => [],
+
     // Scheduled publish/unpublish. The framework scheduler's per-job `enabled` key is not
     // the gate; ScheduleRunner reads this switch before firing any due rows.
     'scheduler' => [
