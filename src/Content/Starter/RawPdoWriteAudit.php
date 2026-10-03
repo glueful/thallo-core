@@ -35,7 +35,6 @@ final class RawPdoWriteAudit implements StaticWriteAudit
         // The install-role grants lock (pg_advisory_xact_lock); the grants go through Aegis.
         'core/src/Setup/InstallRoleGrants.php',
         // The extension-state lock (a session advisory lock; no data read or written).
-        'core/src/Capabilities/Activation/ExtensionStateLock.php',
         // The upgrade adoption: system tables only (flags, activation rows, its own record), on the
         // database provision is installing against.
         'core/src/Setup/CapabilityAdoption.php',
