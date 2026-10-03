@@ -1,0 +1,147 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Thallo\Core\Capabilities\Declarations;
+
+use Thallo\Contracts\Capability\Capability;
+use Thallo\Contracts\Capability\ManagementMode;
+
+/**
+ * Every capability declaration, from every source, validated as a whole (spec §7.3). The verdict
+ * never depends on the order declarations arrived in: an id declared identically by two sources is
+ * one capability; declared differently, it is misconfigured, and nothing picks a winner.
+ */
+final class DeclarationSet
+{
+    /** @var array<string, Capability> */
+    private array $valid = [];
+
+    /** @var array<string, array{reason: string, packages: list<string>}> */
+    private array $misconfigured = [];
+
+    /** @var array<string, Capability> every declared id, valid or not, by its first declaration */
+    private array $capabilities = [];
+
+    /**
+     * @param list<CapabilityDeclaration> $declarations
+     * @param array<string, string> $providers composer package => provider class, from the manifest
+     * @param array<string, string> $errors declared id => why its declaration isn't a valid capability
+     */
+    public function __construct(
+        private readonly array $declarations,
+        private readonly array $providers,
+        array $errors = [],
+    ) {
+        $byId = [];
+        foreach ($declarations as $declaration) {
+            $byId[$declaration->capability->id][] = $declaration;
+        }
+        ksort($byId);
+        foreach ($byId as $id => $group) {
+            $this->capabilities[$id] = $group[0]->capability;
+            $distinct = [];
+            foreach ($group as $declaration) {
+                if (!in_array($declaration->capability, $distinct, false)) {
+                    $distinct[] = $declaration->capability;
+                }
+            }
+            if (count($distinct) > 1) {
+                $sources = array_map(static fn (CapabilityDeclaration $d): string => $d->source, $group);
+                sort($sources);
+                $this->misconfigure($id, 'declared differently by ' . implode(' and ', $sources), $group);
+                continue;
+            }
+            $this->valid[$id] = $group[0]->capability;
+        }
+        foreach ($errors as $id => $reason) {
+            unset($this->valid[$id]);
+            $packages = $this->misconfigured[$id]['packages'] ?? [];
+            $this->misconfigured[$id] = ['reason' => $reason, 'packages' => $packages];
+        }
+    }
+
+    /** @return list<CapabilityDeclaration> */
+    public function declarations(): array
+    {
+        return $this->declarations;
+    }
+
+    /** @return array<string, Capability> valid declarations by id */
+    public function valid(): array
+    {
+        return $this->valid;
+    }
+
+    /** @return array<string, array{reason: string, packages: list<string>}> misconfigured capabilities by id */
+    public function misconfigured(): array
+    {
+        return $this->misconfigured;
+    }
+
+    /** @return array<string, Capability> every declared id, valid or misconfigured */
+    public function capabilities(): array
+    {
+        return $this->capabilities;
+    }
+
+    public function modeOf(string $id): ManagementMode
+    {
+        return ($this->valid[$id] ?? null)?->management ?? ManagementMode::Simple;
+    }
+
+    /** @return array{package: string, provider: string}|null the engine of a valid activation capability */
+    public function engineOf(string $id): ?array
+    {
+        $capability = $this->valid[$id] ?? null;
+        if ($capability === null || $capability->management !== ManagementMode::Activation) {
+            return null;
+        }
+        $package = (string) $capability->owningPackage;
+        $provider = $this->providers[$package] ?? null;
+        return $provider === null ? null : ['package' => $package, 'provider' => $provider];
+    }
+
+    /** @return string|null the provider class of a composer package, from the manifest */
+    public function providerOf(string $package): ?string
+    {
+        return $this->providers[$package] ?? null;
+    }
+
+    /**
+     * The packages a declaration manages, and the packages a misconfigured declaration names.
+     *
+     * @return array<string, array{class: 'managed'|'misconfigured', capability: string}>
+     */
+    public function packageManagement(): array
+    {
+        $out = [];
+        foreach ($this->valid as $id => $capability) {
+            if ($capability->management !== ManagementMode::Simple && $capability->owningPackage !== null) {
+                $out[$capability->owningPackage] = ['class' => 'managed', 'capability' => $id];
+            }
+        }
+        foreach ($this->misconfigured as $id => $entry) {
+            foreach ($entry['packages'] as $package) {
+                $out[$package] = ['class' => 'misconfigured', 'capability' => $id];
+            }
+        }
+        ksort($out);
+        return $out;
+    }
+
+    /** @param list<CapabilityDeclaration> $group */
+    private function misconfigure(string $id, string $reason, array $group): void
+    {
+        $packages = [];
+        foreach ($group as $declaration) {
+            $capability = $declaration->capability;
+            if ($capability->management !== ManagementMode::Simple && $capability->owningPackage !== null) {
+                $packages[] = $capability->owningPackage;
+            }
+        }
+        $packages = array_values(array_unique($packages));
+        sort($packages);
+        $this->misconfigured[$id] = ['reason' => $reason, 'packages' => $packages];
+    }
+}

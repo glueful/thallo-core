@@ -38,6 +38,11 @@ final class DefaultCapabilityRegistry implements CapabilityRegistry
     /** @var array<string,bool> memoized per registry lifetime */
     private array $requested = [];
 
+    /** Called with a registration that arrives after the set was sealed; null = throw. */
+    private ?\Closure $onLateRegistration = null;
+
+    private bool $sealed = false;
+
     /**
      * @param array<string,bool> $overrides Full-capability-id => enabled flag.
      * @param (\Closure(string): ?bool)|null $requestedState Live requested-state source (the
@@ -54,9 +59,34 @@ final class DefaultCapabilityRegistry implements CapabilityRegistry
 
     public function register(Capability $capability): void
     {
+        if ($this->sealed) {
+            // The declaration set was collected before any provider booted and sealed at the first
+            // capability decision: a later declaration could change what earlier boot work saw.
+            if (($this->capabilities[$capability->id] ?? null) == $capability) {
+                return;
+            }
+            if ($this->onLateRegistration !== null) {
+                ($this->onLateRegistration)($capability);
+                return;
+            }
+            throw new \LogicException(
+                "Capability {$capability->id} was registered after the capability set was sealed. Declare it "
+                . 'through DeclaresCapabilities on the provider, or in the package\'s composer.json.'
+            );
+        }
         $this->capabilities[$capability->id] = $capability;
         // A verdict cached before registration (or for a replaced declaration) is stale.
         unset($this->availability[$capability->id]);
+    }
+
+    /**
+     * Seals the set: from now on a registration that isn't identical to a declared capability is
+     * refused (thrown, or handed to $onLateRegistration, which logs it in production).
+     */
+    public function seal(?\Closure $onLateRegistration = null): void
+    {
+        $this->sealed = true;
+        $this->onLateRegistration = $onLateRegistration;
     }
 
     /** @return list<Capability> */

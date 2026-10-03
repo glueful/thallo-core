@@ -2374,6 +2374,15 @@ final class CoreServiceProvider extends ServiceProvider
                 'shared' => true,
                 'autowire' => true,
             ],
+            \Thallo\Core\Capabilities\Declarations\DeclarationSet::class => [
+                'factory' => [self::class, 'makeDeclarationSet'],
+                'shared' => true,
+            ],
+            \Thallo\Core\Capabilities\RequiredPackages::class => [
+                'class' => \Thallo\Core\Capabilities\RequiredPackages::class,
+                'shared' => true,
+                'autowire' => true,
+            ],
             \Thallo\Core\Capabilities\Activation\ActivationStore::class => [
                 'class' => \Thallo\Core\Capabilities\Activation\ActivationStore::class,
                 'shared' => true,
@@ -2792,13 +2801,6 @@ final class CoreServiceProvider extends ServiceProvider
             ],
         ]);
 
-        // Packages Thallo requires, and engines a feature manages, refuse the generic switch: the
-        // admin toggle, extensions:enable/disable and the protected migration lane all read
-        // extensions.protected. Defaults merge under the operator's own entries, which win.
-        $this->mergeConfig('extensions', [
-            'protected' => (new \Thallo\Core\Capabilities\FeatureManagementPolicy())->protectedProviders(),
-        ]);
-
         // DI bindings are contributed declaratively via services(). The first-run commands
         // register HERE, not in boot(): boot() needs a reachable database, and in production a
         // provider boot failure is logged and skipped — commands registered there vanish exactly
@@ -2824,11 +2826,48 @@ final class CoreServiceProvider extends ServiceProvider
         $switchboard = $container->get(CapabilityStateStore::class);
         $snapshot = $container->get(\Thallo\Core\Capabilities\CapabilityStateSnapshot::class);
 
-        return new DefaultCapabilityRegistry(
+        $registry = new DefaultCapabilityRegistry(
             [],
             new ExtensionCapabilityAvailabilityResolver($context),
             static fn (string $id): ?bool => $switchboard->explicitFrom($snapshot->rows, $id),
         );
+        // Every declaration, collected before any provider booted (the first capability decision
+        // happens inside some provider's boot(), after every register()), then sealed.
+        $declarations = $container->get(\Thallo\Core\Capabilities\Declarations\DeclarationSet::class);
+        foreach ($declarations->capabilities() as $capability) {
+            $registry->register($capability);
+        }
+        $registry->seal($context->getEnvironment() === 'production'
+            ? static function (\Thallo\Contracts\Capability\Capability $late) use ($container): void {
+                if ($container->has(LoggerInterface::class)) {
+                    $container->get(LoggerInterface::class)->warning(
+                        "Capability {$late->id} registered after the capability set was sealed; ignored.",
+                    );
+                }
+            }
+            : null);
+        return $registry;
+    }
+
+    /**
+     * The declaration set, collected once per container. Building it also makes the required,
+     * managed and misconfigured providers `extensions.protected` defaults (under the operator's own
+     * entries, which win), before any refusal path reads them.
+     */
+    public static function makeDeclarationSet(
+        ContainerInterface $container,
+    ): \Thallo\Core\Capabilities\Declarations\DeclarationSet {
+        $context = $container->get(ApplicationContext::class);
+        $set = (new \Thallo\Core\Capabilities\Declarations\DeclarationCollector(
+            $context,
+            new \Thallo\Core\Capabilities\Declarations\PackageCapabilityDeclarations($context),
+        ))->collect();
+        $policy = new \Thallo\Core\Capabilities\FeatureManagementPolicy(
+            $set,
+            $container->get(\Thallo\Core\Capabilities\RequiredPackages::class),
+        );
+        $context->mergeConfigDefaults('extensions', ['protected' => $policy->protectedProviders()]);
+        return $set;
     }
 
     public static function makeEngineActivation(
@@ -3003,6 +3042,10 @@ final class CoreServiceProvider extends ServiceProvider
 
     public function boot(ApplicationContext $context): void
     {
+        // The capability declaration set, and with it the extensions.protected defaults, exists
+        // from here on even if no provider has made a capability decision yet.
+        $context->getContainer()->get(\Thallo\Core\Capabilities\Declarations\DeclarationSet::class);
+
         try {
             $stored = self::storedDefaultLocale($context->getContainer());
             if ($stored !== null && $stored !== config($context, 'i18n.default_locale')) {

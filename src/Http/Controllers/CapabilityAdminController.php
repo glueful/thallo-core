@@ -91,7 +91,7 @@ class CapabilityAdminController
                 'reason' => $availability->reason,
                 'remedy' => $availability->remedy,
                 'effective' => $this->capabilities->isEnabled($capability->id),
-                ...$this->activationFields($capability->id),
+                ...$this->activationFields($capability),
             ];
         }
         usort($items, static fn (array $a, array $b): int => strcmp((string) $a['id'], (string) $b['id']));
@@ -194,29 +194,41 @@ class CapabilityAdminController
     }
 
     /**
-     * How Extensions › Capabilities switches this capability, and for an activation feature its open or
-     * last activation, whether application files can be written, and whether its engine is
-     * enabled.
+     * How Extensions › Capabilities switches this capability (its declared mode, with an external
+     * flow's destination and an activation's copy), and for an activation capability its open or
+     * last activation, whether application files can be written, and whether its engine is loaded.
      *
-     * @return array{management: string, activation: ?array<string, mixed>,
-     *     application_files_writable: ?bool, engine_enabled: ?bool}
+     * @return array{management: string, destination: ?array{path: string, label: string},
+     *     copy: ?array{turn_on: ?string, turn_off: ?string, links: list<array{label: string, to: string}>},
+     *     activation: ?array<string, mixed>, application_files_writable: ?bool, engine_enabled: ?bool}
      */
-    private function activationFields(string $id): array
+    private function activationFields(Capability $capability): array
     {
+        $id = $capability->id;
         $policy = $this->policy();
-        $management = $policy->capabilityManagement($id);
+        $declared = [
+            'management' => $policy->capabilityManagement($id),
+            'destination' => $capability->destination === null
+                ? null
+                : ['path' => $capability->destination->path, 'label' => $capability->destination->label],
+            'copy' => $capability->copy === null
+                ? null
+                : [
+                    'turn_on' => $capability->copy->turnOn,
+                    'turn_off' => $capability->copy->turnOff,
+                    'links' => $capability->copy->links,
+                ],
+        ];
         $engine = $policy->engineOf($id);
-        if ($management !== 'activation' || $engine === null) {
-            return [
-                'management' => $management,
+        if ($declared['management'] !== 'activation' || $engine === null) {
+            return $declared + [
                 'activation' => null,
                 'application_files_writable' => null,
                 'engine_enabled' => null,
             ];
         }
         $record = $this->container()->get(ActivationStore::class)->find($id);
-        return [
-            'management' => $management,
+        return $declared + [
             'activation' => $record !== null && $record->generation > 0 ? $record->toArray() : null,
             'application_files_writable' => $this->container()->get(EngineActivation::class)
                 ->applicationFilesWritable(),

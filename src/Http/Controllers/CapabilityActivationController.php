@@ -130,7 +130,7 @@ class CapabilityActivationController
 
     private function isActivationCapability(string $id): bool
     {
-        return in_array($id, (new FeatureManagementPolicy())->activationCapabilities(), true);
+        return in_array($id, app($this->context, FeatureManagementPolicy::class)->activationCapabilities(), true);
     }
 
     /** Overridable seam: the compiled route table is rebuilt on the next request. */

@@ -298,7 +298,7 @@ class ExtensionAdminController
         $enabled = array_fill_keys(EnabledProviders::from($this->context), true);
         $meta = app($this->context, ExtensionManager::class)->listMeta();
         $info = $this->composerInfo();
-        $policy = new FeatureManagementPolicy();
+        $policy = app($this->context, FeatureManagementPolicy::class);
 
         $out = [];
         foreach ($candidates as $name => $candidate) {
