@@ -183,12 +183,14 @@ final class ActivationStore
         string $error,
         ?string $remedy,
         array $resultPatch = [],
+        ?string $reopen = null,
     ): ActivationRecord {
-        $record = function () use ($lease, $step, $error, $remedy, $resultPatch): ActivationRecord {
+        $record = function () use ($lease, $step, $error, $remedy, $resultPatch, $reopen): ActivationRecord {
+            // $reopen: an earlier step the failure shows wasn't really done; a retry runs it again.
             $this->db->getPDO()->prepare(
                 'UPDATE capability_activations
                     SET status = ?, failed_step = ?, error = ?, remedy = ?, result = result || ?::jsonb,
-                        updated_at = NOW()
+                        steps_done = steps_done - ?::text, updated_at = NOW()
                   WHERE capability = ?'
             )->execute([
                 ActivationStatus::FAILED,
@@ -196,6 +198,7 @@ final class ActivationStore
                 $error,
                 $remedy,
                 (string) json_encode((object) $resultPatch),
+                (string) $reopen,
                 $lease->capability,
             ]);
             $detail = ['step' => $step, 'error' => $error];

@@ -103,7 +103,17 @@ final class ActivationRunner
     private function enableEngine(ActivationLease $lease, string $capability, array $engine): ActivationRecord
     {
         if ($this->engine->isPrepared($engine['package'], $engine['provider'])) {
-            return $this->store->completeStep($lease, ActivationStep::ENABLE_ENGINE, ['engine' => 'already']);
+            if ($this->container->get(ExtensionManager::class)->hasProvider($engine['provider'])) {
+                return $this->store->completeStep($lease, ActivationStep::ENABLE_ENGINE, ['engine' => 'already']);
+            }
+            // Listed and ready, but this application didn't load it: the extension cache was built
+            // from a stale list. Rebuild it; the check then runs in a request booted from it.
+            $refreshed = $this->engine->refreshCache();
+            return $this->store->completeStep($lease, ActivationStep::ENABLE_ENGINE, [
+                'engine' => 'already',
+                'cache_refreshed' => $refreshed['status'] === 'refreshed',
+                'cache_stale' => $refreshed['status'] === 'cache_stale',
+            ] + ($refreshed['error'] !== null ? ['cache_error' => $refreshed['error']] : []));
         }
         if (!$this->engine->applicationFilesWritable()) {
             return $this->store->failStep(
@@ -126,8 +136,11 @@ final class ActivationRunner
     private function verifyBoot(ActivationLease $lease, string $capability, string $provider): ActivationRecord
     {
         $reason = null;
+        $reopen = null;
         if (!$this->container->get(ExtensionManager::class)->hasProvider($provider)) {
-            $reason = "The engine's provider ({$provider}) isn't loaded: the extension cache is out of date.";
+            $reason = "The engine's provider ({$provider}) isn't loaded: the extension cache is out of date. "
+                . 'Retry rebuilds it.';
+            $reopen = ActivationStep::ENABLE_ENGINE;
         } else {
             $availability = $this->container->get(CapabilityRegistry::class)->availability($capability);
             if (!$availability->available) {
@@ -135,7 +148,14 @@ final class ActivationRunner
             }
         }
         if ($reason !== null) {
-            return $this->store->failStep($lease, ActivationStep::VERIFY_BOOT, $reason, 'php glueful extensions:cache');
+            return $this->store->failStep(
+                $lease,
+                ActivationStep::VERIFY_BOOT,
+                $reason,
+                'php glueful extensions:cache',
+                [],
+                $reopen,
+            );
         }
         return $this->store->completeStep($lease, ActivationStep::VERIFY_BOOT, ['cache_stale' => false]);
     }

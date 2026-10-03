@@ -81,6 +81,24 @@ final class EngineActivation
         });
     }
 
+    /**
+     * Rebuilds the extension cache from the enabled list, under the lock: for an engine already
+     * listed whose provider the running application didn't load (a cache built from a stale list).
+     *
+     * @return array{status: 'refreshed'|'cache_stale', error: ?string}
+     */
+    public function refreshCache(): array
+    {
+        return $this->lock->within(function (): array {
+            try {
+                $this->rebuildCache();
+            } catch (\Throwable $e) {
+                return ['status' => 'cache_stale', 'error' => $e->getMessage()];
+            }
+            return ['status' => 'refreshed', 'error' => null];
+        });
+    }
+
     /** Listed in the enabled list and its schema ready: nothing for the engine step to do. */
     public function isPrepared(string $package, string $provider): bool
     {
