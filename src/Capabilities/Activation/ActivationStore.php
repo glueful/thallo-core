@@ -22,6 +22,14 @@ final class ActivationStore
 {
     public const LEASE_SECONDS = 120;
 
+    /**
+     * Workspace seeds hold it shared (shareAll); creating a row holds it exclusively
+     * (initializeRow), so a seed in flight finishes before a new row exists, and every later seed
+     * sees the row. Turning off a capability with no row holds it shared from its check through its
+     * off write, so no row is created in between.
+     */
+    public const WORKSPACE_SEED_LOCK = 'thallo:workspace-seed';
+
     public function __construct(
         private readonly Connection $db,
         private readonly CapabilityStateStore $states,
@@ -60,6 +68,29 @@ final class ActivationStore
         });
     }
 
+    /**
+     * The one way an activation row comes to exist (spec §7.5). It must commit on its own, before
+     * anything uses the row, so it refuses to run inside an open transaction. It waits for any
+     * workspace seed in flight (the exclusive workspace-seed lock) and inserts an idle row if none
+     * exists.
+     */
+    public function initializeRow(string $capability): void
+    {
+        if ($this->db->withinTransaction()) {
+            throw new \LogicException(
+                "The activation row for {$capability} must be initialized in its own transaction, before it is used."
+            );
+        }
+        $this->db->transaction(function () use ($capability): void {
+            $pdo = $this->db->getPDO();
+            $pdo->prepare('SELECT pg_advisory_xact_lock(hashtext(?))')->execute([self::WORKSPACE_SEED_LOCK]);
+            $pdo->prepare(
+                "INSERT INTO capability_activations (capability, status) VALUES (?, 'idle')"
+                . ' ON CONFLICT (capability) DO NOTHING'
+            )->execute([$capability]);
+        });
+    }
+
     public function find(string $capability): ?ActivationRecord
     {
         $stmt = $this->db->getPDO()->prepare('SELECT * FROM capability_activations WHERE capability = ?');
@@ -75,7 +106,11 @@ final class ActivationStore
     public function acquire(string $capability, int $generation): ?ActivationLease
     {
         return $this->db->transaction(function () use ($capability, $generation): ?ActivationLease {
-            $row = $this->lockRow($capability);
+            try {
+                $row = $this->lockRow($capability);
+            } catch (ActivationRowMissing) {
+                throw new ActivationSuperseded("Activation {$capability} #{$generation} doesn't exist.");
+            }
             if ((int) $row['generation'] !== $generation || !in_array($row['status'], ActivationStatus::OPEN, true)) {
                 throw new ActivationSuperseded("Activation {$capability} #{$generation} is no longer current.");
             }
@@ -192,6 +227,18 @@ final class ActivationStore
     public function supersede(string $capability, string $actor, ?int $expectedGeneration = null): int
     {
         return $this->db->transaction(function () use ($capability, $actor, $expectedGeneration): int {
+            // Held from the check that no row exists through the off write: initializeRow can't run
+            // in between, so no runner can start before this decision commits.
+            $pdo = $this->db->getPDO();
+            $pdo->prepare('SELECT pg_advisory_xact_lock_shared(hashtext(?))')->execute([self::WORKSPACE_SEED_LOCK]);
+            if ($this->find($capability) === null) {
+                $this->pauseForTestsAfterAbsenceCheck();
+                if ($expectedGeneration !== null) {
+                    throw new ActivationSuperseded("Activation {$capability} #{$expectedGeneration} doesn't exist.");
+                }
+                $this->states->put($capability, false);
+                return 0;
+            }
             $row = $this->lockRow($capability);
             if (
                 $expectedGeneration !== null
@@ -227,8 +274,9 @@ final class ActivationStore
     }
 
     /**
-     * Workspace creation: FOR SHARE on every activation row, in capability order, inside the
-     * caller's transaction (held to its commit). Returns each capability's fresh state.
+     * Workspace creation: the workspace-seed lock (shared), then FOR SHARE on every activation row,
+     * in capability order, inside the caller's transaction (held to its commit). Returns each
+     * capability's fresh state.
      *
      * @return array<string, array{on: bool, preparing: bool}>
      */
@@ -237,7 +285,9 @@ final class ActivationStore
         if (!$this->db->withinTransaction()) {
             throw new \LogicException('shareAll() must run inside the workspace seed transaction.');
         }
-        $rows = $this->db->getPDO()
+        $pdo = $this->db->getPDO();
+        $pdo->prepare('SELECT pg_advisory_xact_lock_shared(hashtext(?))')->execute([self::WORKSPACE_SEED_LOCK]);
+        $rows = $pdo
             ->query('SELECT capability, status FROM capability_activations ORDER BY capability FOR SHARE')
             ->fetchAll(\PDO::FETCH_ASSOC);
         $states = [];
@@ -251,21 +301,29 @@ final class ActivationStore
         return $states;
     }
 
-    /** @return array<string, mixed> the locked row (created idle when missing) */
+    /** @return array<string, mixed> the locked row; it never inserts one (initializeRow does) */
     private function lockRow(string $capability): array
     {
-        $pdo = $this->db->getPDO();
-        $pdo->prepare(
-            "INSERT INTO capability_activations (capability, status) VALUES (?, 'idle')"
-            . ' ON CONFLICT (capability) DO NOTHING'
-        )->execute([$capability]);
-        $stmt = $pdo->prepare('SELECT * FROM capability_activations WHERE capability = ? FOR UPDATE');
+        $stmt = $this->db->getPDO()->prepare('SELECT * FROM capability_activations WHERE capability = ? FOR UPDATE');
         $stmt->execute([$capability]);
         $row = $stmt->fetch(\PDO::FETCH_ASSOC);
         if ($row === false) {
-            throw new \RuntimeException("Activation row for {$capability} could not be locked.");
+            throw new ActivationRowMissing(
+                "No activation row for {$capability}: initialize it (ActivationStore::initializeRow) first."
+            );
         }
         return $row;
+    }
+
+    /** Test seam (APP_ENV=testing only): pause after supersede()'s absence check, holding its lock. */
+    private function pauseForTestsAfterAbsenceCheck(): void
+    {
+        if (getenv('APP_ENV') !== 'testing' || getenv('THALLO_TEST_PAUSE_IN_SUPERSEDE') !== 'after-absence-check') {
+            return;
+        }
+        fwrite(STDOUT, "absence-checked\n");
+        fflush(STDOUT);
+        fgets(STDIN);
     }
 
     /**

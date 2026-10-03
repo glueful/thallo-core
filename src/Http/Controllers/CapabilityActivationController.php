@@ -61,6 +61,9 @@ class CapabilityActivationController
             return Response::notFound("“{$id}” doesn't turn on through activation.");
         }
         $actor = ActorHelper::uuidFromRequest($request) ?? 'admin-api';
+        // The first turn-on creates its row in its own committed transaction (after any workspace
+        // seed in flight), then starts in a second.
+        $this->store->initializeRow($id);
         $record = $this->store->startOrJoin($id, $actor);
         return $this->respond(fn (): ActivationOutcome => $this->runner->run($id, $record->generation, false), 202);
     }

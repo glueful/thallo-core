@@ -49,7 +49,11 @@ final class CapabilitiesEnableCommand extends BaseCommand
             return self::FAILURE;
         }
 
-        $record = $this->getService(ActivationStore::class)->startOrJoin($id, 'cli');
+        // The first turn-on creates its row in its own committed transaction (after any workspace
+        // seed in flight), then starts in a second.
+        $store = $this->getService(ActivationStore::class);
+        $store->initializeRow($id);
+        $record = $store->startOrJoin($id, 'cli');
         $this->line("Turning on {$label}…");
         $outcome = $this->runActivation($id, $record->generation, false);
         if (is_int($outcome)) {

@@ -160,6 +160,7 @@ final class ProvisionCommand extends BaseCommand
         // A feature left preparing (a deploy-time `--prepare`, an interrupted turn-on) finishes in
         // a child process: this process booted before any engine step, so it never verifies one.
         try {
+            $this->getContainer()->get(CapabilityProvisioning::class)->syncRows();
             $exit = $this->getContainer()->get(CapabilityProvisioning::class)
                 ->resumeOpenActivations(fn (string $line) => $this->line($line));
             if ($exit !== null && $exit !== 0) {

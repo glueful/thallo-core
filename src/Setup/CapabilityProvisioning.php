@@ -31,6 +31,21 @@ final class CapabilityProvisioning
     }
 
     /**
+     * Initializes the activation row of every valid activation capability (spec §7.5), each in its
+     * own committed transaction.
+     *
+     * @return list<string> the capabilities whose rows now exist
+     */
+    public function syncRows(): array
+    {
+        $ids = $this->policy->activationCapabilities();
+        foreach ($ids as $id) {
+            $this->store->initializeRow($id);
+        }
+        return $ids;
+    }
+
+    /**
      * @param callable(string): void $line
      * @return int|null the child's exit code, or null when no feature is being turned on
      */
