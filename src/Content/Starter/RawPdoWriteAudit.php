@@ -36,6 +36,9 @@ final class RawPdoWriteAudit implements StaticWriteAudit
         'core/src/Setup/InstallRoleGrants.php',
         // The extension-state lock (a session advisory lock; no data read or written).
         'core/src/Capabilities/Activation/ExtensionStateLock.php',
+        // The upgrade adoption: system tables only (flags, activation rows, its own record), on the
+        // database provision is installing against.
+        'core/src/Setup/CapabilityAdoption.php',
         'packages/thallo-analytics/src/Query/AnalyticsQuery.php',
         'core/src/Content/Repositories/VersionRepository.php',
         'packages/thallo-render/src/Templates/TemplateRepository.php',

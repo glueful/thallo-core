@@ -2378,6 +2378,11 @@ final class CoreServiceProvider extends ServiceProvider
                 'factory' => [self::class, 'makeDeclarationSet'],
                 'shared' => true,
             ],
+            \Thallo\Core\Setup\CapabilityAdoption::class => [
+                'class' => \Thallo\Core\Setup\CapabilityAdoption::class,
+                'shared' => true,
+                'autowire' => true,
+            ],
             \Thallo\Core\Capabilities\RequiredPackages::class => [
                 'class' => \Thallo\Core\Capabilities\RequiredPackages::class,
                 'shared' => true,
@@ -2837,6 +2842,7 @@ final class CoreServiceProvider extends ServiceProvider
             new ExtensionCapabilityAvailabilityResolver($context),
             static fn (string $id): ?bool => $switchboard->explicitFrom($snapshot->rows, $id),
             $misconfigured,
+            static fn (string $id): ?bool => $switchboard->storedFrom($snapshot->rows, $id),
         );
         // Every declaration, collected before any provider booted (the first capability decision
         // happens inside some provider's boot(), after every register()), then sealed.

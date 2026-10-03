@@ -17,7 +17,11 @@ use Thallo\Core\Content\Console\ConvertSettingsCommand;
 use Thallo\Core\Content\Style\Conversion\DecisionsFile;
 use Thallo\Core\Content\Style\Conversion\SettingsConversion;
 use Thallo\Contracts\Style\StyleCompileFailed;
+use Thallo\Core\Setup\CapabilityAdoption;
+use Thallo\Core\Setup\CapabilityAdoptionCaptureFailed;
 use Thallo\Core\Setup\DefaultLanguage;
+use Thallo\Core\Setup\FrameworkProvisionInstaller;
+use Thallo\Core\Setup\ProvisionInstaller;
 use Thallo\Core\Setup\CapabilityProvisioning;
 use Thallo\Core\Setup\InstallRoleGrants;
 use Thallo\Core\Setup\SetupService;
@@ -29,8 +33,8 @@ use Glueful\Console\BaseCommand;
 use Glueful\Extensions\ExtensionManager;
 use Glueful\Installer\DatabaseConfig;
 use Glueful\Installer\EnvWriter;
-use Glueful\Installer\Installer;
 use Glueful\Installer\InstallOptions;
+use Glueful\Installer\InstallResult;
 use Glueful\Installer\InstallStep;
 use Glueful\Security\RandomStringGenerator;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -49,12 +53,35 @@ use function base_path;
 final class ProvisionCommand extends BaseCommand
 {
     /** @param string|null $envPath Override the .env location (tests); null = <base>/.env. */
+    private readonly ProvisionInstaller $installer;
+
     public function __construct(
         ?ContainerInterface $container = null,
         ?ApplicationContext $context = null,
         private readonly ?string $envPath = null,
+        ?ProvisionInstaller $installer = null,
     ) {
         parent::__construct($container, $context);
+        $this->installer = $installer ?? new FrameworkProvisionInstaller();
+    }
+
+    /**
+     * The schema-changing part of provision (feature activation spec §7.3a): capture upgrade-adoption
+     * eligibility on the database being installed against, before anything migrates it; run the
+     * installer (connection test, .env, keys, migrations); then adopt exactly what was captured.
+     * An interrupted run keeps its capture, so the retry applies it.
+     *
+     * @throws CapabilityAdoptionCaptureFailed when an existing database can't be inspected
+     */
+    public function installWithAdoption(string $basePath, InstallOptions $options): InstallResult
+    {
+        $adoption = $this->getContainer()->get(CapabilityAdoption::class);
+        $adoption->capture($options->database);
+        $result = $this->installer->run($basePath, $this->getContext(), $options);
+        if ($result->ok) {
+            $adoption->run();
+        }
+        return $result;
     }
 
     protected function configure(): void
@@ -117,11 +144,17 @@ final class ProvisionCommand extends BaseCommand
             return self::FAILURE;
         }
 
-        // 4. Hand to the framework Installer (single connection test → .env → keys → migrate).
-        $result = (new Installer($basePath, $this->getContext()))->run(new InstallOptions(
-            database: $database,
-            force: (bool) $input->getOption('force'),
-        ));
+        // 4. Capture adoption eligibility, hand to the framework Installer (single connection test →
+        //    .env → keys → migrate), then adopt what was captured.
+        try {
+            $result = $this->installWithAdoption($basePath, new InstallOptions(
+                database: $database,
+                force: (bool) $input->getOption('force'),
+            ));
+        } catch (CapabilityAdoptionCaptureFailed $e) {
+            $this->error($e->getMessage());
+            return self::FAILURE;
+        }
 
         $this->table(['Step', 'Status', 'Detail'], array_map(
             static fn ($s) => [$s->name, $s->status, $s->message],

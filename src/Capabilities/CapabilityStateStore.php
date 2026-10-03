@@ -23,7 +23,7 @@ use Thallo\Tenancy\System\SystemFlags;
  */
 final class CapabilityStateStore
 {
-    private const PREFIX = 'capability.';
+    public const PREFIX = 'capability.';
     private const SEARCH_ID = 'thallo.search';
     private const LEGACY_SEARCH_KEY = 'search_enabled';
 
@@ -34,6 +34,13 @@ final class CapabilityStateStore
     }
 
     /** The existing read rules (canonical key → legacy search row → config map) over given rows. */
+    /** The stored switch only, from snapshot rows: no legacy row, no configuration fallback. */
+    public function storedFrom(array $rows, string $id): ?bool
+    {
+        $raw = $rows[self::PREFIX . $id . '.enabled'] ?? null;
+        return $raw === null ? null : $this->decode((string) $raw);
+    }
+
     public function explicitFrom(array $rows, string $id): ?bool
     {
         $raw = $rows[self::PREFIX . $id . '.enabled'] ?? null;

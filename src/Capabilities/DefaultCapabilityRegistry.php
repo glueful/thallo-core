@@ -51,12 +51,15 @@ final class DefaultCapabilityRegistry implements CapabilityRegistry
      *        lifetime, so repeated gates cost one lookup per capability per boot.
      * @param array<string,string> $misconfigured id => why its declaration is misconfigured; such a
      *        capability is never available.
+     * @param (\Closure(string): ?bool)|null $storedState The stored switch only (no configuration
+     *        fallback), which alone requests an activation capability.
      */
     public function __construct(
         private readonly array $overrides = [],
         private readonly ?CapabilityAvailabilityResolver $resolver = null,
         private readonly ?\Closure $requestedState = null,
         private readonly array $misconfigured = [],
+        private readonly ?\Closure $storedState = null,
     ) {
     }
 
@@ -122,6 +125,15 @@ final class DefaultCapabilityRegistry implements CapabilityRegistry
 
     private function resolveRequested(string $id): bool
     {
+        // An activation capability is requested only by its stored switch, which only its
+        // finalization (or the one-time upgrade adoption) writes on. It never follows its engine, and
+        // configuration never turns it on (spec §7.3a).
+        if ($this->capabilities[$id]->management === \Thallo\Contracts\Capability\ManagementMode::Activation) {
+            $stored = $this->storedState !== null
+                ? ($this->storedState)($id)
+                : (($this->overrides[$id] ?? null) === true ? true : null);
+            return $stored === true;
+        }
         $explicit = $this->requestedState !== null
             ? ($this->requestedState)($id)
             : ($this->overrides[$id] ?? null);
