@@ -26,8 +26,8 @@ final class DeclarationSet
     /**
      * @param list<CapabilityDeclaration> $declarations
      * @param array<string, string> $providers composer package => provider class, from the manifest
-     * @param array<string, string|array{reason: string, package?: string}> $errors declared id => why its
-     *        declaration isn't a valid capability (and the package that declared it, protected with it)
+     * @param array<string, string|list<array{reason: string, package?: string}>> $errors declared id =>
+     *        why its declarations aren't valid (and the packages that declared them, protected with it)
      * @param list<string> $required packages Thallo requires (never an activation engine)
      */
     public function __construct(
@@ -58,17 +58,31 @@ final class DeclarationSet
             $this->valid[$id] = $group[0]->capability;
         }
         $this->rejectEngines($required);
-        foreach ($errors as $id => $error) {
+        foreach ($errors as $id => $entries) {
             $id = (string) $id;
+            $entries = is_array($entries) ? $entries : [['reason' => $entries]];
             unset($this->valid[$id]);
+            // Protected with it: what it already named, the engine any valid declaration of this id
+            // owns (an invalid entry under a valid id never frees that engine), and every declarer.
             $packages = $this->misconfigured[$id]['packages'] ?? [];
-            $package = is_array($error) ? ($error['package'] ?? null) : null;
-            if (is_string($package) && !in_array($package, $packages, true)) {
-                $packages[] = $package;
-                sort($packages);
+            foreach ($byId[$id] ?? [] as $declaration) {
+                $capability = $declaration->capability;
+                if ($capability->management !== ManagementMode::Simple && $capability->owningPackage !== null) {
+                    $packages[] = $capability->owningPackage;
+                }
             }
-            $reason = is_array($error) ? $error['reason'] : $error;
-            $this->misconfigured[$id] = ['reason' => $reason, 'packages' => $packages];
+            $reasons = [];
+            foreach ($entries as $entry) {
+                $reasons[] = (string) $entry['reason'];
+                if (is_string($entry['package'] ?? null)) {
+                    $packages[] = $entry['package'];
+                }
+            }
+            $packages = array_values(array_unique($packages));
+            sort($packages);
+            $reasons = array_values(array_unique($reasons));
+            sort($reasons);
+            $this->misconfigured[$id] = ['reason' => implode('; ', $reasons), 'packages' => $packages];
         }
         $this->rejectSharedPackages();
     }

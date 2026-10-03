@@ -23,7 +23,7 @@ use Thallo\Contracts\Capability\ManagementMode;
  */
 final class PackageCapabilityDeclarations
 {
-    /** @var array<string, array{reason: string, package: string}> why each declared entry is invalid */
+    /** @var array<string, list<array{reason: string, package: string}>> why each declared entry is invalid */
     private array $errors = [];
 
     public function __construct(
@@ -50,7 +50,7 @@ final class PackageCapabilityDeclarations
                 try {
                     $out[] = new CapabilityDeclaration(self::capability($name, (array) $entry), 'package:' . $name);
                 } catch (\Throwable $e) {
-                    $this->errors[$id] = [
+                    $this->errors[$id][] = [
                         'reason' => "an invalid declaration in {$name}: " . $e->getMessage(),
                         'package' => $name,
                     ];
@@ -61,12 +61,13 @@ final class PackageCapabilityDeclarations
     }
 
     /**
-     * Why a declared entry isn't a valid capability, and the package that declared it, by id (an
-     * entry without an id is keyed by its package and position).
+     * Why declared entries aren't valid capabilities, and the packages that declared them, by id
+     * (an entry without an id is keyed by its package and position). Every invalid entry is kept:
+     * two packages with an invalid entry under one id are both listed.
      *
-     * @return array<string, array{reason: string, package: string}>
+     * @return array<string, list<array{reason: string, package: string}>>
      */
-    public function errors(): array
+    public function errorsById(): array
     {
         return $this->errors;
     }

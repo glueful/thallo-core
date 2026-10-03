@@ -2991,21 +2991,25 @@ final class CoreServiceProvider extends ServiceProvider implements \Thallo\Contr
      * The compiled route table is keyed by the capability-state snapshot the registry decides from
      * (feature activation spec §3.2, §3.6): a table compiled under one capability state is rejected by
      * a context booted under another, so turning a capability off removes its routes on the next
-     * request. A snapshot that can't be taken keys it 'unavailable', which never matches a healthy one.
+     * request. A snapshot that can't be taken keys it with a value no other context will ever have:
+     * its routes may still be registered from a state read later, so no context may reuse that table.
      */
-    public static function keyRouteTableByCapabilityState(ApplicationContext $context): void
-    {
+    public static function keyRouteTableByCapabilityState(
+        ApplicationContext $context,
+        ?ContainerInterface $container = null,
+    ): void {
         try {
-            $version = $context->getContainer()->get(\Thallo\Core\Capabilities\CapabilityStateSnapshot::class)->version;
+            $version = ($container ?? $context->getContainer())
+                ->get(\Thallo\Core\Capabilities\CapabilityStateSnapshot::class)->version;
         } catch (\Throwable) {
-            $version = \Thallo\Core\Capabilities\CapabilityStateSnapshot::UNAVAILABLE;
+            $version = \Thallo\Core\Capabilities\CapabilityStateSnapshot::UNAVAILABLE . ':' . bin2hex(random_bytes(8));
         }
         $context->setRouteSignatureInput('thallo.capability_state', $version);
     }
 
     public static function makeRouter(ContainerInterface $container): \Glueful\Routing\Router
     {
-        self::keyRouteTableByCapabilityState($container->get(ApplicationContext::class));
+        self::keyRouteTableByCapabilityState($container->get(ApplicationContext::class), $container);
         return new \Glueful\Routing\Router($container);
     }
 

@@ -45,6 +45,6 @@ final class DeclarationCollector
         foreach ((new PackageManifest($this->context))->getCandidates() as $name => $candidate) {
             $providers[(string) $name] = $candidate->provider;
         }
-        return new DeclarationSet($declarations, $providers, $this->packages->errors(), $this->required);
+        return new DeclarationSet($declarations, $providers, $this->packages->errorsById(), $this->required);
     }
 }
