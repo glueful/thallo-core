@@ -173,6 +173,21 @@ final class PlatformPaymentsSettingsController
     /** @return array<string,mixed> */
     private function state(): array
     {
+        // Payments off (spec §7.7) keeps every saved setting readable and editable; it only stops
+        // new online payments, which the page says.
+        return ['payments_enabled' => $this->paymentsEnabled()] + $this->gatewayState();
+    }
+
+    private function paymentsEnabled(): bool
+    {
+        $container = $this->context->getContainer();
+        return !$container->has(\Thallo\Contracts\Payments\OnlinePaymentInitiation::class)
+            || $container->get(\Thallo\Contracts\Payments\OnlinePaymentInitiation::class)->allowed();
+    }
+
+    /** @return array<string,mixed> */
+    private function gatewayState(): array
+    {
         $configured = $this->configuredGateways();
         if ($configured === []) {
             return [

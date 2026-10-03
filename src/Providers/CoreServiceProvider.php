@@ -321,7 +321,7 @@ use Psr\Log\LoggerInterface;
  * Config: core/config/*.php are merged as defaults in register(); the root config/ is the
  * operator's overrides (environment overlays under config/{env}/ still win key by key).
  */
-final class CoreServiceProvider extends ServiceProvider
+final class CoreServiceProvider extends ServiceProvider implements \Thallo\Contracts\Capability\DeclaresCapabilities
 {
     /**
      * Guards registerEventListeners() against a double-run. EventService::addListener
@@ -438,6 +438,26 @@ final class CoreServiceProvider extends ServiceProvider
             }
         }
         $registry->register($container->get(PaymentAdoptionContributor::class));
+    }
+
+    public static function makePaymentCollector(
+        ContainerInterface $container,
+    ): \Glueful\Extensions\Contracts\Payments\PaymentCollector {
+        $gateway = null;
+        if (
+            class_exists(\Glueful\Extensions\Payvia\Services\PayviaPaymentCollector::class)
+            && $container->has(\Glueful\Extensions\Payvia\GatewayManager::class)
+            && $container->has(\Glueful\Extensions\Payvia\Repositories\PaymentIntentRepository::class)
+        ) {
+            $gateway = new \Glueful\Extensions\Payvia\Services\PayviaPaymentCollector(
+                $container->get(\Glueful\Extensions\Payvia\GatewayManager::class),
+                $container->get(\Glueful\Extensions\Payvia\Repositories\PaymentIntentRepository::class),
+            );
+        }
+        return new \Thallo\Core\Payments\PaymentsGatedCollector(
+            $gateway,
+            $container->get(\Thallo\Contracts\Payments\OnlinePaymentInitiation::class),
+        );
     }
 
     public static function makePayviaTenantResolver(ContainerInterface $container): ThalloPayviaTenantResolver
@@ -2491,6 +2511,18 @@ final class CoreServiceProvider extends ServiceProvider
                 'factory' => [self::class, 'makePayviaTenantResolver'],
                 'shared' => true,
             ],
+            // Payments off is a contract (spec §7.7): the one initiation question, and the payment
+            // collector Commerce's checkout resolves, gated on it (wins over payvia's binding, like
+            // the resolver above).
+            \Thallo\Contracts\Payments\OnlinePaymentInitiation::class => [
+                'class' => \Thallo\Core\Payments\CapabilityOnlinePaymentInitiation::class,
+                'shared' => true,
+                'autowire' => true,
+            ],
+            \Glueful\Extensions\Contracts\Payments\PaymentCollector::class => [
+                'factory' => [self::class, 'makePaymentCollector'],
+                'shared' => true,
+            ],
             \Thallo\Core\Payments\Tenancy\PaymentTenancyAdoption::class => [
                 'class' => \Thallo\Core\Payments\Tenancy\PaymentTenancyAdoption::class,
                 'shared' => true,
@@ -2775,6 +2807,33 @@ final class CoreServiceProvider extends ServiceProvider
             $defaults['source_roots'] = ['uploads' => rtrim($root, '/')] + (array) ($defaults['source_roots'] ?? []);
         }
         return $defaults;
+    }
+
+    /**
+     * Payments (feature activation spec §7.7): online payments through glueful/payvia, prepared by
+     * the activation flow. While it is off, every place that starts an online payment answers as
+     * manual collection; payments already started still settle.
+     */
+    public function capabilities(): array
+    {
+        return [
+            new \Thallo\Contracts\Capability\Capability(
+                'thallo.payments',
+                label: 'Payments',
+                description: 'Online payments for orders and plans, through the gateways in Settings › Payments.',
+                owningPackage: 'glueful/payvia',
+                management: \Thallo\Contracts\Capability\ManagementMode::Activation,
+                copy: new \Thallo\Contracts\Capability\ActivationCopy(
+                    turnOn: 'This prepares online payments: Payvia and its gateways, configured in '
+                        . 'Settings › Payments. Your orders and plans are kept.',
+                    turnOff: 'New online payments stop, and customers pay by manual collection. Payments '
+                        . 'already started still settle, refunds still work, and subscriptions already '
+                        . "billed by your payment provider keep renewing; turning Payments off doesn't "
+                        . 'cancel them.',
+                    links: [['label' => 'Settings › Payments', 'to' => '/settings/payments']],
+                ),
+            ),
+        ];
     }
 
     public function register(ApplicationContext $context): void
