@@ -62,6 +62,23 @@ final class CapabilityStateStore
         return $this->explicit($id);
     }
 
+    /**
+     * The stored switch alone, read now: no legacy row and no configuration fallback. An activation
+     * capability is on only by this (spec §7.3a); null when nothing is stored or the table is absent.
+     */
+    public function storedFresh(string $id): ?bool
+    {
+        if ($this->system instanceof SystemFlags) {
+            $this->system->clearCache();
+        }
+        try {
+            $raw = $this->system->get(self::PREFIX . $id . '.enabled');
+        } catch (\Throwable) {
+            return null;
+        }
+        return $raw === null ? null : $this->decode($raw);
+    }
+
     public function requested(string $id): bool
     {
         return $this->explicit($id) ?? true;

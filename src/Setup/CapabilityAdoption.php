@@ -185,18 +185,18 @@ final class CapabilityAdoption
         return $eligible;
     }
 
+    /**
+     * Whether the engine's schema is ready now. A readiness check that fails is not an answer: it
+     * propagates, and capture() stops provision before migrating instead of recording "not eligible".
+     */
     private function isReady(SchemaReadiness $readiness, string $package): bool
     {
-        try {
-            foreach ($readiness->forPackage($package) as $result) {
-                if ($result['state'] !== ReadinessState::Ready) {
-                    return false;
-                }
+        foreach ($readiness->forPackage($package) as $result) {
+            if ($result['state'] !== ReadinessState::Ready) {
+                return false;
             }
-            return true;
-        } catch (\Throwable) {
-            return false;
         }
+        return true;
     }
 
     private function hasStoredState(Connection $db, string $id): bool

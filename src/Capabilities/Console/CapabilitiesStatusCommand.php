@@ -25,7 +25,7 @@ final class CapabilitiesStatusCommand extends BaseCommand
         foreach ($this->getService(FeatureManagementPolicy::class)->activationCapabilities() as $id) {
             $record = $store->find($id);
             $open = $record !== null && $record->isOpen();
-            $state = $open ? $record->status : ($states->fresh($id) === true ? 'on' : 'off');
+            $state = $open ? $record->status : ($states->storedFresh($id) === true ? 'on' : 'off');
             $rows[] = [
                 $id,
                 $state,

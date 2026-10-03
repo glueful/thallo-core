@@ -294,7 +294,7 @@ final class ActivationStore
         foreach ($rows as $row) {
             $capability = (string) $row['capability'];
             $states[$capability] = [
-                'on' => $this->states->fresh($capability) === true,
+                'on' => $this->states->storedFresh($capability) === true,
                 'preparing' => in_array($row['status'], ActivationStatus::OPEN, true),
             ];
         }
