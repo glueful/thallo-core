@@ -20,6 +20,9 @@ final class DeclarationSet
     /** @var array<string, array{reason: string, packages: list<string>}> */
     private array $misconfigured = [];
 
+    /** @var array<string, true> ids with an invalid declaration (a package entry that can't be read) */
+    private array $invalid = [];
+
     /** @var array<string, Capability> every declared id, valid or not, by its first declaration */
     private array $capabilities = [];
 
@@ -60,6 +63,7 @@ final class DeclarationSet
         $this->rejectEngines($required);
         foreach ($errors as $id => $entries) {
             $id = (string) $id;
+            $this->invalid[$id] = true;
             $entries = is_array($entries) ? $entries : [['reason' => $entries]];
             unset($this->valid[$id]);
             // Protected with it: what it already named, the engine any valid declaration of this id
@@ -209,8 +213,13 @@ final class DeclarationSet
                     continue;
                 }
                 unset($this->valid[$id]);
+                $others = array_values(array_diff($ids, [$id]));
+                $onlyInvalid = array_filter($others, fn (string $other): bool => !isset($this->invalid[$other])) === [];
                 $this->misconfigured[$id] = [
-                    'reason' => "one of several capabilities that claim {$package} (" . implode(', ', $ids) . ')',
+                    'reason' => $onlyInvalid
+                        ? "a capability over {$package}, which has an invalid capability entry ("
+                            . implode(', ', $others) . ')'
+                        : "one of several capabilities that claim {$package} (" . implode(', ', $ids) . ')',
                     'packages' => [$package],
                 ];
             }

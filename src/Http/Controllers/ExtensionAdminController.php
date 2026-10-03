@@ -200,14 +200,17 @@ class ExtensionAdminController
             $executor = $this->schemaExecutor();
             // The executor owns its locking (glueful/framework 1.88): its migration locks, then the
             // extension-state lock. Holding that lock here first would invert the order.
-            $this->pauseForTestsBeforeExecutor();
+            $this->beforeExecutor();
             $operation = $enable
                 ? $executor->enable($name, 'admin-api')
                 : $executor->disable($name, 'admin-api');
         } catch (SchemaNotBootstrappedException | UndeclaredSchemaException | LockContentionException $e) {
             return Response::error($e->getMessage(), 409);
         } catch (\RuntimeException $e) {
-            return Response::error($e->getMessage(), 422);
+            // The framework's extension-state lock timing out is contention (another change to the
+            // list is still running), not a bad request; it throws a plain RuntimeException.
+            $status = str_starts_with($e->getMessage(), self::STATE_LOCK_TIMEOUT) ? 409 : 422;
+            return Response::error($e->getMessage(), $status);
         }
 
         $succeeded = in_array($operation->status, [
@@ -236,15 +239,12 @@ class ExtensionAdminController
         return Response::success($payload, $message);
     }
 
-    /** Test seam (APP_ENV=testing only): pause right before the executor call. */
-    private function pauseForTestsBeforeExecutor(): void
+    /** How glueful/framework's ExtensionStateMutex words its timeout. */
+    private const STATE_LOCK_TIMEOUT = 'Another change to the extension list is still running';
+
+    /** Overridable seam: runs right before the executor call (tests pause here). */
+    protected function beforeExecutor(): void
     {
-        if ($this->context->getEnvironment() !== 'testing' || getenv('THALLO_TEST_PAUSE_BEFORE_EXECUTOR') !== '1') {
-            return;
-        }
-        fwrite(STDOUT, "before-executor\n");
-        fflush(STDOUT);
-        fgets(STDIN);
     }
 
     /** Overridable seam: the executor comes from the app container in production. */

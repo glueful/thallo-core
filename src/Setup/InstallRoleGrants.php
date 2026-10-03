@@ -15,6 +15,7 @@ use Glueful\Extensions\ExtensionManager;
 use Glueful\Interfaces\Permission\PermissionCatalogSyncInterface;
 use Glueful\Permissions\Catalog\PermissionRegistry;
 use Thallo\Core\Capabilities\CapabilityStateStore;
+use Thallo\Core\Capabilities\Declarations\DeclarationSet;
 use Thallo\Core\Capabilities\FeatureManagementPolicy;
 
 /**
@@ -69,7 +70,7 @@ final class InstallRoleGrants
     {
         $before = $this->permissionSlugs();
         $declared = $this->syncCatalog();
-        $withheld = $this->withheldSlugs($activating);
+        $withheld = $this->withheldPermissions($activating);
 
         // The decision and its record are one serialized transaction: under the grants lock the
         // ledger is read fresh, the grants are made and the ledger is written back. Two runs (two
@@ -143,12 +144,17 @@ final class InstallRoleGrants
     }
 
     /**
-     * The permissions of every activation capability's engine whose capability is not on (its
-     * stored switch), other than the one being activated.
+     * The permissions provision doesn't grant yet: those of every activation capability's engine
+     * whose capability is not on (its stored switch), other than the one being activated, and those
+     * of every package a misconfigured declaration claims (it can't be activated until fixed).
+     *
+     * A permission is matched by its `managed_by`, which the framework sets to the declaring
+     * provider's package. A permission declared by a package other than the engine (an integration
+     * pack that declares an activation over someone else's engine) is not withheld.
      *
      * @return list<string>
      */
-    private function withheldSlugs(?string $activating): array
+    public function withheldPermissions(?string $activating): array
     {
         $container = $this->context->getContainer();
         if (!$container->has(FeatureManagementPolicy::class) || !$container->has(CapabilityStateStore::class)) {
@@ -163,6 +169,12 @@ final class InstallRoleGrants
                 $packages[] = $package;
             }
         }
+        if ($container->has(DeclarationSet::class)) {
+            foreach ($container->get(DeclarationSet::class)->misconfigured() as $entry) {
+                array_push($packages, ...$entry['packages']);
+            }
+        }
+        $packages = array_values(array_unique($packages));
         if ($packages === []) {
             return [];
         }

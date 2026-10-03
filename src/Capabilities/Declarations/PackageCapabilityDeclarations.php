@@ -40,7 +40,14 @@ final class PackageCapabilityDeclarations
         foreach ($this->packages() as $package) {
             $name = is_string($package['name'] ?? null) ? $package['name'] : null;
             $entries = $package['extra']['thallo']['capabilities'] ?? null;
-            if ($name === null || !is_array($entries)) {
+            if ($name === null || $entries === null) {
+                continue;
+            }
+            if (!is_array($entries) || !array_is_list($entries)) {
+                $this->errors["{$name} (capabilities)"][] = [
+                    'reason' => "an invalid declaration in {$name}: extra.thallo.capabilities must be a list",
+                    'package' => $name,
+                ];
                 continue;
             }
             foreach (array_values($entries) as $index => $entry) {
