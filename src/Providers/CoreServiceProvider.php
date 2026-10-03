@@ -2437,6 +2437,13 @@ final class CoreServiceProvider extends ServiceProvider implements \Thallo\Contr
                 'factory' => [self::class, 'makeCapabilityStateSnapshot'],
                 'shared' => true,
             ],
+            // The router loads the compiled route table when it is built, which happens at the first
+            // provider that registers a route — before this provider boots. Building it here keys
+            // the table by the capability state first, whichever provider asks for it.
+            \Glueful\Routing\Router::class => [
+                'factory' => [self::class, 'makeRouter'],
+                'shared' => true,
+            ],
             // The update notice (decision 11): Packagist's public metadata behind the ReleaseFeed
             // seam, the checker wired from config and Composer's installed-version registry.
             ReleaseFeed::class => [
@@ -2978,6 +2985,28 @@ final class CoreServiceProvider extends ServiceProvider implements \Thallo\Contr
             $container->get(\Thallo\Core\Capabilities\Activation\EngineActivation::class),
             $container,
         );
+    }
+
+    /**
+     * The compiled route table is keyed by the capability-state snapshot the registry decides from
+     * (feature activation spec §3.2, §3.6): a table compiled under one capability state is rejected by
+     * a context booted under another, so turning a capability off removes its routes on the next
+     * request. A snapshot that can't be taken keys it 'unavailable', which never matches a healthy one.
+     */
+    public static function keyRouteTableByCapabilityState(ApplicationContext $context): void
+    {
+        try {
+            $version = $context->getContainer()->get(\Thallo\Core\Capabilities\CapabilityStateSnapshot::class)->version;
+        } catch (\Throwable) {
+            $version = \Thallo\Core\Capabilities\CapabilityStateSnapshot::UNAVAILABLE;
+        }
+        $context->setRouteSignatureInput('thallo.capability_state', $version);
+    }
+
+    public static function makeRouter(ContainerInterface $container): \Glueful\Routing\Router
+    {
+        self::keyRouteTableByCapabilityState($container->get(ApplicationContext::class));
+        return new \Glueful\Routing\Router($container);
     }
 
     public static function makeCapabilityStateSnapshot(

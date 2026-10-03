@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Thallo\Core\Http\Controllers;
 
-use Thallo\Contracts\Extensions\ExtensionStateCoordinator;
 use Thallo\Core\Capabilities\FeatureManagementPolicy;
 use Thallo\Core\Support\ReadmeRenderer;
 use Glueful\Bootstrap\ApplicationContext;
@@ -199,11 +198,12 @@ class ExtensionAdminController
         // surface keeps only HTTP concerns: authority, protected refusal, host writability.
         try {
             $executor = $this->schemaExecutor();
-            $operation = $this->withinExtensionStateLock(
-                static fn (): ExtensionOperation => $enable
-                    ? $executor->enable($name, 'admin-api')
-                    : $executor->disable($name, 'admin-api'),
-            );
+            // The executor owns its locking (glueful/framework 1.88): its migration locks, then the
+            // extension-state lock. Holding that lock here first would invert the order.
+            $this->pauseForTestsBeforeExecutor();
+            $operation = $enable
+                ? $executor->enable($name, 'admin-api')
+                : $executor->disable($name, 'admin-api');
         } catch (SchemaNotBootstrappedException | UndeclaredSchemaException | LockContentionException $e) {
             return Response::error($e->getMessage(), 409);
         } catch (\RuntimeException $e) {
@@ -236,25 +236,15 @@ class ExtensionAdminController
         return Response::success($payload, $message);
     }
 
-    /**
-     * Interim, until Thallo requires glueful/framework ^1.88 (feature activation plan Task 11):
-     * the toggle holds the extension-state lock around the executor call, so it can't overwrite
-     * an activation's edit to the enabled list. Before 1.88 the executor takes no extension-state
-     * lock of its own, so this wrapper is the only coordination and creates no lock-order
-     * inversion. From 1.88 the executor takes its migration locks and then that lock itself, and
-     * holding it here first would invert that order, so Task 11 removes this wrapper.
-     *
-     * @template T
-     * @param callable(): T $sequence
-     * @return T
-     */
-    private function withinExtensionStateLock(callable $sequence): mixed
+    /** Test seam (APP_ENV=testing only): pause right before the executor call. */
+    private function pauseForTestsBeforeExecutor(): void
     {
-        $container = $this->context->getContainer();
-        if (!$container->has(ExtensionStateCoordinator::class)) {
-            return $sequence();
+        if ($this->context->getEnvironment() !== 'testing' || getenv('THALLO_TEST_PAUSE_BEFORE_EXECUTOR') !== '1') {
+            return;
         }
-        return $container->get(ExtensionStateCoordinator::class)->within($sequence);
+        fwrite(STDOUT, "before-executor\n");
+        fflush(STDOUT);
+        fgets(STDIN);
     }
 
     /** Overridable seam: the executor comes from the app container in production. */
