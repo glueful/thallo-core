@@ -207,10 +207,7 @@ class ExtensionAdminController
         } catch (SchemaNotBootstrappedException | UndeclaredSchemaException | LockContentionException $e) {
             return Response::error($e->getMessage(), 409);
         } catch (\RuntimeException $e) {
-            // The framework's extension-state lock timing out is contention (another change to the
-            // list is still running), not a bad request; it throws a plain RuntimeException.
-            $status = str_starts_with($e->getMessage(), self::STATE_LOCK_TIMEOUT) ? 409 : 422;
-            return Response::error($e->getMessage(), $status);
+            return Response::error($e->getMessage(), 422);
         }
 
         $succeeded = in_array($operation->status, [
@@ -238,9 +235,6 @@ class ExtensionAdminController
             : ($enable ? 'Extension enabled.' : 'Extension disabled.');
         return Response::success($payload, $message);
     }
-
-    /** How glueful/framework's ExtensionStateMutex words its timeout. */
-    private const STATE_LOCK_TIMEOUT = 'Another change to the extension list is still running';
 
     /** Overridable seam: runs right before the executor call (tests pause here). */
     protected function beforeExecutor(): void
