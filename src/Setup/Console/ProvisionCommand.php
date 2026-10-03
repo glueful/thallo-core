@@ -55,6 +55,9 @@ final class ProvisionCommand extends BaseCommand
     /** @param string|null $envPath Override the .env location (tests); null = <base>/.env. */
     private readonly ProvisionInstaller $installer;
 
+    /** Why adopting failed after the migrations ran, for the operator; null when it didn't. */
+    private ?string $adoptionFailure = null;
+
     public function __construct(
         ?ContainerInterface $container = null,
         ?ApplicationContext $context = null,
@@ -69,19 +72,34 @@ final class ProvisionCommand extends BaseCommand
      * The schema-changing part of provision (feature activation spec §7.3a): capture upgrade-adoption
      * eligibility on the database being installed against, before anything migrates it; run the
      * installer (connection test, .env, keys, migrations); then adopt exactly what was captured.
-     * An interrupted run keeps its capture, so the retry applies it.
+     * An interrupted run keeps its capture, so the retry applies it. Adopting that fails after the
+     * migrations ran is reported (adoptionFailure()) rather than thrown: the migrations stand, the
+     * capture is kept for the retry, and the rest of provision still runs.
      *
      * @throws CapabilityAdoptionCaptureFailed when an existing database can't be inspected
      */
     public function installWithAdoption(string $basePath, InstallOptions $options): InstallResult
     {
+        $this->adoptionFailure = null;
         $adoption = $this->getContainer()->get(CapabilityAdoption::class);
         $adoption->capture($options->database);
         $result = $this->installer->run($basePath, $this->getContext(), $options);
         if ($result->ok) {
-            $adoption->run();
+            try {
+                $adoption->run();
+            } catch (\Throwable $e) {
+                $this->adoptionFailure = 'Provision migrated the database, but keeping your capabilities as they '
+                    . "were failed ({$e->getMessage()}). Nothing was lost: run php glueful thallo:provision again "
+                    . 'to finish.';
+            }
         }
         return $result;
+    }
+
+    /** Why adopting failed in the last installWithAdoption(), or null. */
+    public function adoptionFailure(): ?string
+    {
+        return $this->adoptionFailure;
     }
 
     protected function configure(): void
@@ -169,6 +187,10 @@ final class ProvisionCommand extends BaseCommand
                 }
             }
             return self::FAILURE;
+        }
+
+        if ($this->adoptionFailure !== null) {
+            $this->error($this->adoptionFailure);
         }
 
         // SETUP_TOKEN gates the unauthenticated first-run POST /admin/setup in production
@@ -394,6 +416,10 @@ final class ProvisionCommand extends BaseCommand
             $this->warning($warning);
         }
         $this->line('');
+        if ($this->adoptionFailure !== null) {
+            $this->error($this->adoptionFailure);
+            return self::FAILURE;
+        }
         return self::SUCCESS;
     }
 

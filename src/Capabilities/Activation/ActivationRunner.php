@@ -73,7 +73,7 @@ final class ActivationRunner
                         ActivationStep::ENABLE_ENGINE => $this->enableEngine($lease, $capability, $engine),
                         ActivationStep::VERIFY_BOOT => $this->verifyBoot($lease, $capability, $engine['provider']),
                         ActivationStep::SEED_BLOCKS => $this->seedBlocks($lease, $capability, $record),
-                        ActivationStep::GRANT_PERMISSIONS => $this->grantPermissions($lease),
+                        ActivationStep::GRANT_PERMISSIONS => $this->grantPermissions($lease, $capability),
                         ActivationStep::FINALIZE => $this->finalize($lease, $capability),
                         default => $this->store->completeStep($lease, $step),
                     };
@@ -162,9 +162,9 @@ final class ActivationRunner
         return $this->store->completeStep($lease, ActivationStep::SEED_BLOCKS, ['blocks_created' => $total]);
     }
 
-    private function grantPermissions(ActivationLease $lease): ActivationRecord
+    private function grantPermissions(ActivationLease $lease, string $capability): ActivationRecord
     {
-        $report = $this->store->withinFenced($lease, fn () => $this->grants->apply());
+        $report = $this->store->withinFenced($lease, fn () => $this->grants->apply($capability));
         return $this->store->completeStep($lease, ActivationStep::GRANT_PERMISSIONS, ['grants' => $report->granted]);
     }
 

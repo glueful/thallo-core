@@ -170,8 +170,8 @@ final class CapabilityAdoption
             if ($this->hasStoredState($db, $id)) {
                 continue;
             }
-            if ($candidate['oldRule'] && ($configured[$id] ?? true) === false) {
-                continue;                                                    // the configuration switched it off
+            if ($candidate['oldRule'] && array_key_exists($id, $configured) && $configured[$id] !== true) {
+                continue;                     // the configuration switched it off (the old rule: only true is on)
             }
             $provider = $providers[$candidate['package']] ?? null;
             if ($provider === null || !in_array($provider, $enabled, true)) {

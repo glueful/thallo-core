@@ -392,7 +392,7 @@ class ExtensionAdminController
 
     /**
      * The CLI equivalent an operator can run for this row's state: a managed engine turns on
-     * through its feature, and a required package has none.
+     * through its feature, and a required or misconfigured package has none.
      *
      * @param array{class: string, capability: ?string, reason: ?string, link: ?string} $management
      */
@@ -401,7 +401,10 @@ class ExtensionAdminController
         if ($schemaState === 'divergent') {
             return 'php glueful migrate:verify';
         }
-        if ($management['class'] === FeatureManagementPolicy::REQUIRED) {
+        if (
+            $management['class'] === FeatureManagementPolicy::REQUIRED
+            || $management['class'] === FeatureManagementPolicy::MISCONFIGURED
+        ) {
             return null;
         }
         if ($management['class'] === FeatureManagementPolicy::MANAGED) {

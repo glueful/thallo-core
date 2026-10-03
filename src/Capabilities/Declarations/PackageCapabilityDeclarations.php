@@ -23,7 +23,7 @@ use Thallo\Contracts\Capability\ManagementMode;
  */
 final class PackageCapabilityDeclarations
 {
-    /** @var array<string, string> declared id (or package) => why it isn't a valid capability */
+    /** @var array<string, array{reason: string, package: string}> why each declared entry is invalid */
     private array $errors = [];
 
     public function __construct(
@@ -43,19 +43,29 @@ final class PackageCapabilityDeclarations
             if ($name === null || !is_array($entries)) {
                 continue;
             }
-            foreach ($entries as $entry) {
-                $id = is_array($entry) && is_string($entry['id'] ?? null) ? $entry['id'] : $name;
+            foreach (array_values($entries) as $index => $entry) {
+                $id = is_array($entry) && is_string($entry['id'] ?? null) && $entry['id'] !== ''
+                    ? $entry['id']
+                    : "{$name} (entry " . ($index + 1) . ')';
                 try {
                     $out[] = new CapabilityDeclaration(self::capability($name, (array) $entry), 'package:' . $name);
                 } catch (\Throwable $e) {
-                    $this->errors[$id] = "{$name}: " . $e->getMessage();
+                    $this->errors[$id] = [
+                        'reason' => "an invalid declaration in {$name}: " . $e->getMessage(),
+                        'package' => $name,
+                    ];
                 }
             }
         }
         return $out;
     }
 
-    /** @return array<string, string> why a declared entry isn't a valid capability, by id */
+    /**
+     * Why a declared entry isn't a valid capability, and the package that declared it, by id (an
+     * entry without an id is keyed by its package and position).
+     *
+     * @return array<string, array{reason: string, package: string}>
+     */
     public function errors(): array
     {
         return $this->errors;

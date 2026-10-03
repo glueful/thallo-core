@@ -26,7 +26,8 @@ final class DeclarationSet
     /**
      * @param list<CapabilityDeclaration> $declarations
      * @param array<string, string> $providers composer package => provider class, from the manifest
-     * @param array<string, string> $errors declared id => why its declaration isn't a valid capability
+     * @param array<string, string|array{reason: string, package?: string}> $errors declared id => why its
+     *        declaration isn't a valid capability (and the package that declared it, protected with it)
      * @param list<string> $required packages Thallo requires (never an activation engine)
      */
     public function __construct(
@@ -57,12 +58,19 @@ final class DeclarationSet
             $this->valid[$id] = $group[0]->capability;
         }
         $this->rejectEngines($required);
-        $this->rejectSharedPackages();
-        foreach ($errors as $id => $reason) {
+        foreach ($errors as $id => $error) {
+            $id = (string) $id;
             unset($this->valid[$id]);
             $packages = $this->misconfigured[$id]['packages'] ?? [];
+            $package = is_array($error) ? ($error['package'] ?? null) : null;
+            if (is_string($package) && !in_array($package, $packages, true)) {
+                $packages[] = $package;
+                sort($packages);
+            }
+            $reason = is_array($error) ? $error['reason'] : $error;
             $this->misconfigured[$id] = ['reason' => $reason, 'packages' => $packages];
         }
+        $this->rejectSharedPackages();
     }
 
     /** @return list<CapabilityDeclaration> */
@@ -158,7 +166,11 @@ final class DeclarationSet
         }
     }
 
-    /** One package can be managed by one capability only: every capability claiming it is rejected. */
+    /**
+     * One package can be managed by one capability only: every capability claiming it is rejected. A
+     * misconfigured declaration's packages are claims too, so a conflict over another activation's
+     * engine blocks that activation as well; the misconfigured one keeps its own reason.
+     */
     private function rejectSharedPackages(): void
     {
         $claims = [];
@@ -167,12 +179,21 @@ final class DeclarationSet
                 $claims[$capability->owningPackage][] = $id;
             }
         }
+        foreach ($this->misconfigured as $id => $entry) {
+            foreach ($entry['packages'] as $package) {
+                $claims[$package][] = (string) $id;
+            }
+        }
         foreach ($claims as $package => $ids) {
+            $ids = array_values(array_unique($ids));
             if (count($ids) < 2) {
                 continue;
             }
             sort($ids);
             foreach ($ids as $id) {
+                if (!isset($this->valid[$id])) {
+                    continue;
+                }
                 unset($this->valid[$id]);
                 $this->misconfigured[$id] = [
                     'reason' => "one of several capabilities that claim {$package} (" . implode(', ', $ids) . ')',

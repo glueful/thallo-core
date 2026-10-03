@@ -14,6 +14,8 @@ use Glueful\Extensions\Aegis\Repositories\RoleRepository;
 use Glueful\Extensions\ExtensionManager;
 use Glueful\Interfaces\Permission\PermissionCatalogSyncInterface;
 use Glueful\Permissions\Catalog\PermissionRegistry;
+use Thallo\Core\Capabilities\CapabilityStateStore;
+use Thallo\Core\Capabilities\FeatureManagementPolicy;
 
 /**
  * Makes "superuser has full access" true.
@@ -35,6 +37,11 @@ use Glueful\Permissions\Catalog\PermissionRegistry;
  * into the ledger) takes every permission that existed before this run's catalog sync as already
  * offered, and is granted only what the sync added. ROLE_EXCLUSIONS still withhold
  * a permission from a role outright.
+ *
+ * A permission managed by the engine of an activation capability that is not on is synced but
+ * neither granted nor recorded as offered: that capability's activation grants it (spec §7.3a — no
+ * grants before the activation). The activation passes its capability, so its engine's permissions
+ * are offered then.
  */
 final class InstallRoleGrants
 {
@@ -57,10 +64,12 @@ final class InstallRoleGrants
     ) {
     }
 
-    public function apply(): InstallRoleGrantsReport
+    /** @param string|null $activating the activation capability granting its permissions now */
+    public function apply(?string $activating = null): InstallRoleGrantsReport
     {
         $before = $this->permissionSlugs();
         $declared = $this->syncCatalog();
+        $withheld = $this->withheldSlugs($activating);
 
         // The decision and its record are one serialized transaction: under the grants lock the
         // ledger is read fresh, the grants are made and the ledger is written back. Two runs (two
@@ -69,7 +78,7 @@ final class InstallRoleGrants
         // revocation. An activation calls this inside its fenced row lock, so its ownership is held
         // through the whole transaction (lock order: activation row, then this lock).
         $db = $this->context->getContainer()->get(Connection::class);
-        $granted = $db->transaction(function () use ($db, $before): array {
+        $granted = $db->transaction(function () use ($db, $before, $withheld): array {
             $db->getPDO()->exec("SELECT pg_advisory_xact_lock(hashtext('thallo:install-role-grants'))");
             $channel = $this->channel();
             if ($channel instanceof SystemFlags) {
@@ -80,7 +89,13 @@ final class InstallRoleGrants
 
             $granted = [];
             foreach (self::ROLE_EXCLUSIONS as $role => $except) {
-                [$granted[$role], $ledger[$role]] = $this->grantNew($role, $except, $ledger[$role] ?? null, $before);
+                [$granted[$role], $ledger[$role]] = $this->grantNew(
+                    $role,
+                    $except,
+                    $ledger[$role] ?? null,
+                    $before,
+                    $withheld,
+                );
             }
             $channel->put(self::LEDGER_KEY, (string) json_encode($ledger, JSON_THROW_ON_ERROR));
             return $granted;
@@ -125,6 +140,37 @@ final class InstallRoleGrants
     private function channel(): SystemChannel
     {
         return $this->context->getContainer()->get(SystemChannel::class);
+    }
+
+    /**
+     * The permissions of every activation capability's engine whose capability is not on (its
+     * stored switch), other than the one being activated.
+     *
+     * @return list<string>
+     */
+    private function withheldSlugs(?string $activating): array
+    {
+        $container = $this->context->getContainer();
+        if (!$container->has(FeatureManagementPolicy::class) || !$container->has(CapabilityStateStore::class)) {
+            return [];
+        }
+        $policy = $container->get(FeatureManagementPolicy::class);
+        $states = $container->get(CapabilityStateStore::class);
+        $packages = [];
+        foreach ($policy->activationCapabilities() as $id) {
+            $package = $policy->engineOf($id)['package'] ?? null;
+            if ($id !== $activating && is_string($package) && $states->storedFresh($id) !== true) {
+                $packages[] = $package;
+            }
+        }
+        if ($packages === []) {
+            return [];
+        }
+        $in = implode(', ', array_fill(0, count($packages), '?'));
+        $stmt = $container->get(Connection::class)->getPDO()
+            ->prepare("SELECT slug FROM permissions WHERE managed_by IN ({$in})");
+        $stmt->execute($packages);
+        return array_map('strval', $stmt->fetchAll(\PDO::FETCH_COLUMN));
     }
 
     /** @return list<string> every permission slug in the provider now */
@@ -198,9 +244,10 @@ final class InstallRoleGrants
      * @param list<string> $except
      * @param list<string>|null $offered the role's ledger entry; null when it has none yet
      * @param list<string> $before the permission slugs that existed before this run's catalog sync
+     * @param list<string> $withheld synced, but neither granted nor recorded as offered
      * @return array{0: int, 1: list<string>}
      */
-    private function grantNew(string $roleSlug, array $except, ?array $offered, array $before): array
+    private function grantNew(string $roleSlug, array $except, ?array $offered, array $before, array $withheld): array
     {
         $roles = new RoleRepository(null, $this->context);
         $permissions = new PermissionRepository(null, $this->context);
@@ -221,13 +268,14 @@ final class InstallRoleGrants
         // grants already (reading that as an upgrade recorded every migration-seeded permission as
         // offered and granted none). An installed site's role holding grants has, in effect,
         // been offered whatever existed before this run.
-        $offered ??= $held === [] || !$this->installed() ? [] : $before;
+        $offered ??= $held === [] || !$this->installed() ? [] : array_values(array_diff($before, $withheld));
         $offeredSet = array_fill_keys($offered, true);
+        $withheldSet = array_fill_keys($withheld, true);
 
         $granted = 0;
         foreach ($permissions->findAllPermissions() as $permission) {
             $slug = $permission->getSlug();
-            if (isset($offeredSet[$slug]) || in_array($slug, $except, true)) {
+            if (isset($offeredSet[$slug]) || isset($withheldSet[$slug]) || in_array($slug, $except, true)) {
                 continue;
             }
             $offeredSet[$slug] = true;
