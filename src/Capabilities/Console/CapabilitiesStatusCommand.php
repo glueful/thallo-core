@@ -14,8 +14,8 @@ use Thallo\Core\Capabilities\CapabilityStateStore;
 use Thallo\Core\Capabilities\FeatureManagementPolicy;
 
 /** Where every feature with an activation flow stands: on, off, preparing or failed, and why. */
-#[AsCommand(name: 'thallo:features:status', description: 'Show where each feature with an activation stands')]
-final class FeaturesStatusCommand extends BaseCommand
+#[AsCommand(name: 'thallo:capabilities:status', description: 'Show where each capability with an activation stands')]
+final class CapabilitiesStatusCommand extends BaseCommand
 {
     protected function execute(InputInterface $input, OutputInterface $output): int
     {

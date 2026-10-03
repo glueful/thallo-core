@@ -65,7 +65,7 @@ final class FeatureManagementPolicy
     }
 
     /**
-     * How a capability is switched on the Features page: `activation` (the activation flow),
+     * How a capability is switched on Extensions › Capabilities: `activation` (the activation flow),
      * `workspaces` (Settings › Workspaces) or `simple` (a plain switch).
      */
     public function capabilityManagement(string $capability): string
@@ -111,7 +111,7 @@ final class FeatureManagementPolicy
                     'class' => self::MANAGED,
                     'capability' => $capability,
                     'reason' => self::managedReason($engine['label'], $capability),
-                    'link' => '/features',
+                    'link' => '/extensions',
                 ];
             }
         }
@@ -149,7 +149,7 @@ final class FeatureManagementPolicy
 
     private static function managedReason(string $label, string $capability): string
     {
-        return "Managed by {$label}: turn it on in Features, or run "
-            . "`php glueful thallo:features:enable {$capability}`.";
+        return "Managed by {$label}: turn it on in Extensions, or run "
+            . "`php glueful thallo:capabilities:enable {$capability}`.";
     }
 }

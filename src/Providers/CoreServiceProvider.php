@@ -2631,18 +2631,18 @@ final class CoreServiceProvider extends ServiceProvider
                 'shared' => true,
                 'autowire' => true,
             ],
-            \Thallo\Core\Capabilities\Console\FeaturesEnableCommand::class => [
-                'class' => \Thallo\Core\Capabilities\Console\FeaturesEnableCommand::class,
+            \Thallo\Core\Capabilities\Console\CapabilitiesEnableCommand::class => [
+                'class' => \Thallo\Core\Capabilities\Console\CapabilitiesEnableCommand::class,
                 'shared' => true,
                 'autowire' => true,
             ],
-            \Thallo\Core\Capabilities\Console\FeaturesResumeCommand::class => [
-                'class' => \Thallo\Core\Capabilities\Console\FeaturesResumeCommand::class,
+            \Thallo\Core\Capabilities\Console\CapabilitiesResumeCommand::class => [
+                'class' => \Thallo\Core\Capabilities\Console\CapabilitiesResumeCommand::class,
                 'shared' => true,
                 'autowire' => true,
             ],
-            \Thallo\Core\Capabilities\Console\FeaturesStatusCommand::class => [
-                'class' => \Thallo\Core\Capabilities\Console\FeaturesStatusCommand::class,
+            \Thallo\Core\Capabilities\Console\CapabilitiesStatusCommand::class => [
+                'class' => \Thallo\Core\Capabilities\Console\CapabilitiesStatusCommand::class,
                 'shared' => true,
                 'autowire' => true,
             ],
@@ -2651,8 +2651,8 @@ final class CoreServiceProvider extends ServiceProvider
                 'shared' => true,
                 'autowire' => true,
             ],
-            \Thallo\Core\Setup\FeatureProvisioning::class => [
-                'class' => \Thallo\Core\Setup\FeatureProvisioning::class,
+            \Thallo\Core\Setup\CapabilityProvisioning::class => [
+                'class' => \Thallo\Core\Setup\CapabilityProvisioning::class,
                 'shared' => true,
                 'autowire' => true,
             ],
@@ -3086,9 +3086,9 @@ final class CoreServiceProvider extends ServiceProvider
             \Thallo\Core\Content\Console\ListBlockTypesCommand::class,
             \Thallo\Core\Content\Console\PruneFormSubmissionsCommand::class,
             \Thallo\Core\Capabilities\Console\CapabilitiesCommand::class,
-            \Thallo\Core\Capabilities\Console\FeaturesEnableCommand::class,
-            \Thallo\Core\Capabilities\Console\FeaturesResumeCommand::class,
-            \Thallo\Core\Capabilities\Console\FeaturesStatusCommand::class,
+            \Thallo\Core\Capabilities\Console\CapabilitiesEnableCommand::class,
+            \Thallo\Core\Capabilities\Console\CapabilitiesResumeCommand::class,
+            \Thallo\Core\Capabilities\Console\CapabilitiesStatusCommand::class,
             \Thallo\Core\Content\Console\DocsSetupCommand::class,
             PolicyManifestCommand::class,
             SeedBlockTypesCommand::class,

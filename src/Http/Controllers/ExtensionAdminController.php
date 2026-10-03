@@ -407,7 +407,7 @@ class ExtensionAdminController
         if ($management['class'] === FeatureManagementPolicy::MANAGED) {
             return $management['capability'] === null
                 ? null
-                : "php glueful thallo:features:enable {$management['capability']}";
+                : "php glueful thallo:capabilities:enable {$management['capability']}";
         }
         return $enabled
             ? "php glueful extensions:disable {$package}"

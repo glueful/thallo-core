@@ -107,7 +107,7 @@ final class ActivationRunner
                 ActivationStep::ENABLE_ENGINE,
                 "Application files can't be written on this host, so the engine ({$engine['package']}) "
                 . "can't be enabled here. Prepare it at deploy time.",
-                "php glueful thallo:features:enable {$capability} --prepare",
+                "php glueful thallo:capabilities:enable {$capability} --prepare",
             );
         }
         $prepared = $this->engine->prepare($engine['package'], $engine['provider'], 'activation:' . $capability);

@@ -14,13 +14,13 @@ use Thallo\Core\Capabilities\FeatureManagementPolicy;
  * Provision's part in features (feature activation spec §3.9–3.10).
  *
  *  - resumeOpenActivations: a feature left preparing (a deploy-time `--prepare`, an interrupted
- *    turn-on) is finished by `thallo:features:resume` in a child process, so provision's own
+ *    turn-on) is finished by `thallo:capabilities:resume` in a child process, so provision's own
  *    process never verifies a boot it changed.
  *  - repairRequiredProviders: a package Thallo requires that is missing from the enabled list is
  *    put back (under the extension-state lock, with the cache rebuilt) when application files are
  *    writable; on a read-only host each one is named with the deploy-time step instead.
  */
-final class FeatureProvisioning
+final class CapabilityProvisioning
 {
     public function __construct(
         private readonly ApplicationContext $context,
@@ -44,7 +44,7 @@ final class FeatureProvisioning
             return null;
         }
         $line('Finishing ' . implode(', ', $open) . ' in a fresh process:');
-        return (new FreshProcess($this->context))->glueful(['thallo:features:resume'], $line);
+        return (new FreshProcess($this->context))->glueful(['thallo:capabilities:resume'], $line);
     }
 
     /**

@@ -13,7 +13,7 @@ use Thallo\Core\Capabilities\Activation\ActivationStatus;
 use Thallo\Core\Capabilities\Activation\ActivationSuperseded;
 
 /**
- * What thallo:features:enable and :resume share: one runner call, and what to do with where it
+ * What thallo:capabilities:enable and :resume share: one runner call, and what to do with where it
  * stopped — report a failure with its fix, report success from the operation's result, stop for
  * --prepare, or continue in a fresh process (at most MAX_HOPS in a row).
  */
@@ -30,7 +30,7 @@ trait ContinuesActivations
             $this->error("{$id} was turned off or restarted while this ran; nothing more was done.");
             return self::FAILURE;
         } catch (ActivationInProgress) {
-            $this->error("{$id} is being turned on by another request. See `php glueful thallo:features:status`.");
+            $this->error("{$id} is being turned on by another request. See `php glueful thallo:capabilities:status`.");
             return self::FAILURE;
         }
     }
@@ -49,7 +49,7 @@ trait ContinuesActivations
             if ($record->remedy !== null) {
                 $this->line("Fix: {$record->remedy}");
             }
-            $this->line("Then run `php glueful thallo:features:resume {$id}`.");
+            $this->line("Then run `php glueful thallo:capabilities:resume {$id}`.");
             return self::FAILURE;
         }
         if ($record->status === ActivationStatus::SUCCEEDED) {
@@ -61,19 +61,19 @@ trait ContinuesActivations
         }
         if ($prepareOnly) {
             $this->success(
-                "Prepared. Finish on the running site: Features, or `php glueful thallo:features:resume {$id}`."
+                "Prepared. Finish on the running site: Extensions, or `php glueful thallo:capabilities:resume {$id}`."
             );
             return self::SUCCESS;
         }
         if ($hop >= self::MAX_HOPS) {
             $this->error(
-                "{$label} still needs a fresh process after {$hop}; run `php glueful thallo:features:resume {$id}`."
+                "{$label} still needs a fresh process after {$hop}; run `php glueful thallo:capabilities:resume {$id}`."
             );
             return self::FAILURE;
         }
         $this->line('Continuing in a fresh process…');
         $exit = $this->getService(FreshProcess::class)->glueful(
-            ['thallo:features:resume', $id, '--hop=' . ($hop + 1)],
+            ['thallo:capabilities:resume', $id, '--hop=' . ($hop + 1)],
             static function (string $line) use ($output): void {
                 $output->writeln($line);
             },

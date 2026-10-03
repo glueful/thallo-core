@@ -14,13 +14,13 @@ use Thallo\Core\Capabilities\Activation\ActivationStore;
 use Thallo\Core\Capabilities\FeatureManagementPolicy;
 
 /**
- * Turns a feature on from a shell, as the Features page does: prepares its engine, then continues
+ * Turns a capability on from a shell, as Extensions › Capabilities does: prepares its engine, then continues
  * in a fresh process (the engine's provider only boots there) through its blocks, its permissions
  * and the switch. `--prepare` stops after the engine, for deploy time on a host whose application
  * files are read-only at runtime; the running site then finishes it.
  */
-#[AsCommand(name: 'thallo:features:enable', description: 'Turn a feature on, preparing everything it needs')]
-final class FeaturesEnableCommand extends BaseCommand
+#[AsCommand(name: 'thallo:capabilities:enable', description: 'Turn a capability on, preparing everything it needs')]
+final class CapabilitiesEnableCommand extends BaseCommand
 {
     use ContinuesActivations;
 

@@ -194,7 +194,7 @@ class CapabilityAdminController
     }
 
     /**
-     * How the Features page switches this capability, and for an activation feature its open or
+     * How Extensions › Capabilities switches this capability, and for an activation feature its open or
      * last activation, whether application files can be written, and whether its engine is
      * enabled.
      *

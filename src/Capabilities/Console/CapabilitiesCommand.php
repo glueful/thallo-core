@@ -79,7 +79,7 @@ final class CapabilitiesCommand extends BaseCommand
         $label = $policy->labelOf($id);
         if ($label !== null && $enabled) {
             $this->error(
-                "Turn {$label} on with `php glueful thallo:features:enable {$id}`: it prepares the store first."
+                "Turn {$label} on with `php glueful thallo:capabilities:enable {$id}`: it prepares the store first."
             );
             return self::FAILURE;
         }

@@ -18,8 +18,8 @@ use Thallo\Core\Capabilities\FeatureManagementPolicy;
  * fresh process: after `--prepare` at deploy time, after a failed step was fixed, or from
  * provision. When it retries the engine step it continues in another fresh process.
  */
-#[AsCommand(name: 'thallo:features:resume', description: 'Finish turning on a feature that is being prepared')]
-final class FeaturesResumeCommand extends BaseCommand
+#[AsCommand(name: 'thallo:capabilities:resume', description: 'Finish turning on a capability that is being prepared')]
+final class CapabilitiesResumeCommand extends BaseCommand
 {
     use ContinuesActivations;
 
