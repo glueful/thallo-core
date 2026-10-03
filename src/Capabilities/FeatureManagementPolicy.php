@@ -62,6 +62,13 @@ final class FeatureManagementPolicy
         return $this->declarations->capabilities()[$id] ?? null;
     }
 
+    /** Why a declared capability is misconfigured, or null when it isn't. */
+    public function misconfiguration(string $id): ?string
+    {
+        $entry = $this->declarations->misconfigured()[$id] ?? null;
+        return $entry === null ? null : self::misconfiguredReason($id, $entry['reason']);
+    }
+
     /** Its name for messages ("Commerce"), or null when it doesn't turn on through activation. */
     public function labelOf(string $capability): ?string
     {

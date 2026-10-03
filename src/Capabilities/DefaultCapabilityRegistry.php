@@ -49,11 +49,14 @@ final class DefaultCapabilityRegistry implements CapabilityRegistry
      *        switchboard); when set it REPLACES the static overrides map. `null` means "no
      *        explicit answer" and the switch follows the engine. Memoized per registry
      *        lifetime, so repeated gates cost one lookup per capability per boot.
+     * @param array<string,string> $misconfigured id => why its declaration is misconfigured; such a
+     *        capability is never available.
      */
     public function __construct(
         private readonly array $overrides = [],
         private readonly ?CapabilityAvailabilityResolver $resolver = null,
         private readonly ?\Closure $requestedState = null,
+        private readonly array $misconfigured = [],
     ) {
     }
 
@@ -139,6 +142,11 @@ final class DefaultCapabilityRegistry implements CapabilityRegistry
         $capability = $this->capabilities[$id] ?? null;
         if ($capability === null) {
             return CapabilityAvailability::unavailable("Capability {$id} is not registered.");
+        }
+        // A misconfigured declaration is never available, whatever its stored state: every gate
+        // that consumes effective state sees it off.
+        if (isset($this->misconfigured[$id])) {
+            return CapabilityAvailability::unavailable($this->misconfigured[$id]);
         }
         if ($this->resolver === null) {
             return $capability->owningPackage === null

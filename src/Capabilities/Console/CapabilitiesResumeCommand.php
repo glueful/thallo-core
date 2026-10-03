@@ -36,6 +36,10 @@ final class CapabilitiesResumeCommand extends BaseCommand
         $hop = max(0, (int) $input->getOption('hop'));
 
         $given = trim((string) ($input->getArgument('capability') ?? ''));
+        if ($given !== '' && ($misconfigured = $policy->misconfiguration($given)) !== null) {
+            $this->error($misconfigured);
+            return self::FAILURE;
+        }
         if ($given !== '' && $policy->labelOf($given) === null) {
             $this->error("{$given} doesn't turn on through activation.");
             return self::FAILURE;

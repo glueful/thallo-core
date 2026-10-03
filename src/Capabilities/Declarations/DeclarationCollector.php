@@ -17,9 +17,11 @@ use Thallo\Contracts\Capability\DeclaresCapabilities;
  */
 final class DeclarationCollector
 {
+    /** @param list<string> $required packages Thallo requires (RequiredPackages::packages()) */
     public function __construct(
         private readonly ApplicationContext $context,
         private readonly PackageCapabilityDeclarations $packages,
+        private readonly array $required = [],
     ) {
     }
 
@@ -43,6 +45,6 @@ final class DeclarationCollector
         foreach ((new PackageManifest($this->context))->getCandidates() as $name => $candidate) {
             $providers[(string) $name] = $candidate->provider;
         }
-        return new DeclarationSet($declarations, $providers, $this->packages->errors());
+        return new DeclarationSet($declarations, $providers, $this->packages->errors(), $this->required);
     }
 }

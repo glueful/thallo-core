@@ -52,6 +52,10 @@ final class ActivationRunner
      */
     public function run(string $capability, int $generation, bool $freshBoot): ActivationOutcome
     {
+        $misconfigured = $this->policy->misconfiguration($capability);
+        if ($misconfigured !== null) {
+            throw new \InvalidArgumentException($misconfigured);
+        }
         $engine = $this->policy->engineOf($capability)
             ?? throw new \InvalidArgumentException("{$capability} does not turn on through the activation flow.");
         $lease = $this->store->acquire($capability, $generation)

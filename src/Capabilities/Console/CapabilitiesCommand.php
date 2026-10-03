@@ -76,6 +76,11 @@ final class CapabilitiesCommand extends BaseCommand
         // A feature with an activation flow turns on through it (engine, blocks, grants, then the
         // switch); turning it off supersedes any outstanding runner and stores it off in one write.
         $policy = $this->getService(FeatureManagementPolicy::class);
+        $misconfigured = $policy->misconfiguration($id);
+        if ($misconfigured !== null) {
+            $this->error($misconfigured);
+            return self::FAILURE;
+        }
         $label = $policy->labelOf($id);
         if ($label !== null && $enabled) {
             $this->error(

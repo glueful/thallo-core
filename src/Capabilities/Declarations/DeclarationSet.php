@@ -27,11 +27,13 @@ final class DeclarationSet
      * @param list<CapabilityDeclaration> $declarations
      * @param array<string, string> $providers composer package => provider class, from the manifest
      * @param array<string, string> $errors declared id => why its declaration isn't a valid capability
+     * @param list<string> $required packages Thallo requires (never an activation engine)
      */
     public function __construct(
         private readonly array $declarations,
         private readonly array $providers,
         array $errors = [],
+        array $required = [],
     ) {
         $byId = [];
         foreach ($declarations as $declaration) {
@@ -54,6 +56,8 @@ final class DeclarationSet
             }
             $this->valid[$id] = $group[0]->capability;
         }
+        $this->rejectEngines($required);
+        $this->rejectSharedPackages();
         foreach ($errors as $id => $reason) {
             unset($this->valid[$id]);
             $packages = $this->misconfigured[$id]['packages'] ?? [];
@@ -128,6 +132,55 @@ final class DeclarationSet
         }
         ksort($out);
         return $out;
+    }
+
+    /** An activation engine must be installed, and must not be a package Thallo requires. */
+    private function rejectEngines(array $required): void
+    {
+        foreach ($this->valid as $id => $capability) {
+            if ($capability->management !== ManagementMode::Activation) {
+                continue;
+            }
+            $package = (string) $capability->owningPackage;
+            if (in_array($package, $required, true)) {
+                unset($this->valid[$id]);
+                $this->misconfigured[$id] = [
+                    'reason' => "an activation over {$package}, which is required by Thallo",
+                    'packages' => [],
+                ];
+            } elseif (!isset($this->providers[$package])) {
+                unset($this->valid[$id]);
+                $this->misconfigured[$id] = [
+                    'reason' => "an activation over {$package}, which is not installed",
+                    'packages' => [],
+                ];
+            }
+        }
+    }
+
+    /** One package can be managed by one capability only: every capability claiming it is rejected. */
+    private function rejectSharedPackages(): void
+    {
+        $claims = [];
+        foreach ($this->valid as $id => $capability) {
+            if ($capability->management !== ManagementMode::Simple && $capability->owningPackage !== null) {
+                $claims[$capability->owningPackage][] = $id;
+            }
+        }
+        foreach ($claims as $package => $ids) {
+            if (count($ids) < 2) {
+                continue;
+            }
+            sort($ids);
+            foreach ($ids as $id) {
+                unset($this->valid[$id]);
+                $this->misconfigured[$id] = [
+                    'reason' => "one of several capabilities that claim {$package} (" . implode(', ', $ids) . ')',
+                    'packages' => [$package],
+                ];
+            }
+        }
+        ksort($this->misconfigured);
     }
 
     /** @param list<CapabilityDeclaration> $group */

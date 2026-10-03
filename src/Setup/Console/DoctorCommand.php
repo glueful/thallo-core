@@ -59,6 +59,10 @@ final class DoctorCommand extends BaseCommand
         if ($reachability !== null) {
             $checks[] = $reachability;
         }
+        $declarations = $this->capabilityDeclarationsCheck();
+        if ($declarations !== null) {
+            $checks[] = $declarations;
+        }
 
         $rows = [];
         $failed = false;
@@ -97,5 +101,27 @@ final class DoctorCommand extends BaseCommand
             Check::WARN => 'WARN',
             default => 'FAIL',
         };
+    }
+
+    /**
+     * Capability declarations that conflict (spec §7.3): each one is blocked everywhere until its
+     * packages are fixed, so it fails the doctor. Skipped when the application can't build them.
+     */
+    private function capabilityDeclarationsCheck(): ?Check
+    {
+        try {
+            $container = $this->getContext()->getContainer();
+            $set = $container->get(\Thallo\Core\Capabilities\Declarations\DeclarationSet::class);
+            $policy = $container->get(\Thallo\Core\Capabilities\FeatureManagementPolicy::class);
+        } catch (\Throwable) {
+            return null;
+        }
+        $problems = [];
+        foreach (array_keys($set->misconfigured()) as $id) {
+            $problems[] = (string) $policy->misconfiguration($id);
+        }
+        return $problems === []
+            ? Check::ok('capability-declarations', 'Every capability declaration is consistent.')
+            : Check::fail('capability-declarations', implode(' ', $problems));
     }
 }

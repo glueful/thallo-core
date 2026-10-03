@@ -2826,14 +2826,20 @@ final class CoreServiceProvider extends ServiceProvider
         $switchboard = $container->get(CapabilityStateStore::class);
         $snapshot = $container->get(\Thallo\Core\Capabilities\CapabilityStateSnapshot::class);
 
+        $declarations = $container->get(\Thallo\Core\Capabilities\Declarations\DeclarationSet::class);
+        $policy = $container->get(\Thallo\Core\Capabilities\FeatureManagementPolicy::class);
+        $misconfigured = [];
+        foreach (array_keys($declarations->misconfigured()) as $id) {
+            $misconfigured[$id] = (string) $policy->misconfiguration($id);
+        }
         $registry = new DefaultCapabilityRegistry(
             [],
             new ExtensionCapabilityAvailabilityResolver($context),
             static fn (string $id): ?bool => $switchboard->explicitFrom($snapshot->rows, $id),
+            $misconfigured,
         );
         // Every declaration, collected before any provider booted (the first capability decision
         // happens inside some provider's boot(), after every register()), then sealed.
-        $declarations = $container->get(\Thallo\Core\Capabilities\Declarations\DeclarationSet::class);
         foreach ($declarations->capabilities() as $capability) {
             $registry->register($capability);
         }
@@ -2858,14 +2864,13 @@ final class CoreServiceProvider extends ServiceProvider
         ContainerInterface $container,
     ): \Thallo\Core\Capabilities\Declarations\DeclarationSet {
         $context = $container->get(ApplicationContext::class);
+        $required = $container->get(\Thallo\Core\Capabilities\RequiredPackages::class);
         $set = (new \Thallo\Core\Capabilities\Declarations\DeclarationCollector(
             $context,
             new \Thallo\Core\Capabilities\Declarations\PackageCapabilityDeclarations($context),
+            $required->packages(),
         ))->collect();
-        $policy = new \Thallo\Core\Capabilities\FeatureManagementPolicy(
-            $set,
-            $container->get(\Thallo\Core\Capabilities\RequiredPackages::class),
-        );
+        $policy = new \Thallo\Core\Capabilities\FeatureManagementPolicy($set, $required);
         $context->mergeConfigDefaults('extensions', ['protected' => $policy->protectedProviders()]);
         return $set;
     }

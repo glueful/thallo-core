@@ -34,6 +34,11 @@ final class CapabilitiesEnableCommand extends BaseCommand
     {
         $id = trim((string) $input->getArgument('capability'));
         $policy = $this->getService(FeatureManagementPolicy::class);
+        $misconfigured = $policy->misconfiguration($id);
+        if ($misconfigured !== null) {
+            $this->error($misconfigured);
+            return self::FAILURE;
+        }
         $label = $policy->labelOf($id);
         if ($label === null) {
             $this->error(

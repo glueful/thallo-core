@@ -124,6 +124,10 @@ class CapabilityAdminController
         if (!$registered) {
             return Response::notFound("No registered capability named “{$id}”.");
         }
+        $misconfigured = $this->policy()->misconfiguration($id);
+        if ($misconfigured !== null) {
+            return Response::error($misconfigured, 409, ['reason' => 'misconfigured']);
+        }
 
         // A feature with an activation flow is never written on directly (it would skip the
         // engine, its blocks and its grants), and turning it off supersedes any open activation
@@ -198,7 +202,7 @@ class CapabilityAdminController
      * flow's destination and an activation's copy), and for an activation capability its open or
      * last activation, whether application files can be written, and whether its engine is loaded.
      *
-     * @return array{management: string, destination: ?array{path: string, label: string},
+     * @return array{management: string, misconfigured: ?string, destination: ?array{path: string, label: string},
      *     copy: ?array{turn_on: ?string, turn_off: ?string, links: list<array{label: string, to: string}>},
      *     activation: ?array<string, mixed>, application_files_writable: ?bool, engine_enabled: ?bool}
      */
@@ -208,6 +212,7 @@ class CapabilityAdminController
         $policy = $this->policy();
         $declared = [
             'management' => $policy->capabilityManagement($id),
+            'misconfigured' => $policy->misconfiguration($id),
             'destination' => $capability->destination === null
                 ? null
                 : ['path' => $capability->destination->path, 'label' => $capability->destination->label],

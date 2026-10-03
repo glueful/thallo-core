@@ -54,6 +54,9 @@ class CapabilityActivationController
     #[ApiResponse(409, description: 'Another request is running this activation (`in_progress`).')]
     public function start(Request $request, string $id): Response
     {
+        if (($refused = $this->refuseMisconfigured($id)) !== null) {
+            return $refused;
+        }
         if (!$this->isActivationCapability($id)) {
             return Response::notFound("“{$id}” doesn't turn on through activation.");
         }
@@ -74,6 +77,9 @@ class CapabilityActivationController
     #[ApiResponse(409, description: 'A newer decision exists (`superseded`), or it is running (`in_progress`).')]
     public function continue(ActivationGenerationData $input, Request $request, string $id): Response
     {
+        if (($refused = $this->refuseMisconfigured($id)) !== null) {
+            return $refused;
+        }
         if (!$this->isActivationCapability($id)) {
             return Response::notFound("“{$id}” doesn't turn on through activation.");
         }
@@ -92,6 +98,9 @@ class CapabilityActivationController
     #[ApiResponse(409, description: 'That generation is no longer current (`superseded`); nothing changed.')]
     public function cancel(ActivationGenerationData $input, Request $request, string $id): Response
     {
+        if (($refused = $this->refuseMisconfigured($id)) !== null) {
+            return $refused;
+        }
         if (!$this->isActivationCapability($id)) {
             return Response::notFound("“{$id}” doesn't turn on through activation.");
         }
@@ -126,6 +135,13 @@ class CapabilityActivationController
         );
         $response->setStatusCode($status);
         return $response;
+    }
+
+    /** A misconfigured capability can't be started, continued or cancelled (409 `misconfigured`). */
+    private function refuseMisconfigured(string $id): ?Response
+    {
+        $why = app($this->context, FeatureManagementPolicy::class)->misconfiguration($id);
+        return $why === null ? null : Response::error($why, 409, ['reason' => 'misconfigured']);
     }
 
     private function isActivationCapability(string $id): bool
