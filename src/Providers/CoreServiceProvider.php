@@ -801,6 +801,15 @@ final class CoreServiceProvider extends ServiceProvider implements \Thallo\Contr
                 'factory' => [self::class, 'makeCapabilityRegistry'],
                 'shared' => true,
             ],
+            \Thallo\Contracts\Fields\FieldOptionSourceRegistry::class => [
+                'class' => \Thallo\Core\Content\Fields\DefaultFieldOptionSourceRegistry::class,
+                'shared' => true,
+            ],
+            \Thallo\Core\Content\Fields\FieldOptionsController::class => [
+                'class' => \Thallo\Core\Content\Fields\FieldOptionsController::class,
+                'shared' => true,
+                'autowire' => true,
+            ],
             \Thallo\Contracts\Capability\AvailabilityFingerprint::class => [
                 'class' => \Thallo\Core\Capabilities\RegistryAvailabilityFingerprint::class,
                 'shared' => true,

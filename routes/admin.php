@@ -136,9 +136,15 @@ $router->group(['prefix' => '/v1/admin'], function (Router $router): void {
         // or delete's scope from the stored section, not the request.
         $router->post('/saved-sections', [\Thallo\Core\Content\Http\Controllers\SavedSectionController::class, 'store'])
             ->middleware('content_permission:content.view');
-        $router->patch('/saved-sections/{id}', [\Thallo\Core\Content\Http\Controllers\SavedSectionController::class, 'update'])
+        $router->patch(
+            '/saved-sections/{id}',
+            [\Thallo\Core\Content\Http\Controllers\SavedSectionController::class, 'update'],
+        )
             ->middleware('content_permission:content.view');
-        $router->delete('/saved-sections/{id}', [\Thallo\Core\Content\Http\Controllers\SavedSectionController::class, 'destroy'])
+        $router->delete(
+            '/saved-sections/{id}',
+            [\Thallo\Core\Content\Http\Controllers\SavedSectionController::class, 'destroy'],
+        )
             ->middleware('content_permission:content.view');
 
         // "Set up documentation" (Settings › Import / Export): makes a content type and changes a
@@ -351,6 +357,12 @@ $router->group(['prefix' => '/v1/admin'], function (Router $router): void {
 
         $router->delete('/form-submissions/{uuid}', [FormSubmissionsController::class, 'destroy'])
         ->middleware('content_permission:content.manage');
+
+    // A block field's server-provided choices (search block spec §3.9). The route needs
+    // content.edit (an author can load a field's choices); each source then checks its own
+    // permission. GET /field-options/{source} — permission: content.edit.
+        $router->get('/field-options/{source}', [\Thallo\Core\Content\Fields\FieldOptionsController::class, 'show'])
+        ->middleware('content_permission:content.edit');
 
     // Instance General settings — site identity, default locale, delivery defaults, feature toggles
     // (persisted as env keys in .env).
