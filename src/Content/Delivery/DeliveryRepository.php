@@ -220,6 +220,37 @@ final class DeliveryRepository
         return $rows[0] ?? null;
     }
 
+    /**
+     * Distinct indexable entries in uuid order, strictly after `$afterUuid` — the same join as
+     * every other indexable read, so a page of entries means a page of published, routed, active
+     * entries of live types.
+     *
+     * @return list<string>
+     */
+    public function indexableEntryUuidsAfter(?string $afterUuid, int $limit): array
+    {
+        $q = $this->applyIndexableJoins($this->db->table('entry_publications as p'), null, null)
+            ->select(['p.entry_uuid'])
+            ->distinct()
+            ->orderBy('p.entry_uuid', 'ASC')
+            ->limit($limit);
+        if ($afterUuid !== null) {
+            $q->where('p.entry_uuid', '>', $afterUuid);
+        }
+        return array_map(static fn (array $r): string => (string) $r['entry_uuid'], $q->get());
+    }
+
+    /** @return list<string> the locales in which one entry is indexable */
+    public function indexableLocalesOf(string $entryUuid): array
+    {
+        $rows = $this->applyIndexableJoins($this->db->table('entry_publications as p'), null, null, $entryUuid)
+            ->select(['p.locale'])
+            ->distinct()
+            ->orderBy('p.locale', 'ASC')
+            ->get();
+        return array_map(static fn (array $r): string => (string) $r['locale'], $rows);
+    }
+
     private const INDEXABLE_SELECT = [
         'p.entry_uuid', 'e.content_type_uuid', 'ct.slug as content_type_slug',
         'ct.public_delivery', 'ct.mount_at_root', 'p.locale', 'r.slug', 'v.fields', 'p.published_at',

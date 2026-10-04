@@ -43,6 +43,16 @@ final class EngineIndexableContentReader implements IndexableContentReader
         return new IndexablePage($items, $limit, $offset);
     }
 
+    public function publishedEntryUuidsAfter(?string $afterUuid, int $limit): array
+    {
+        return $this->delivery->indexableEntryUuidsAfter($afterUuid, $limit);
+    }
+
+    public function publishedLocalesOf(string $entryUuid): array
+    {
+        return $this->delivery->indexableLocalesOf($entryUuid);
+    }
+
     /** @param array<string,mixed> $row one row of DeliveryRepository's indexable join */
     private function toIndexable(array $row): IndexableContent
     {
