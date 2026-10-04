@@ -2704,6 +2704,15 @@ final class CoreServiceProvider extends ServiceProvider implements \Thallo\Contr
                 'shared' => true,
                 'autowire' => true,
             ],
+            \Thallo\Core\Capabilities\Console\AvailabilityPurgeCommand::class => [
+                'class' => \Thallo\Core\Capabilities\Console\AvailabilityPurgeCommand::class,
+                'shared' => true,
+                'autowire' => true,
+            ],
+            \Thallo\Core\Capabilities\AvailabilityPurge::class => [
+                'factory' => [self::class, 'makeAvailabilityPurge'],
+                'shared' => true,
+            ],
             \Thallo\Core\Capabilities\Console\FreshProcess::class => [
                 'class' => \Thallo\Core\Capabilities\Console\FreshProcess::class,
                 'shared' => true,
@@ -3018,6 +3027,28 @@ final class CoreServiceProvider extends ServiceProvider implements \Thallo\Contr
         return new \Glueful\Routing\Router($container);
     }
 
+    public static function makeAvailabilityPurge(
+        ContainerInterface $container,
+    ): \Thallo\Core\Capabilities\AvailabilityPurge {
+        $context = $container->get(ApplicationContext::class);
+        $pages = $container->has(\Thallo\Contracts\Delivery\RenderedPageCachePurge::class)
+            ? $container->get(\Thallo\Contracts\Delivery\RenderedPageCachePurge::class)
+            : null;
+        $edge = $container->has(\Glueful\Cache\Contracts\EdgeCacheInterface::class)
+            ? $container->get(\Glueful\Cache\Contracts\EdgeCacheInterface::class)
+            : null;
+
+        return new \Thallo\Core\Capabilities\AvailabilityPurge(
+            $container->get(\Thallo\Contracts\Capability\AvailabilityFingerprint::class),
+            $container->get(\Thallo\Contracts\Settings\SystemChannel::class),
+            $container->get(Connection::class),
+            $container->get(\Glueful\Cache\CacheStore::class),
+            (int) config($context, 'render.availability_edge_grace', 300),
+            $pages instanceof \Thallo\Contracts\Delivery\RenderedPageCachePurge ? $pages : null,
+            $edge instanceof \Glueful\Cache\Contracts\EdgeCacheInterface ? $edge : null,
+        );
+    }
+
     public static function makeCapabilityStateSnapshot(
         ContainerInterface $container,
     ): \Thallo\Core\Capabilities\CapabilityStateSnapshot {
@@ -3224,6 +3255,23 @@ final class CoreServiceProvider extends ServiceProvider implements \Thallo\Contr
                     }
                 },
             );
+            // Cached pages from before a change in the features in use are purged on the next
+            // request (search block spec §3.6) — configuration-only changes included. Never fails a
+            // request: the origin is already protected by the availability fingerprint in each key,
+            // and `thallo:availability:purge` (scheduled) repeats it.
+            $container->get(RequestLifecycle::class)->onBeginRequest(
+                static function () use ($container): void {
+                    try {
+                        $container->get(\Thallo\Core\Capabilities\AvailabilityPurge::class)->reconcile();
+                    } catch (\Throwable $e) {
+                        if ($container->has(LoggerInterface::class)) {
+                            $container->get(LoggerInterface::class)->warning(
+                                'Cached pages not purged after a feature change: ' . $e->getMessage(),
+                            );
+                        }
+                    }
+                },
+            );
         }
 
         EditorialFieldTypes::register(app($context, FieldTypeRegistry::class));
@@ -3240,6 +3288,7 @@ final class CoreServiceProvider extends ServiceProvider implements \Thallo\Contr
             \Thallo\Core\Capabilities\Console\CapabilitiesEnableCommand::class,
             \Thallo\Core\Capabilities\Console\CapabilitiesResumeCommand::class,
             \Thallo\Core\Capabilities\Console\CapabilitiesStatusCommand::class,
+            \Thallo\Core\Capabilities\Console\AvailabilityPurgeCommand::class,
             \Thallo\Core\Content\Console\DocsSetupCommand::class,
             PolicyManifestCommand::class,
             SeedBlockTypesCommand::class,
