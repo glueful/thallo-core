@@ -23,6 +23,8 @@ final class RegionDefinitions
         'header' => [
             'logo', 'navigation', 'button', 'color_mode', 'social_links', 'container', 'rich_text',
             'mini-cart', 'wishlist-link', 'auth-state',
+            // `search` is search-owned (thallo.search): a field, or an icon that opens one.
+            'search',
         ],
         'footer' => [
             'logo', 'navigation', 'button', 'social_links', 'container', 'rich_text',
