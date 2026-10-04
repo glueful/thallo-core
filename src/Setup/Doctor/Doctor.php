@@ -62,6 +62,10 @@ final class Doctor
         $checks[] = $this->writableStorageCheck();
         $checks[] = $this->logExposureCheck();
         $checks[] = $this->keysCheck();
+        $schedule = $this->scheduleCheck();
+        if ($schedule !== null) {
+            $checks[] = $schedule;
+        }
         $environment = $this->environmentCheck();
         // A web server that is not serving public/ fails every path below for that one reason:
         // say it once, and do not send the operator after asset rules.
@@ -408,6 +412,47 @@ final class Doctor
             || str_ends_with($host, '.localhost')
             || str_ends_with($host, '.local')
             || str_ends_with($host, '.test');
+    }
+
+    /**
+     * The scheduled jobs Thallo depends on. A site's config/schedule.php is its own copy and replaces
+     * the shipped list, so a job added in a release runs only once the site lists it: an upgrade
+     * that skipped the Upgrade Notes would otherwise never index search or finish a CDN purge.
+     */
+    private const REQUIRED_JOBS = [
+        'schedules_run',
+        'render_availability_purge',
+        'search_reconcile',
+        'search_reconcile_full',
+    ];
+
+    /** Warns when the site's config/schedule.php is missing a job Thallo runs on; null without one. */
+    private function scheduleCheck(): ?Check
+    {
+        $file = $this->basePath . '/config/schedule.php';
+        if (!is_file($file)) {
+            return null;
+        }
+        try {
+            $config = (static fn (string $path): mixed => require $path)($file);
+        } catch (\Throwable) {
+            return Check::warn('schedule', 'config/schedule.php could not be read.');
+        }
+        $names = [];
+        foreach ((array) (is_array($config) ? ($config['jobs'] ?? []) : []) as $job) {
+            if (is_array($job) && is_string($job['name'] ?? null)) {
+                $names[] = $job['name'];
+            }
+        }
+        $missing = array_values(array_diff(self::REQUIRED_JOBS, $names));
+        if ($missing === []) {
+            return Check::ok('schedule', 'config/schedule.php lists every job Thallo runs on.');
+        }
+        return Check::warn(
+            'schedule',
+            'config/schedule.php is missing ' . implode(', ', $missing)
+            . '. Copy them from a new site\'s config/schedule.php; until then they never run.',
+        );
     }
 
     private function writableStorageCheck(): Check
