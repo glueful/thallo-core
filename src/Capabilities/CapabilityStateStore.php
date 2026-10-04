@@ -137,6 +137,10 @@ final class CapabilityStateStore
                 $this->system->forget(self::LEGACY_SEARCH_KEY);
             }
             $version->advance();
+            // The version this switch advanced to, kept per capability: consumers that must notice
+            // every change (search's rebuild demand) compare against it, so an off/on cycle they
+            // never observed still reads as a change.
+            $this->system->put(self::PREFIX . $id . '.changed_at', $version->current());
         });
     }
 
