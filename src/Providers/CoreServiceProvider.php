@@ -801,6 +801,11 @@ final class CoreServiceProvider extends ServiceProvider implements \Thallo\Contr
                 'factory' => [self::class, 'makeCapabilityRegistry'],
                 'shared' => true,
             ],
+            \Thallo\Contracts\Capability\AvailabilityFingerprint::class => [
+                'class' => \Thallo\Core\Capabilities\RegistryAvailabilityFingerprint::class,
+                'shared' => true,
+                'autowire' => true,
+            ],
             SchemaProjector::class => [
                 'class' => SchemaProjector::class,
                 'shared' => false,
