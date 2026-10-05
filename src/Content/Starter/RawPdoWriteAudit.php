@@ -67,6 +67,8 @@ final class RawPdoWriteAudit implements StaticWriteAudit
         // The layout write locks: the same shape (type layouts spec §5.5); layout rows are written
         // through the builder under them.
         'core/src/Content/Layouts/LayoutWriteLock.php',
+        // The font library's blob lock: a row lock on the framework's (unowned) blobs table only.
+        'core/src/Content/Fonts/FontLibrary.php',
         // Storefront-rendering slice 2, Tasks 8/10: PackSlugLifecycleAuthority/
         // PackCheckoutAttemptAuthority's getPDO() is pg_advisory_xact_lock only (slug/checkout-
         // attempt reservation locking); every owned-row read/write (thallo_commerce_product_slugs,

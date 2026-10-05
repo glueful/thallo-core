@@ -1574,6 +1574,30 @@ final class CoreServiceProvider extends ServiceProvider implements \Thallo\Contr
         );
     }
 
+    public static function makeWoff2FaceReader(): \Thallo\Core\Content\Fonts\Woff2FaceReader
+    {
+        return new \Thallo\Core\Content\Fonts\Woff2FaceReader(
+            \Thallo\Core\Content\Fonts\Brotli\BrotliDecoders::best(),
+        );
+    }
+
+    public static function makeFontLibrary(ContainerInterface $container): \Thallo\Core\Content\Fonts\FontLibrary
+    {
+        return new \Thallo\Core\Content\Fonts\FontLibrary(
+            $container->get(\Glueful\Database\Connection::class),
+            $container->get(\Thallo\Core\Content\Fonts\FontBlobFiles::class),
+            $container->get(\Thallo\Core\Content\Fonts\Woff2FaceReader::class),
+            $container->get(\Thallo\Tenancy\System\SystemFlags::class),
+            $container->get(MediaUrlBatchResolver::class),
+        );
+    }
+
+    public static function makeFontLibraryReader(
+        ContainerInterface $container,
+    ): \Thallo\Contracts\Fonts\FontLibraryReader {
+        return $container->get(\Thallo\Core\Content\Fonts\FontLibrary::class);
+    }
+
     public static function makeLayoutChanges(ContainerInterface $container): \Thallo\Core\Content\Layouts\LayoutChanges
     {
         return new \Thallo\Core\Content\Layouts\LayoutChanges(
@@ -1879,6 +1903,30 @@ final class CoreServiceProvider extends ServiceProvider implements \Thallo\Contr
                 'class' => \Thallo\Core\Content\Http\Controllers\SavedSectionController::class,
                 'shared' => true,
                 'autowire' => true,
+            ],
+            // The font library (block typeface spec §2.3): faces read from WOFF2 files with Thallo's
+            // bounded Brotli port; the library is also the render pack's FontLibraryReader.
+            \Thallo\Core\Content\Fonts\Woff2FaceReader::class => [
+                'factory' => [self::class, 'makeWoff2FaceReader'],
+                'shared' => true,
+            ],
+            \Thallo\Core\Content\Fonts\FontBlobCheck::class => [
+                'class' => \Thallo\Core\Content\Fonts\FontBlobCheck::class,
+                'shared' => true,
+                'autowire' => true,
+            ],
+            \Thallo\Core\Content\Fonts\FontBlobFiles::class => [
+                'class' => \Thallo\Core\Content\Fonts\StorageFontBlobFiles::class,
+                'shared' => true,
+                'autowire' => true,
+            ],
+            \Thallo\Core\Content\Fonts\FontLibrary::class => [
+                'factory' => [self::class, 'makeFontLibrary'],
+                'shared' => true,
+            ],
+            \Thallo\Contracts\Fonts\FontLibraryReader::class => [
+                'factory' => [self::class, 'makeFontLibraryReader'],
+                'shared' => true,
             ],
             \Thallo\Core\Content\Layouts\LayoutWriteLock::class => [
                 'class' => \Thallo\Core\Content\Layouts\LayoutWriteLock::class,
