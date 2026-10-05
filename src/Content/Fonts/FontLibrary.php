@@ -31,6 +31,10 @@ use Thallo\Tenancy\System\SystemFlags;
 final class FontLibrary implements FontLibraryReader
 {
     public const GENERATION_KEY = 'thallo.fonts.generation';
+    /** Files one add may bring: nine weights, upright and italic. */
+    public const FILES_MAX = 18;
+    /** Seconds of reading after which an add reads no further file. */
+    public const READ_BUDGET_SECONDS = 15.0;
     private const NAME_MAX = 120;
 
     /** The weight range and style an unreadable face keeps (spec §2.5's compatibility declaration). */
@@ -47,6 +51,8 @@ final class FontLibrary implements FontLibraryReader
         private readonly Woff2FaceReader $reader,
         SystemFlags $flags,
         private readonly ?MediaUrlBatchResolver $urls = null,
+        /** Seconds, for the add's reading budget; tests pass their own. */
+        private readonly ?\Closure $clock = null,
     ) {
         $this->check = new FontBlobCheck($db, $flags);
     }
@@ -141,8 +147,18 @@ final class FontLibrary implements FontLibraryReader
         if (count(array_unique($blobUuids)) !== count($blobUuids)) {
             throw new FontLibraryRefusal('That file is already in this family', 'conflict');
         }
+        if (count($blobUuids) > self::FILES_MAX) {
+            throw new FontLibraryRefusal('Add at most ' . self::FILES_MAX . ' files at a time', 'invalid');
+        }
+        // Each file has its own decode deadline; the whole add has this budget too, so many slow files
+        // end in a reason, never in PHP's time limit (whose default is 30 seconds).
+        $clock = $this->clock ?? static fn (): float => microtime(true);
+        $started = $clock();
         $faces = [];
         foreach ($blobUuids as $blob) {
+            if ($faces !== [] && $clock() - $started > self::READ_BUDGET_SECONDS) {
+                throw new FontLibraryRefusal('These files took too long to read; add fewer at a time', 'invalid');
+            }
             $faces[$blob] = $this->readFace($blob);
         }
         return $this->withBlobsLocked(
@@ -453,6 +469,8 @@ final class FontLibrary implements FontLibraryReader
         } catch (UnreadableFont $e) {
             throw $e->forBlob($blobUuid);
         }
+        // Gone even if the request dies mid-read (a fatal time limit skips the finally below).
+        register_shutdown_function(static fn () => @unlink($path));
         try {
             return $this->reader->read($path);
         } catch (UnreadableFont $e) {
