@@ -17,6 +17,8 @@ use Thallo\Core\Content\Fonts\Http\DTOs\AddFontFaceData;
 use Thallo\Core\Content\Fonts\Http\DTOs\CreateFontFamilyData;
 use Thallo\Core\Content\Fonts\Http\DTOs\UpdateFontFamilyData;
 use Thallo\Core\Content\Fonts\UnreadableFont;
+use Symfony\Component\HttpFoundation\Request;
+use Thallo\Core\Content\Authorization\PermissionRequirementAuthority;
 use Thallo\Render\ThemeLocator;
 
 /**
@@ -39,6 +41,8 @@ final class FontLibraryController
         private readonly Connection $db,
         /** The active theme: its optional face (spec §2.2) is the Theme built-in's specimen. */
         private readonly ?ThemeLocator $theme = null,
+        /** Whether the reader may manage the library: the picker offers Restore only then. */
+        private readonly ?PermissionRequirementAuthority $permissions = null,
     ) {
     }
 
@@ -47,12 +51,12 @@ final class FontLibraryController
         summary: 'List typefaces',
         description: 'The typefaces an editor can choose: the built-ins, then the workspace\'s uploaded '
             . 'families (removed ones flagged) with the faces read from their files, and the active '
-            . 'theme\'s own face. No usage. Requires any of `content.edit`, `content.manage`, '
-            . '`templates.manage` or `styles.manage`.',
+            . 'theme\'s own face, and whether the reader may manage the library (`can_manage`). No usage. '
+            . 'Requires any of `content.edit`, `content.manage`, `templates.manage` or `styles.manage`.',
         tags: ['Thallo Fonts'],
     )]
     #[ApiResponse(200, description: 'The typefaces.')]
-    public function index(): Response
+    public function index(?Request $request = null): Response
     {
         $families = [];
         foreach (self::BUILT_INS as $id => $name) {
@@ -68,10 +72,11 @@ final class FontLibraryController
         }
         usort($uploaded, static fn (array $a, array $b): int => [$a['removed'], strtolower($a['name']), $a['id']]
             <=> [$b['removed'], strtolower($b['name']), $b['id']]);
-        return Response::success(
-            ['families' => [...$families, ...$uploaded], 'theme_face' => $this->themeFace()],
-            'Typefaces retrieved.',
-        );
+        return Response::success([
+            'families' => [...$families, ...$uploaded],
+            'theme_face' => $this->themeFace(),
+            'can_manage' => $request !== null && $this->permissions?->allows($request, ['content.manage']) === true,
+        ], 'Typefaces retrieved.');
     }
 
     /** GET /v1/admin/fonts/{id}/usage */
