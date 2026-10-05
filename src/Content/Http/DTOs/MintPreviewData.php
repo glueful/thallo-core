@@ -44,10 +44,7 @@ final class MintPreviewData implements RequestData
         public readonly ?string $font = null,
         #[Rule('string')]
         public readonly ?string $background = null,
-        /**
-         * @var string|null Pending Custom Text family: a font library ID (a built-in or a current
-         *      family), or `none` to take a saved one off.
-         */
+        /** @var string|null Pending Custom Text family: a font library ID, or `none` to take a saved one off. */
         #[Rule('string')]
         public readonly ?string $font_text_family = null,
         /** @var string|null Pending Custom Headings family, the same way. */

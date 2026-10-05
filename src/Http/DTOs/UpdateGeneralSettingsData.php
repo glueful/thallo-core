@@ -61,10 +61,7 @@ final class UpdateGeneralSettingsData implements RequestData
         /** @var string|null Typeface pairing, or `custom`; enum-validated in the controller. */
         #[Rule('string')]
         public readonly ?string $theme_font = null,
-        /**
-         * @var string|null Custom's Text family: a font library ID — a built-in (`serif`, `theme`,
-         *      …) or a current uploaded family; '' clears (and stays cleared).
-         */
+        /** @var string|null Custom's Text family: a built-in or a current family's ID; '' clears (and stays). */
         #[Rule('string')]
         public readonly ?string $theme_font_text_family = null,
         /** @var string|null Custom's Headings family, the same way; '' clears (headings follow the text). */
