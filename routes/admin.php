@@ -199,6 +199,38 @@ $router->group(['prefix' => '/v1/admin'], function (Router $router): void {
         $router->get('/style-classes/{id}/jobs/{job}', [StyleClassController::class, 'showJob'])
         ->middleware('content_permission:content.view');
 
+    // The font library (block typeface spec §2, §4.6): any editor reads the picker; usage and every
+    // change need content.manage.
+        $router->get('/fonts', [\Thallo\Core\Content\Fonts\Http\FontLibraryController::class, 'index'])
+        ->middleware('content_permission:content.edit,content.manage,templates.manage,styles.manage');
+
+        $router->get('/fonts/{id}/usage', [\Thallo\Core\Content\Fonts\Http\FontLibraryController::class, 'usage'])
+        ->middleware('content_permission:content.manage');
+
+        $router->post('/fonts', [\Thallo\Core\Content\Fonts\Http\FontLibraryController::class, 'store'])
+        ->middleware('content_permission:content.manage');
+
+        $router->patch('/fonts/{id}', [\Thallo\Core\Content\Fonts\Http\FontLibraryController::class, 'update'])
+        ->middleware('content_permission:content.manage');
+
+        $router->post('/fonts/{id}/faces', [\Thallo\Core\Content\Fonts\Http\FontLibraryController::class, 'addFace'])
+        ->middleware('content_permission:content.manage');
+
+        $router->delete('/fonts/{id}/faces/{blob_uuid}', [\Thallo\Core\Content\Fonts\Http\FontLibraryController::class, 'removeFace'])
+        ->middleware('content_permission:content.manage');
+
+        $router->delete('/fonts/{id}', [\Thallo\Core\Content\Fonts\Http\FontLibraryController::class, 'destroy'])
+        ->middleware('content_permission:content.manage');
+
+        $router->post('/fonts/{id}/restore', [\Thallo\Core\Content\Fonts\Http\FontLibraryController::class, 'restore'])
+        ->middleware('content_permission:content.manage');
+
+        $router->delete('/fonts/{id}/permanent', [\Thallo\Core\Content\Fonts\Http\FontLibraryController::class, 'purge'])
+        ->middleware('content_permission:content.manage');
+
+        $router->post('/fonts/{id}/read-again', [\Thallo\Core\Content\Fonts\Http\FontLibraryController::class, 'readAgain'])
+        ->middleware('content_permission:content.manage');
+
     // Entry authoring (identity, drafts, preview).
         $router->get('/entries', [EntryController::class, 'index'])
         ->middleware('content_permission:content.view');

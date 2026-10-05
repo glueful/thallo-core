@@ -1942,6 +1942,16 @@ final class CoreServiceProvider extends ServiceProvider implements \Thallo\Contr
             ],
             // Appearance's Custom from the library (spec §2.7–§2.8): the lock every assignment
             // writer takes, and provision's one-time upgrade of the old uploads.
+            \Thallo\Core\Content\Fonts\FontUsage::class => [
+                'class' => \Thallo\Core\Content\Fonts\FontUsage::class,
+                'shared' => true,
+                'autowire' => true,
+            ],
+            \Thallo\Core\Content\Fonts\Http\FontLibraryController::class => [
+                'class' => \Thallo\Core\Content\Fonts\Http\FontLibraryController::class,
+                'shared' => true,
+                'autowire' => true,
+            ],
             \Thallo\Core\Settings\AppearanceLock::class => [
                 'class' => \Thallo\Core\Settings\AppearanceLock::class,
                 'shared' => true,

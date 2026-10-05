@@ -166,7 +166,7 @@ final class FontLibrary implements FontLibraryReader
         }
         foreach (array_keys($faces) as $blob) {
             $this->assertHeld((string) $blob);
-            $this->check->usable((string) $blob);
+            $this->usable((string) $blob);
         }
         $id = Utils::generateNanoID(12);
         $now = gmdate('Y-m-d H:i:s');
@@ -193,7 +193,7 @@ final class FontLibrary implements FontLibraryReader
             if ($family['removed_at'] !== null) {
                 throw new FontLibraryRefusal('That family was removed', 'conflict');
             }
-            $this->check->usable($blobUuid);
+            $this->usable($blobUuid);
             if (in_array($blobUuid, $this->faceBlobs($id), true)) {
                 throw new FontLibraryRefusal('That file is already in this family', 'conflict');
             }
@@ -332,6 +332,31 @@ final class FontLibrary implements FontLibraryReader
     }
 
     /**
+     * The families a media file is a face of, current or removed — what the media library says it
+     * is used in, and what refuses its deletion.
+     *
+     * @return list<array{id: string, name: string, removed: bool}>
+     */
+    public function familiesUsingBlob(string $blobUuid): array
+    {
+        $ids = array_values(array_unique(array_map(
+            static fn (array $r): string => (string) $r['family_id'],
+            $this->db->table('font_faces')->select(['family_id'])->where('blob_uuid', '=', $blobUuid)->get(),
+        )));
+        if ($ids === []) {
+            return [];
+        }
+        $rows = $this->db->table('font_families')->select(['id', 'name', 'removed_at'])->whereIn('id', $ids)->get();
+        usort($rows, static fn (array $a, array $b): int => [(string) $a['name'], (string) $a['id']]
+            <=> [(string) $b['name'], (string) $b['id']]);
+        return array_map(static fn (array $r): array => [
+            'id' => (string) $r['id'],
+            'name' => (string) $r['name'],
+            'removed' => $r['removed_at'] !== null,
+        ], $rows);
+    }
+
+    /**
      * One consistent read: the generation, then the rows, then the generation again — a change that
      * commits in between moves the generation (it is bumped in the change's own transaction), and the
      * read is taken again.
@@ -400,12 +425,28 @@ final class FontLibrary implements FontLibraryReader
     // Helpers
     //----------------------------------------------------------------------------------------------
 
+    /** Checks (under its lock) that the blob is still one of the workspace's font files. */
+    private function usable(string $blobUuid): void
+    {
+        try {
+            $this->check->usable($blobUuid);
+        } catch (UnreadableFont $e) {
+            throw $e->forBlob($blobUuid);
+        }
+    }
+
     /** Reads one blob's face from a temporary copy of its file. */
     private function readFace(string $blobUuid): FaceMetadata
     {
-        $path = $this->files->localPath($blobUuid);
+        try {
+            $path = $this->files->localPath($blobUuid);
+        } catch (UnreadableFont $e) {
+            throw $e->forBlob($blobUuid);
+        }
         try {
             return $this->reader->read($path);
+        } catch (UnreadableFont $e) {
+            throw $e->forBlob($blobUuid);
         } finally {
             @unlink($path);
         }

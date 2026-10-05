@@ -35,6 +35,8 @@ final class MediaAdminController
     public function __construct(
         private readonly ApplicationContext $context,
         private readonly SystemFlags $flags,
+        /** The font library (block typeface spec §2.6): its files cannot be deleted from here. */
+        private readonly ?\Thallo\Core\Content\Fonts\FontLibrary $fonts = null,
     ) {
     }
 
@@ -156,14 +158,31 @@ final class MediaAdminController
     #[ApiResponse(404, description: 'No such media.')]
     public function destroy(Request $request, string $uuid): Response
     {
-        $blob = $this->findBlob($uuid);
-        if ($blob === null) {
-            return Response::notFound('Media not found.');
+        // One transaction holding the blob row lock first — the font library's lock order — so a
+        // family being given this file and this deletion never both proceed: whichever waits sees
+        // what the other committed.
+        $outcome = db($this->context)->transaction(function () use ($uuid): Response|array {
+            $this->fonts?->lockBlob($uuid);
+            $blob = $this->findBlob($uuid);
+            if ($blob === null) {
+                return Response::notFound('Media not found.');
+            }
+            $families = $this->fonts?->familiesUsingBlob($uuid) ?? [];
+            if ($families !== []) {
+                return Response::error(sprintf(
+                    'This file is a font in the library (%s); remove it there first.',
+                    implode(', ', array_column($families, 'name')),
+                ), 409);
+            }
+            db($this->context)->table('blobs')
+                ->where('uuid', '=', $uuid)
+                ->update(['status' => 'deleted', 'deleted_at' => date('Y-m-d H:i:s')]);
+            return $blob;
+        });
+        if ($outcome instanceof Response) {
+            return $outcome;
         }
-
-        db($this->context)->table('blobs')
-            ->where('uuid', '=', $uuid)
-            ->update(['status' => 'deleted', 'deleted_at' => date('Y-m-d H:i:s')]);
+        $blob = $outcome;
 
         // The raw status update bypasses BlobRepository's entity events, so audit the deletion
         // explicitly — otherwise media deletes go unrecorded (uploads are audited via the repo).
@@ -384,7 +403,11 @@ final class MediaAdminController
             ];
         }, $rows);
 
-        return Response::success(['usage' => array_values($usage)], 'Usage retrieved.');
+        return Response::success([
+            'usage' => array_values($usage),
+            // A font file a family uses, current or removed (block typeface spec §2.6).
+            'font_library' => $this->fonts?->familiesUsingBlob($uuid) ?? [],
+        ], 'Usage retrieved.');
     }
 
     // ---- Helpers --------------------------------------------------------------
