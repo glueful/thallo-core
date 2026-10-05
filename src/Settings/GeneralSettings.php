@@ -49,9 +49,11 @@ final class GeneralSettings
         // Design settings (website plan phase 1b): closed enums, defaults are today's look.
         'theme_radius'      => ['thallo.theme.radius', 'string', 'round'],
         'theme_font'        => ['thallo.theme.font', 'string', 'sans'],
-        // The site's own typefaces (the `custom` pairing): media library uuids of woff2 files.
-        'theme_font_body'    => ['thallo.theme.font_body', 'string', ''],
-        'theme_font_display' => ['thallo.theme.font_display', 'string', ''],
+        // The `custom` pairing's Text and Headings (block typeface spec §2.8): font library IDs — a
+        // built-in or an uploaded family. '' is stored when someone clears one, so the one-time
+        // upgrade from the old uploads (FontLibraryUpgrade) never refills it.
+        'theme_font_text_family'     => ['thallo.theme.font_text_family', 'string', ''],
+        'theme_font_headings_family' => ['thallo.theme.font_headings_family', 'string', ''],
         'theme_background'  => ['thallo.theme.background', 'string', 'plain'],
         // Admin SPA base URL — powers the preview bar's Edit/Design deep links.
         // Auto-populated at web setup (the SPA sends its own origin).
@@ -132,16 +134,27 @@ final class GeneralSettings
         return (string) $this->value('theme_font');
     }
 
-    /** Media library uuid of the text face (`custom` pairing); '' when none. */
-    public function themeFontBody(): string
+    /** The `custom` pairing's Text family (a font library ID); '' when none. */
+    public function themeFontTextFamily(): string
     {
-        return (string) $this->value('theme_font_body');
+        return (string) $this->value('theme_font_text_family');
     }
 
-    /** Media library uuid of the headings face (`custom` pairing); '' when none. */
-    public function themeFontDisplay(): string
+    /** The `custom` pairing's Headings family (a font library ID); '' when none. */
+    public function themeFontHeadingsFamily(): string
     {
-        return (string) $this->value('theme_font_display');
+        return (string) $this->value('theme_font_headings_family');
+    }
+
+    /**
+     * A stored settings row as it is now, read fresh: null when there is no row, '' when an empty
+     * value is stored. Unlike the accessors, it never falls back to a default — it tells "never set"
+     * apart from "deliberately cleared".
+     */
+    public function storedValue(string $key): ?string
+    {
+        $this->store->clearCache();
+        return $this->store->get($key);
     }
 
     public function themeBackground(): string

@@ -264,6 +264,25 @@ final class ProvisionCommand extends BaseCommand
             $this->warning('Starter block types not seeded (' . $e->getMessage() . ').');
         }
 
+        // The font library (block typeface spec §2.7): Custom's uploads become library families,
+        // once per workspace (every workspace, each with its own marker). Never fatal: a run that
+        // fails leaves nothing behind, and the next provision tries again.
+        try {
+            if ($this->getContainer()->get(SetupService::class)->isInstalled()) {
+                $fonts = $this->getContainer()->get(\Thallo\Core\Content\Fonts\FontLibraryUpgradeStep::class)->run();
+                $this->line(sprintf(
+                    'Font library: %d %s checked, %d custom %s moved into the library.',
+                    $fonts['workspaces'],
+                    $fonts['workspaces'] === 1 ? 'workspace' : 'workspaces',
+                    $fonts['created'],
+                    $fonts['created'] === 1 ? 'font' : 'fonts',
+                ));
+            }
+        } catch (\Throwable $e) {
+            $this->warning('Custom fonts not moved into the font library (' . $e->getMessage()
+                . ') — run php glueful thallo:provision again.');
+        }
+
         // Production boot refuses live extension discovery, so the compiled extension cache
         // must exist before the next `php glueful` call — rebuild it from the provisioned state.
         try {

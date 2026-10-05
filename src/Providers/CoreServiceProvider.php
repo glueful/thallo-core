@@ -1522,6 +1522,7 @@ final class CoreServiceProvider extends ServiceProvider implements \Thallo\Contr
                 : null,
             $container->get(PreviewWorkingCopyStore::class),
             $container->get(\Thallo\Core\Content\Layouts\EntryLayoutStatus::class),
+            $container->get(\Thallo\Contracts\Fonts\FontLibraryReader::class),
         );
     }
 
@@ -1589,6 +1590,17 @@ final class CoreServiceProvider extends ServiceProvider implements \Thallo\Contr
             $container->get(\Thallo\Core\Content\Fonts\Woff2FaceReader::class),
             $container->get(\Thallo\Tenancy\System\SystemFlags::class),
             $container->get(MediaUrlBatchResolver::class),
+        );
+    }
+
+    public static function makeFontLibraryUpgradeStep(
+        ContainerInterface $container,
+    ): \Thallo\Core\Content\Fonts\FontLibraryUpgradeStep {
+        $runner = \Glueful\Extensions\Contracts\Tenancy\TenantContextRunner::class;
+        return new \Thallo\Core\Content\Fonts\FontLibraryUpgradeStep(
+            $container->get(\Thallo\Core\Content\Fonts\FontLibraryUpgrade::class),
+            $container->get(\Thallo\Tenancy\System\SystemFlags::class),
+            $container->has($runner) ? $container->get($runner) : null,
         );
     }
 
@@ -1926,6 +1938,22 @@ final class CoreServiceProvider extends ServiceProvider implements \Thallo\Contr
             ],
             \Thallo\Contracts\Fonts\FontLibraryReader::class => [
                 'factory' => [self::class, 'makeFontLibraryReader'],
+                'shared' => true,
+            ],
+            // Appearance's Custom from the library (spec §2.7–§2.8): the lock every assignment
+            // writer takes, and provision's one-time upgrade of the old uploads.
+            \Thallo\Core\Settings\AppearanceLock::class => [
+                'class' => \Thallo\Core\Settings\AppearanceLock::class,
+                'shared' => true,
+                'autowire' => true,
+            ],
+            \Thallo\Core\Content\Fonts\FontLibraryUpgrade::class => [
+                'class' => \Thallo\Core\Content\Fonts\FontLibraryUpgrade::class,
+                'shared' => true,
+                'autowire' => true,
+            ],
+            \Thallo\Core\Content\Fonts\FontLibraryUpgradeStep::class => [
+                'factory' => [self::class, 'makeFontLibraryUpgradeStep'],
                 'shared' => true,
             ],
             \Thallo\Core\Content\Layouts\LayoutWriteLock::class => [

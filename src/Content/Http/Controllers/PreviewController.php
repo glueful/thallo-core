@@ -61,6 +61,8 @@ final class PreviewController
         private readonly ?PreviewWorkingCopyStore $workingCopies = null,
         /** Whether the entry renders through its type's layout (type layouts spec §6.3). */
         private readonly ?\Thallo\Core\Content\Layouts\EntryLayoutStatus $layouts = null,
+        /** The font library (block typeface spec §2.8): a pending Custom family must be in it. */
+        private readonly ?\Thallo\Contracts\Fonts\FontLibraryReader $fonts = null,
     ) {
     }
 
@@ -105,16 +107,29 @@ final class PreviewController
             return Response::validation(['neutral' => 'unknown neutral color']);
         }
 
-        // Pending design settings, the same way: each a closed enum, any subset. A pending face
-        // is a media library uuid, or `none` for a saved face taken off but not yet saved.
+        // Pending design settings, the same way: each a closed enum, any subset. A pending Custom
+        // family is validated as a save is — a built-in or a current library family — or `none`, for
+        // a saved one taken off but not yet saved.
         $design = [];
-        $face = static fn (string $v): ?string => $v === 'none' ? $v : ThemeDesign::normalizeFace($v);
+        $snapshot = null;
+        $family = function (string $v) use (&$snapshot): ?string {
+            if ($v === 'none') {
+                return $v;
+            }
+            if (!\Thallo\Core\Content\Fonts\FontId::isValid($v)) {
+                return null;
+            }
+            $snapshot ??= $this->fonts?->snapshot();
+            $resolution = $snapshot?->resolution($v)
+                ?? (\Thallo\Core\Content\Fonts\FontId::isReserved($v) ? 'builtin' : 'missing');
+            return $resolution === 'missing' ? null : $v;
+        };
         $enums = [
             'radius' => ThemeDesign::normalizeRadius(...),
             'font' => ThemeDesign::normalizeFont(...),
             'background' => ThemeDesign::normalizeBackground(...),
-            'font_body' => $face,
-            'font_display' => $face,
+            'font_text_family' => $family,
+            'font_headings_family' => $family,
         ];
         foreach ($enums as $name => $normalize) {
             $value = $input->{$name};

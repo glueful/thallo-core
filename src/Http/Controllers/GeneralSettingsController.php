@@ -47,6 +47,10 @@ final class GeneralSettingsController
         private readonly ?\Thallo\Core\Content\Delivery\HomepageEligibility $homepageEligibility = null,
         /** Soft-bound (visual builder spec §2.4): a theme switch compiles its artifact before activating. */
         private readonly ?StyleArtifactCompiler $styleCompiler = null,
+        /** The font library (block typeface spec §2.8): Custom's families must be in it. */
+        private readonly ?\Thallo\Contracts\Fonts\FontLibraryReader $fonts = null,
+        /** Taken around every write of Custom's assignments (spec §2.7), as the upgrade takes it. */
+        private readonly ?\Thallo\Core\Settings\AppearanceLock $appearanceLock = null,
     ) {
     }
 
@@ -112,6 +116,8 @@ final class GeneralSettingsController
             $this->settings->themeRadius(),
             $this->settings->themeFont(),
             $this->settings->themeBackground(),
+            $this->settings->themeFontTextFamily(),
+            $this->settings->themeFontHeadingsFamily(),
         ];
         $identityBefore = $this->identity();
         $searchBefore = $this->settings->searchEnabled();
@@ -126,6 +132,17 @@ final class GeneralSettingsController
             }
         }
 
+        // Custom's assignments under the appearance lock, so the one-time upgrade never refills one
+        // this save is writing (or has just cleared).
+        $families = array_filter([
+            'theme_font_text_family' => $input->theme_font_text_family,
+            'theme_font_headings_family' => $input->theme_font_headings_family,
+        ], static fn (?string $v): bool => $v !== null);
+        if ($families !== []) {
+            $write = fn () => $this->settings->save($families);
+            $this->appearanceLock !== null ? $this->appearanceLock->within($write) : $write();
+        }
+
         $this->settings->save([
             'theme' => $input->theme,
             // The one spelling the stylesheet writes (#ABC → #aabbcc); validated above.
@@ -135,8 +152,6 @@ final class GeneralSettingsController
             'theme_neutral' => $input->theme_neutral,
             'theme_radius' => $input->theme_radius,
             'theme_font' => $input->theme_font,
-            'theme_font_body' => $input->theme_font_body,
-            'theme_font_display' => $input->theme_font_display,
             'theme_background' => $input->theme_background,
             'site_name' => $input->site_name,
             'site_preview_url' => $input->site_preview_url,
@@ -167,14 +182,16 @@ final class GeneralSettingsController
             $this->settings->themeRadius(),
             $this->settings->themeFont(),
             $this->settings->themeBackground(),
+            $this->settings->themeFontTextFamily(),
+            $this->settings->themeFontHeadingsFamily(),
         ];
         if (
             ($input->theme_accent !== null && $this->settings->themeAccent() !== $accentBefore)
             || ($input->theme_neutral !== null && $this->settings->themeNeutral() !== $neutralBefore)
             || $designAfter !== $designBefore
             // What every page shows of the site but the cache key does not carry: without this a new
-            // logo, favicon or name was served stale for up to render.cache_ttl. (A custom font file
-            // is in the key already.)
+            // logo, favicon or name was served stale for up to render.cache_ttl. (Custom's families
+            // are in the key already.)
             || $this->identity() !== $identityBefore
         ) {
             $this->events?->dispatch(new ThemeAppearanceChanged(
@@ -271,12 +288,21 @@ final class GeneralSettingsController
         if ($input->theme_font !== null && ThemeDesign::normalizeFont($input->theme_font) === null) {
             $errors['theme_font'] = 'unknown typeface pairing';
         }
-        // The site's own faces are media library files, named by uuid ('' clears). The page
-        // declares them by the URL the library serves, so only the uuid's shape is held here.
-        foreach (['theme_font_body', 'theme_font_display'] as $face) {
-            $uuid = $input->{$face};
-            if ($uuid !== null && $uuid !== '' && ThemeDesign::normalizeFace($uuid) === null) {
-                $errors[$face] = 'not a media library file';
+        // Custom's Text and Headings (block typeface spec §2.8): a built-in, or a family the library
+        // holds now ('' clears). A removed or unknown family is refused at save; at render it falls
+        // back by the Text/Headings rules.
+        $snapshot = null;
+        foreach (['theme_font_text_family', 'theme_font_headings_family'] as $key) {
+            $id = $input->{$key};
+            if ($id === null || $id === '') {
+                continue;
+            }
+            $snapshot ??= $this->fonts?->snapshot();
+            $known = \Thallo\Core\Content\Fonts\FontId::isValid($id)
+                && in_array($snapshot?->resolution($id) ?? (\Thallo\Core\Content\Fonts\FontId::isReserved($id)
+                    ? 'builtin' : 'missing'), ['builtin', 'uploaded'], true);
+            if (!$known) {
+                $errors[$key] = 'unknown typeface';
             }
         }
         if ($input->theme_background !== null && ThemeDesign::normalizeBackground($input->theme_background) === null) {

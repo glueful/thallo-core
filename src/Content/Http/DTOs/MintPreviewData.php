@@ -44,12 +44,15 @@ final class MintPreviewData implements RequestData
         public readonly ?string $font = null,
         #[Rule('string')]
         public readonly ?string $background = null,
-        /** @var string|null Pending text face (`custom` pairing): a media uuid, or `none` to take it off. */
+        /**
+         * @var string|null Pending Custom Text family: a font library ID (a built-in or a current
+         *      family), or `none` to take a saved one off.
+         */
         #[Rule('string')]
-        public readonly ?string $font_body = null,
-        /** @var string|null Pending headings face: a media uuid, or `none` to take it off. */
+        public readonly ?string $font_text_family = null,
+        /** @var string|null Pending Custom Headings family, the same way. */
         #[Rule('string')]
-        public readonly ?string $font_display = null,
+        public readonly ?string $font_headings_family = null,
     ) {
     }
 }
