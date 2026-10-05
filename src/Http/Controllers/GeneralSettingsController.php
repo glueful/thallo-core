@@ -134,10 +134,13 @@ final class GeneralSettingsController
 
         // Custom's assignments under the appearance lock, so the one-time upgrade never refills one
         // this save is writing (or has just cleared).
+        // The page sends every key it shows, an unset family as '': that is no change, and storing it
+        // would read to the upgrade as a deliberate clear. Only clearing a stored family clears it.
         $families = array_filter([
             'theme_font_text_family' => $input->theme_font_text_family,
             'theme_font_headings_family' => $input->theme_font_headings_family,
-        ], static fn (?string $v): bool => $v !== null);
+        ], fn (?string $v, string $key): bool => $v !== null
+            && ($v !== '' || $this->settings->storedValue($key) !== null), ARRAY_FILTER_USE_BOTH);
         if ($families !== []) {
             $write = fn () => $this->settings->save($families);
             $this->appearanceLock !== null ? $this->appearanceLock->within($write) : $write();
