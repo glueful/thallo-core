@@ -132,6 +132,7 @@ final class FontLibrary implements FontLibraryReader
      */
     public function create(string $name, string $fallback, array $blobUuids): string
     {
+        $this->ensureGenerationRow();
         $name = self::validName($name);
         self::assertFallback($fallback);
         if ($blobUuids === []) {
@@ -159,6 +160,7 @@ final class FontLibrary implements FontLibraryReader
      */
     public function createWithFaces(string $name, string $fallback, array $faces): string
     {
+        $this->ensureGenerationRow();
         $name = self::validName($name);
         self::assertFallback($fallback);
         if ($faces === []) {
@@ -187,6 +189,7 @@ final class FontLibrary implements FontLibraryReader
     /** @throws UnreadableFont|FontLibraryRefusal */
     public function addFace(string $id, string $blobUuid): void
     {
+        $this->ensureGenerationRow();
         $face = $this->readFace($blobUuid);
         $this->withBlobsLocked([$blobUuid], function () use ($id, $blobUuid, $face): void {
             $family = $this->lockFamily($id);
@@ -205,6 +208,7 @@ final class FontLibrary implements FontLibraryReader
     /** @throws FontLibraryRefusal */
     public function removeFace(string $id, string $blobUuid): void
     {
+        $this->ensureGenerationRow();
         $this->withBlobsLocked([$blobUuid], function () use ($id, $blobUuid): void {
             $this->lockFamily($id);
             // Counted under the family lock: two removals cannot both see two faces.
@@ -226,6 +230,7 @@ final class FontLibrary implements FontLibraryReader
     /** @throws FontLibraryRefusal */
     public function rename(string $id, string $name): void
     {
+        $this->ensureGenerationRow();
         $name = self::validName($name);
         $this->db->transaction(function () use ($id, $name): void {
             $this->lockFamily($id);
@@ -237,6 +242,7 @@ final class FontLibrary implements FontLibraryReader
     /** @throws FontLibraryRefusal */
     public function setFallback(string $id, string $fallback): void
     {
+        $this->ensureGenerationRow();
         self::assertFallback($fallback);
         $this->db->transaction(function () use ($id, $fallback): void {
             $this->lockFamily($id);
@@ -248,6 +254,7 @@ final class FontLibrary implements FontLibraryReader
     /** The soft delete: the family leaves the pickers and the stylesheet; its files stay protected. */
     public function remove(string $id): void
     {
+        $this->ensureGenerationRow();
         $this->db->transaction(function () use ($id): void {
             if ($this->lockFamily($id)['removed_at'] !== null) {
                 return;
@@ -259,6 +266,7 @@ final class FontLibrary implements FontLibraryReader
 
     public function restore(string $id): void
     {
+        $this->ensureGenerationRow();
         $this->db->transaction(function () use ($id): void {
             if ($this->lockFamily($id)['removed_at'] === null) {
                 return;
@@ -271,6 +279,7 @@ final class FontLibrary implements FontLibraryReader
     /** Deletes a removed family and its faces, releasing their files. */
     public function purge(string $id): void
     {
+        $this->ensureGenerationRow();
         // The face set is read first so its blobs can be locked before the family; if a face was added
         // in between, the set no longer covers it and the attempt starts again.
         for ($attempt = 0; $attempt < 3; $attempt++) {
@@ -302,6 +311,7 @@ final class FontLibrary implements FontLibraryReader
      */
     public function readAgain(string $id): void
     {
+        $this->ensureGenerationRow();
         $read = [];
         foreach ($this->faceBlobs($id) as $blob) {
             $read[$blob] = $this->readFace($blob);
@@ -481,6 +491,33 @@ final class FontLibrary implements FontLibraryReader
     {
         $row = $this->db->table('settings')->select(['value'])->where('key', '=', self::GENERATION_KEY)->first();
         return is_array($row) ? (int) $row['value'] : 0;
+    }
+
+    /**
+     * The generation row, created before a change's transaction (final review): two first changes in
+     * a workspace would otherwise both insert it inside their transactions, and one would fail. A
+     * concurrent insert is waited for and then found. Inside a caller's own transaction nothing is
+     * done here — a failed insert would abort it — and bumpGeneration() inserts as before.
+     */
+    private function ensureGenerationRow(): void
+    {
+        if ($this->db->withinTransaction()) {
+            return;
+        }
+        if ($this->db->table('settings')->where('key', '=', self::GENERATION_KEY)->first() !== null) {
+            return;
+        }
+        try {
+            $this->db->table('settings')->insert([
+                'key' => self::GENERATION_KEY,
+                'value' => '0',
+                'updated_at' => gmdate('Y-m-d H:i:s'),
+            ]);
+        } catch (\Throwable $e) {
+            if ($this->db->table('settings')->where('key', '=', self::GENERATION_KEY)->first() === null) {
+                throw $e;
+            }
+        }
     }
 
     /**
