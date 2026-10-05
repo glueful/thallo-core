@@ -170,7 +170,8 @@ final class MediaAdminController
             $families = $this->fonts?->familiesUsingBlob($uuid) ?? [];
             if ($families !== []) {
                 return Response::error(sprintf(
-                    'This file is a font in the library (%s); remove it there first.',
+                    'This file is a font in the library (%s); '
+                        . 'delete the family permanently in Site › Appearance › Typefaces first.',
                     implode(', ', array_column($families, 'name')),
                 ), 409);
             }
