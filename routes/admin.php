@@ -204,6 +204,8 @@ $router->group(['prefix' => '/v1/admin'], function (Router $router): void {
         $router->get('/fonts', [\Thallo\Core\Content\Fonts\Http\FontLibraryController::class, 'index'])
         ->middleware('content_permission:content.edit,content.manage,templates.manage,styles.manage');
 
+        $router->get('/fonts/usage-counts', [\Thallo\Core\Content\Fonts\Http\FontLibraryController::class, 'usageCounts'])
+        ->middleware('content_permission:content.manage');
         $router->get('/fonts/{id}/usage', [\Thallo\Core\Content\Fonts\Http\FontLibraryController::class, 'usage'])
         ->middleware('content_permission:content.manage');
 

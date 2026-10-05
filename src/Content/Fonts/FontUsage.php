@@ -48,100 +48,147 @@ final class FontUsage
      */
     public function of(string $id): array
     {
-        $entries = [];
-        $regions = [];
-        $layouts = [];
-        $sections = [];
+        return $this->scan([$id])[$id];
+    }
+
+    /**
+     * How many places name each family — as many as of() would list — from one scan of every source
+     * (the Typefaces card's counts).
+     *
+     * @param list<string> $ids
+     * @return array<string, int>
+     */
+    public function counts(array $ids): array
+    {
+        $out = [];
+        foreach ($this->scan($ids) as $id => $usage) {
+            $out[$id] = count($usage['entries']) + count($usage['regions']) + count($usage['layouts'])
+                + count($usage['saved_sections']) + count($usage['style_classes'])
+                + (int) $usage['appearance']['text'] + (int) $usage['appearance']['headings'];
+        }
+        return $out;
+    }
+
+    /**
+     * @param list<string> $ids
+     * @return array<string, array{
+     *   entries: list<array{uuid: string, title: string, locale: string, draft: bool, published: bool,
+     *     versions: bool}>,
+     *   regions: list<string>,
+     *   layouts: list<array{id: string, name: string}>,
+     *   saved_sections: list<array{id: string, name: string}>,
+     *   style_classes: list<array{id: string, name: string}>,
+     *   appearance: array{text: bool, headings: bool}
+     * }>
+     */
+    private function scan(array $ids): array
+    {
+        $wanted = array_fill_keys($ids, true);
+        $found = array_fill_keys($ids, ['entries' => [], 'regions' => [], 'layouts' => [], 'sections' => []]);
         $published = $this->publishedVersionUuids();
-        $visit = function (DocumentRef $ref) use ($id, $published, &$entries, &$regions, &$layouts, &$sections): void {
-            if (!$this->uses($ref, $id)) {
+        $visit = function (DocumentRef $ref) use ($wanted, $published, &$found): void {
+            $used = [];
+            foreach ($ref->schema->fields() as $field) {
+                if ($field->type === 'blocks') {
+                    $this->collect($ref->fields[$field->name] ?? null, $used);
+                }
+            }
+            $used = array_intersect_key($used, $wanted);
+            if ($used === []) {
                 return;
             }
-            switch ($ref->sourceType) {
-                case EntryDraftsSource::ID:
-                case PublishedEntriesSource::ID:
-                case EntryVersionsSource::ID:
-                    if ($ref->sourceType === EntryVersionsSource::ID && isset($published[$ref->sourceId])) {
-                        return; // the current publication: counted as published
-                    }
-                    $uuid = $ref->sourceType === EntryVersionsSource::ID
-                        ? (string) ($ref->meta['entry_uuid'] ?? $ref->sourceId)
-                        : $ref->sourceId;
-                    $key = $uuid . ':' . $ref->locale;
-                    $entries[$key] ??= ['uuid' => $uuid, 'title' => '', 'locale' => (string) $ref->locale,
-                        'draft' => false, 'published' => false, 'versions' => false];
-                    if ($entries[$key]['title'] === '' && is_string($ref->fields['title'] ?? null)) {
-                        $entries[$key]['title'] = $ref->fields['title'];
-                    }
-                    $flag = match ($ref->sourceType) {
-                        EntryDraftsSource::ID => 'draft',
-                        PublishedEntriesSource::ID => 'published',
-                        default => 'versions',
-                    };
-                    $entries[$key][$flag] = true;
-                    break;
-                case RegionsSource::ID:
-                    $regions[$ref->sourceId] = $ref->sourceId;
-                    break;
-                case LayoutsSource::ID:
-                    $target = (string) ($ref->meta['target'] ?? '');
-                    $layouts[$ref->sourceId] = ['id' => $ref->sourceId, 'name' => $target];
-                    break;
-                case SavedSectionsSource::ID:
-                    $sections[$ref->sourceId] = ['id' => $ref->sourceId, 'name' => (string) ($ref->meta['name'] ?? '')];
-                    break;
+            if ($ref->sourceType === EntryVersionsSource::ID && isset($published[$ref->sourceId])) {
+                return; // the current publication: counted as published
+            }
+            foreach (array_keys($used) as $id) {
+                switch ($ref->sourceType) {
+                    case EntryDraftsSource::ID:
+                    case PublishedEntriesSource::ID:
+                    case EntryVersionsSource::ID:
+                        $uuid = $ref->sourceType === EntryVersionsSource::ID
+                            ? (string) ($ref->meta['entry_uuid'] ?? $ref->sourceId)
+                            : $ref->sourceId;
+                        $key = $uuid . ':' . $ref->locale;
+                        $found[$id]['entries'][$key] ??= ['uuid' => $uuid, 'title' => '',
+                            'locale' => (string) $ref->locale, 'draft' => false, 'published' => false,
+                            'versions' => false];
+                        if ($found[$id]['entries'][$key]['title'] === '' && is_string($ref->fields['title'] ?? null)) {
+                            $found[$id]['entries'][$key]['title'] = $ref->fields['title'];
+                        }
+                        $flag = match ($ref->sourceType) {
+                            EntryDraftsSource::ID => 'draft',
+                            PublishedEntriesSource::ID => 'published',
+                            default => 'versions',
+                        };
+                        $found[$id]['entries'][$key][$flag] = true;
+                        break;
+                    case RegionsSource::ID:
+                        $found[$id]['regions'][$ref->sourceId] = $ref->sourceId;
+                        break;
+                    case LayoutsSource::ID:
+                        $found[$id]['layouts'][$ref->sourceId] = [
+                            'id' => $ref->sourceId,
+                            'name' => (string) ($ref->meta['target'] ?? ''),
+                        ];
+                        break;
+                    case SavedSectionsSource::ID:
+                        $found[$id]['sections'][$ref->sourceId] = [
+                            'id' => $ref->sourceId,
+                            'name' => (string) ($ref->meta['name'] ?? ''),
+                        ];
+                        break;
+                }
             }
         };
         $this->sources->each(static fn (BlockDocumentSource $source, DocumentRef $ref) => $visit($ref));
 
-        return [
-            'entries' => array_values($entries),
-            'regions' => array_values($regions),
-            'layouts' => array_values($layouts),
-            'saved_sections' => array_values($sections),
-            'style_classes' => $this->styleClasses($id),
-            'appearance' => [
-                'text' => $this->settings->themeFontTextFamily() === $id,
-                'headings' => $this->settings->themeFontHeadingsFamily() === $id,
-            ],
-        ];
-    }
-
-    private function uses(DocumentRef $ref, string $id): bool
-    {
-        foreach ($ref->schema->fields() as $field) {
-            if ($field->type === 'blocks' && $this->walk($ref->fields[$field->name] ?? null, $id)) {
-                return true;
-            }
+        $classes = $this->styleClasses();
+        $text = $this->settings->themeFontTextFamily();
+        $headings = $this->settings->themeFontHeadingsFamily();
+        $out = [];
+        foreach ($ids as $id) {
+            $out[$id] = [
+                'entries' => array_values($found[$id]['entries']),
+                'regions' => array_values($found[$id]['regions']),
+                'layouts' => array_values($found[$id]['layouts']),
+                'saved_sections' => array_values($found[$id]['sections']),
+                'style_classes' => $classes[$id] ?? [],
+                'appearance' => ['text' => $text === $id, 'headings' => $headings === $id],
+            ];
         }
-        return false;
+        return $out;
     }
 
-    private function walk(mixed $list, string $id): bool
+    /**
+     * Every typeface ID a block list sets — targets and parts, nested blocks included — as keys of
+     * `$found`.
+     *
+     * @param array<string, true> $found
+     */
+    private function collect(mixed $list, array &$found): void
     {
         if (!is_array($list)) {
-            return false;
+            return;
         }
         foreach ($list as $block) {
             if (!is_array($block) || !is_string($block['type'] ?? null)) {
                 continue;
             }
             $settings = is_array($block['settings'] ?? null) ? $block['settings'] : [];
-            if (self::familyOf($settings['style'] ?? null) === $id) {
-                return true;
+            $own = self::familyOf($settings['style'] ?? null);
+            if ($own !== null) {
+                $found[$own] = true;
             }
             foreach (is_array($settings['parts'] ?? null) ? $settings['parts'] : [] as $part) {
-                if (self::familyOf($part) === $id) {
-                    return true;
+                $partFamily = self::familyOf($part);
+                if ($partFamily !== null) {
+                    $found[$partFamily] = true;
                 }
             }
             foreach ($this->registry->regionsFor($block['type']) as $slot) {
-                if ($this->walk($block['data'][$slot] ?? null, $id)) {
-                    return true;
-                }
+                $this->collect($block['data'][$slot] ?? null, $found);
             }
         }
-        return false;
     }
 
     /** The typeface ID a style record sets, if any. */
@@ -153,14 +200,15 @@ final class FontUsage
             : null;
     }
 
-    /** @return list<array{id: string, name: string}> */
-    private function styleClasses(string $id): array
+    /** @return array<string, list<array{id: string, name: string}>> the style classes naming each family */
+    private function styleClasses(): array
     {
         $found = [];
         foreach ($this->db->table('style_classes')->select(['id', 'name', 'style'])->get() as $row) {
             $style = is_string($row['style'] ?? null) ? json_decode($row['style'], true) : $row['style'];
-            if (self::familyOf($style) === $id) {
-                $found[] = ['id' => (string) $row['id'], 'name' => (string) $row['name']];
+            $family = self::familyOf($style);
+            if ($family !== null) {
+                $found[$family][] = ['id' => (string) $row['id'], 'name' => (string) $row['name']];
             }
         }
         return $found;

@@ -64,8 +64,10 @@ final class FontLibraryController
                 'removed' => false, 'faces' => []];
         }
         $uploaded = [];
+        // One snapshot for the whole list: one read of the library and one batch of media URLs.
+        $snapshot = $this->library->snapshot();
         foreach ($this->db->table('font_families')->select(['id'])->get() as $row) {
-            $view = $this->family((string) $row['id']);
+            $view = $snapshot->family((string) $row['id']);
             if ($view !== null) {
                 $uploaded[] = self::present($view);
             }
@@ -93,6 +95,23 @@ final class FontLibraryController
             return Response::notFound('That typeface doesn\'t exist');
         }
         return Response::success($this->usage->of($id), 'Usage retrieved.');
+    }
+
+    /** GET /v1/admin/fonts/usage-counts */
+    #[ApiOperation(
+        summary: 'How often each typeface is used',
+        description: 'For every uploaded family, current or removed, the number of places that name it — the '
+            . 'places GET /fonts/{id}/usage lists — from one scan. Requires `content.manage`.',
+        tags: ['Thallo Fonts'],
+    )]
+    #[ApiResponse(200, description: 'The counts, by family ID.')]
+    public function usageCounts(): Response
+    {
+        $ids = array_map(
+            static fn (array $row): string => (string) $row['id'],
+            $this->db->table('font_families')->select(['id'])->get(),
+        );
+        return Response::success(['counts' => (object) $this->usage->counts($ids)], 'Usage counted.');
     }
 
     /** POST /v1/admin/fonts */
