@@ -271,11 +271,13 @@ final class ProvisionCommand extends BaseCommand
             if ($this->getContainer()->get(SetupService::class)->isInstalled()) {
                 $fonts = $this->getContainer()->get(\Thallo\Core\Content\Fonts\FontLibraryUpgradeStep::class)->run();
                 $this->line(sprintf(
-                    'Font library: %d %s checked, %d custom %s moved into the library.',
+                    'Font library: %d %s checked, %d custom %s moved into the library, %d font %s made public.',
                     $fonts['workspaces'],
                     $fonts['workspaces'] === 1 ? 'workspace' : 'workspaces',
                     $fonts['created'],
                     $fonts['created'] === 1 ? 'font' : 'fonts',
+                    $fonts['published'],
+                    $fonts['published'] === 1 ? 'file' : 'files',
                 ));
             }
         } catch (\Throwable $e) {

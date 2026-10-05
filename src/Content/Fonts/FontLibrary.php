@@ -185,6 +185,7 @@ final class FontLibrary implements FontLibraryReader
         foreach (array_keys($faces) as $blob) {
             $this->assertHeld((string) $blob);
             $this->usable((string) $blob);
+            $this->publishFile((string) $blob);
         }
         $id = Utils::generateNanoID(12);
         $now = gmdate('Y-m-d H:i:s');
@@ -216,9 +217,30 @@ final class FontLibrary implements FontLibraryReader
             if (in_array($blobUuid, $this->faceBlobs($id), true)) {
                 throw new FontLibraryRefusal('That file is already in this family', 'conflict');
             }
+            $this->publishFile($blobUuid);
             $this->insertFace($id, $blobUuid, $face, gmdate('Y-m-d H:i:s'));
             $this->bumpGeneration();
         });
+    }
+
+    /**
+     * Makes every file the workspace's families use public — current and removed alike — and answers
+     * how many it changed. Provision runs it: families added before files were made public on adding
+     * had their faces left out of the fonts stylesheet.
+     */
+    public function publishFaceFiles(): int
+    {
+        $blobs = array_values(array_unique(array_map(
+            static fn (array $row): string => (string) $row['blob_uuid'],
+            $this->db->table('font_faces')->select(['blob_uuid'])->get(),
+        )));
+        if ($blobs === []) {
+            return 0;
+        }
+        return (int) $this->db->table('blobs')
+            ->whereIn('uuid', $blobs)
+            ->where('visibility', '!=', 'public')
+            ->update(['visibility' => 'public']);
     }
 
     /** @throws FontLibraryRefusal */
@@ -450,6 +472,18 @@ final class FontLibrary implements FontLibraryReader
     //----------------------------------------------------------------------------------------------
     // Helpers
     //----------------------------------------------------------------------------------------------
+
+    /**
+     * Makes a family's file public (under its lock): the site serves it to every visitor, and a private
+     * file has no address — its face would be left out of the fonts stylesheet.
+     */
+    private function publishFile(string $blobUuid): void
+    {
+        $this->db->table('blobs')
+            ->where('uuid', '=', $blobUuid)
+            ->where('visibility', '!=', 'public')
+            ->update(['visibility' => 'public']);
+    }
 
     /** Checks (under its lock) that the blob is still one of the workspace's font files. */
     private function usable(string $blobUuid): void

@@ -1600,6 +1600,7 @@ final class CoreServiceProvider extends ServiceProvider implements \Thallo\Contr
         return new \Thallo\Core\Content\Fonts\FontLibraryUpgradeStep(
             $container->get(\Thallo\Core\Content\Fonts\FontLibraryUpgrade::class),
             $container->get(\Thallo\Tenancy\System\SystemFlags::class),
+            $container->get(\Thallo\Core\Content\Fonts\FontLibrary::class),
             $container->has($runner) ? $container->get($runner) : null,
         );
     }
