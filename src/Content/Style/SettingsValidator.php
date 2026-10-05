@@ -11,6 +11,7 @@ use Thallo\Contracts\Style\StyleSchema;
 use Thallo\Contracts\Style\StyleTargets;
 use Thallo\Contracts\Style\ValueKind;
 use Thallo\Contracts\Style\Vocabulary;
+use Thallo\Core\Content\Fonts\FontId;
 
 /**
  * Validates one block's `settings` (visual builder spec §1.1–1.5) against the style contract and
@@ -240,7 +241,7 @@ final class SettingsValidator
             return [null, sprintf('unknown value kind "%s"', $value['type'])];
         }
         if (!$def->accepts($kind)) {
-            return [null, sprintf('expects a %s', $def->tokenDomain !== null ? 'token' : 'choice')];
+            return [null, sprintf('expects a %s', self::expected($def))];
         }
         if ($kind === ValueKind::Reset) {
             return [['type' => 'reset'], null];
@@ -248,6 +249,9 @@ final class SettingsValidator
         $raw = $value['value'] ?? null;
         if (!is_string($raw) || $raw === '') {
             return [null, 'needs a value'];
+        }
+        if ($kind === ValueKind::Font) {
+            return FontId::isValid($raw) ? [['type' => 'font', 'value' => $raw], null] : [null, 'is not a typeface ID'];
         }
         if ($kind === ValueKind::Token) {
             if (!Vocabulary::isBaseline($raw)) {
@@ -262,6 +266,14 @@ final class SettingsValidator
             return [null, 'must be one of ' . implode(', ', $def->choices ?? [])];
         }
         return [['type' => 'choice', 'value' => $raw], null];
+    }
+
+    private static function expected(PropertyDefinition $def): string
+    {
+        if ($def->accepts(ValueKind::Font)) {
+            return 'font';
+        }
+        return $def->tokenDomain !== null ? 'token' : 'choice';
     }
 
     /** @return array{0: list<string>, 1: array<string,string>} */
