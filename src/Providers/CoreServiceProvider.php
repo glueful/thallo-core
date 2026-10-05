@@ -3190,6 +3190,16 @@ final class CoreServiceProvider extends ServiceProvider implements \Thallo\Contr
 
     public function boot(ApplicationContext $context): void
     {
+        // The media extension caps an original at 2048px on either side before it makes a resized
+        // copy — a guard against decompression bombs that also refused ordinary banners and every
+        // phone photo, breaking their thumbnails, srcsets and backgrounds. Thallo's default is
+        // 6000px (36 MP); IMAGE_MAX_WIDTH/HEIGHT or the site's config/image.php still win. Set at
+        // boot, after every provider's register(), so it lands over the extension's own default.
+        $context->mergeConfigDefaults('image', ['limits' => [
+            'max_width' => (int) env('IMAGE_MAX_WIDTH', 6000),
+            'max_height' => (int) env('IMAGE_MAX_HEIGHT', 6000),
+        ]]);
+
         // The capability declaration set, and with it the extensions.protected defaults, exists
         // from here on even if no provider has made a capability decision yet.
         $context->getContainer()->get(\Thallo\Core\Capabilities\Declarations\DeclarationSet::class);
