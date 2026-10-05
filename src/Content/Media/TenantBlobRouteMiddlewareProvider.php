@@ -23,6 +23,9 @@ final class TenantBlobRouteMiddlewareProvider implements BlobRouteMiddlewareProv
         // member (it reads the `auth.user.uuid` attribute the auth middleware populates). Without
         // auth here, the tenancy pipeline denied EVERY upload (403 "Access to this tenant is
         // denied") no matter what bearer the admin SPA sent.
-        return ['auth', 'tenant_profile:admin'];
+        // DELETE also refuses a font library file (block typeface spec §2.6), once the workspace is bound.
+        return $action === BlobRouteAction::DELETE
+            ? ['auth', 'tenant_profile:admin', 'font_library_blob_guard']
+            : ['auth', 'tenant_profile:admin'];
     }
 }

@@ -2125,6 +2125,12 @@ final class CoreServiceProvider extends ServiceProvider implements \Thallo\Contr
                 'shared' => true,
                 'alias' => ['content_permission'],
             ],
+            \Thallo\Core\Content\Fonts\Http\FontLibraryBlobGuard::class => [
+                'class' => \Thallo\Core\Content\Fonts\Http\FontLibraryBlobGuard::class,
+                'shared' => true,
+                'autowire' => true,
+                'alias' => ['font_library_blob_guard'],
+            ],
             PermissionRequirementAuthority::class => [
                 'factory' => [self::class, 'makePermissionRequirementAuthority'],
                 'shared' => true,
