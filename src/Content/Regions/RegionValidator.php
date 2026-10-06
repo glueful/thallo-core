@@ -29,12 +29,16 @@ final class RegionValidator
     }
 
     /**
+     * `$strict` is the publish gate (FieldValidator): a save is live at once, so it stays on; the
+     * stage turns it off, so a block still being filled in — a Shortcode whose name is not chosen
+     * yet — previews instead of refusing the whole apply.
+     *
      * @param list<array<string,mixed>> $blocks
      * @param array<string,mixed> $settings
      * @return array{blocks: list<array<string,mixed>>, settings: array<string,mixed>}
      * @throws ValidationException
      */
-    public function validate(string $slug, array $blocks, array $settings): array
+    public function validate(string $slug, array $blocks, array $settings, bool $strict = true): array
     {
         $palette = RegionDefinitions::PALETTES[$slug] ?? null;
         if ($palette === null) {
@@ -54,7 +58,7 @@ final class RegionValidator
         }
 
         $schema = ContentTypeSchema::fromArray([['name' => 'blocks', 'type' => 'blocks']]);
-        $clean = $this->fields->validate($schema, ['blocks' => array_values($blocks)], true);
+        $clean = $this->fields->validate($schema, ['blocks' => array_values($blocks)], $strict);
 
         return [
             'blocks' => $clean['blocks'] ?? [],
@@ -69,10 +73,11 @@ final class RegionValidator
      * and the cross-region collision is reported on the footer's block.
      *
      * @param array<string, array{blocks?: mixed, settings?: mixed}> $regions keyed by slug
+     * @param bool $strict the publish gate, as validate()'s
      * @return array<string, array{blocks: list<array<string,mixed>>, settings: array<string,mixed>}>
      * @throws ValidationException
      */
-    public function validateBoth(array $regions): array
+    public function validateBoth(array $regions, bool $strict = true): array
     {
         $errors = [];
         $clean = [];
@@ -81,7 +86,7 @@ final class RegionValidator
             $blocks = is_array($region['blocks'] ?? null) ? array_values($region['blocks']) : [];
             $settings = is_array($region['settings'] ?? null) ? $region['settings'] : [];
             try {
-                $clean[$slug] = $this->validate($slug, $blocks, $settings);
+                $clean[$slug] = $this->validate($slug, $blocks, $settings, $strict);
             } catch (ValidationException $e) {
                 foreach ($e->errors() as $path => $message) {
                     $errors["regions.{$slug}.{$path}"] = $message;

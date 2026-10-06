@@ -123,7 +123,9 @@ final class RegionPreviewController
             return Response::error('The regions are too large to preview.', 413);
         }
         try {
-            $clean = $this->validator->validateBoth($input->regions);
+            // Not strict: the stage previews work in progress, as the Design and Layouts stages do;
+            // the save re-validates with the publish gate on.
+            $clean = $this->validator->validateBoth($input->regions, false);
         } catch (ValidationException $e) {
             return Response::validation($e->errors());
         }
