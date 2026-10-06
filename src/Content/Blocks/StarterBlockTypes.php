@@ -732,8 +732,21 @@ final class StarterBlockTypes
             ['slug' => 'logos', 'label' => 'Logos', 'icon' => 'i-lucide-building-2',
                 'category' => 'Media', 'description' => 'A “trusted by” strip of brand logos.',
                 'flags' => [],
-                'style_capabilities' => ['spacing', 'visibility', 'layout.item'],
-                'style_targets' => StyleTargets::root('box', ['spacing', 'visibility', 'layout.item']),
+                'style_capabilities' => [
+                    'spacing', 'visibility', 'layout.item', 'layout.gap.column', 'layout.gap.row', 'logos',
+                ],
+                // The row of logos is what the gaps space (a flex row, wrapping or scrolling), and
+                // every logo — the scrolling run's copies too — takes the logo size.
+                'style_targets' => StyleTargets::root('box', ['spacing', 'visibility', 'layout.item'], [
+                    'targets' => [
+                        // The theme's own logo gaps (blocks.css), so an unset gap names what it is.
+                        'track' => ['kind' => 'stack', 'optional' => true, 'defaults' => [
+                            'display' => 'flex', 'gap' => ['row' => 'lg', 'column' => '2xl'],
+                        ]],
+                        'image' => ['kind' => 'box', 'optional' => true],
+                    ],
+                    'map' => ['layout.gap.column' => 'track', 'layout.gap.row' => 'track', 'logos' => 'image'],
+                ]),
                 'schema' => [
                     ['name' => 'title', 'type' => 'string'],
                     ['name' => 'images', 'type' => 'asset', 'multiple' => true],
