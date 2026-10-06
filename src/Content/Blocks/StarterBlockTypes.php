@@ -205,8 +205,13 @@ final class StarterBlockTypes
                 'category' => 'Layout',
                 'description' => 'A horizontal rule, optionally with a centered label and icon.',
                 'flags' => [],
-                'style_capabilities' => ['spacing', 'visibility', 'colors.border', 'layout.item'],
-                'style_targets' => StyleTargets::root('box', ['spacing', 'visibility', 'colors.border', 'layout.item']),
+                'style_capabilities' => ['spacing', 'visibility', 'colors.border', 'typography', 'layout.item'],
+                // The colour is drawn by the lines, not the block (which has no border of its own),
+                // and the label — with its icon — takes the text style.
+                'style_targets' => StyleTargets::root('box', ['spacing', 'visibility', 'layout.item'], [
+                    'targets' => ['line' => ['kind' => 'box'], 'label' => ['kind' => 'text', 'optional' => true]],
+                    'map' => ['colors.border' => 'line', 'typography' => 'label'],
+                ]),
                 'schema' => [
                     ['name' => 'label', 'type' => 'string'],
                     ['name' => 'type', 'type' => 'enum', 'enum' => ['solid', 'dashed', 'dotted']],
