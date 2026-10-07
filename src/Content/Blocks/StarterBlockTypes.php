@@ -1111,7 +1111,15 @@ final class StarterBlockTypes
                 'category' => 'Items', 'description' => 'One social profile: brand icon + URL.',
                 'flags' => [],
                 'style_capabilities' => ['spacing', 'visibility', 'colors.text', 'layout.item'],
-                'style_targets' => StyleTargets::root('box', ['spacing', 'visibility', 'colors.text', 'layout.item']),
+                // The link's own Icon section, drawn on top of the Social links row's: where both
+                // set something, this link's value wins (parent_style_classes('icon', 'icon')).
+                'style_targets' => StyleTargets::root(
+                    'box',
+                    ['spacing', 'visibility', 'colors.text', 'layout.item'],
+                ) + ['parts' => ['icon' => ['label' => 'Icon', 'capabilities' => [
+                    'colors', 'border', 'radius', 'typography.size',
+                    'spacing.padding.top', 'spacing.padding.right', 'spacing.padding.bottom', 'spacing.padding.left',
+                ]]]],
                 'schema' => [
                     ['name' => 'icon', 'type' => 'string', 'required' => true,
                         'pattern' => 'brand:[a-z0-9]+(-[a-z0-9]+)*', 'format' => 'brand-icon'],
