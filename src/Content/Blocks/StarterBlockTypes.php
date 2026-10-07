@@ -226,10 +226,17 @@ final class StarterBlockTypes
                 'category' => 'Layout',
                 'description' => 'A footer bar: copyright, links and social, over an optional top band.',
                 'flags' => [],
-                'style_capabilities' => ['spacing', 'visibility', 'colors.surface', 'colors.text', 'layout.item'],
+                'style_capabilities' => [
+                    'spacing', 'visibility', 'colors.surface', 'colors.text', 'layout.item', 'footer',
+                ],
+                // The divider is the top section's bottom edge (`top`, optional: the section renders
+                // only while it holds blocks, and on the stage).
                 'style_targets' => StyleTargets::root('box', [
                     'spacing', 'visibility', 'colors.surface', 'colors.text',
                     'layout.item',
+                ], [
+                    'targets' => ['top' => ['kind' => 'box', 'optional' => true]],
+                    'map' => ['footer' => 'top'],
                 ]),
                 'schema' => [
                     ['name' => 'top', 'type' => 'blocks'],
@@ -723,9 +730,15 @@ final class StarterBlockTypes
                 'description' => 'A row of brand icons linking to social profiles.',
                 'flags' => [],
                 'style_capabilities' => ['spacing', 'alignment.content', 'visibility', 'layout.item'],
+                // Every icon's look, in one place: each Social link reads its parent's `icon` part
+                // (parent_style_classes()). Size scales the icon (it is 1em); padding gives a
+                // background or border room around it.
                 'style_targets' => StyleTargets::root('row', [
                     'spacing', 'alignment.content', 'visibility', 'layout.item',
-                ]),
+                ]) + ['parts' => ['icon' => ['label' => 'Icon', 'children' => true, 'capabilities' => [
+                    'colors', 'border', 'radius', 'typography.size',
+                    'spacing.padding.top', 'spacing.padding.right', 'spacing.padding.bottom', 'spacing.padding.left',
+                ]]]],
                 'schema' => [
                     ['name' => 'items', 'type' => 'blocks', 'block_types' => ['social_link']],
                 ]],
