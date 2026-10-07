@@ -26,7 +26,9 @@ final class EngineBlockStyleRegistry implements BlockStyleRegistry
     public function capabilitiesFor(string $type): StyleCapabilities
     {
         $declared = $this->row($type)['style_capabilities'] ?? null;
-        return StyleCapabilities::fromDeclaration(is_array($declared) ? $declared : null);
+        $caps = StyleCapabilities::fromDeclaration(is_array($declared) ? $declared : null);
+        // Effective: a hover path only where its target owns the resting path (hover state spec §2.2).
+        return $this->targetsFor($type)?->effective($caps) ?? $caps;
     }
 
     public function targetsFor(string $type): ?StyleTargets
