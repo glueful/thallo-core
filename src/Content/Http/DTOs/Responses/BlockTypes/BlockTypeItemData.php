@@ -35,6 +35,8 @@ final class BlockTypeItemData implements ResponseData
         public readonly ?array $flags = null,
         /** @var array<string,mixed>|null Starter content for a freshly inserted block. */
         public readonly ?array $starter_content = null,
+        /** @var array<string,mixed>|null What the block (`block`) and each part (`parts`) offer, expanded, in schema order. */
+        public readonly ?array $style_paths = null,
     ) {
     }
 }

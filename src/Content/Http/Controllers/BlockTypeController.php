@@ -9,6 +9,7 @@ use Thallo\Contracts\Style\BlockTemplateTargetCheck;
 use Thallo\Contracts\Style\StyleTargets;
 use Thallo\Core\Content\Blocks\BlockFactory;
 use Thallo\Core\Content\Blocks\BlockTypeRepository;
+use Thallo\Core\Content\Blocks\BlockTypeStylePaths;
 use Thallo\Core\Content\Blocks\CustomBlockStyle;
 use Thallo\Core\Content\Blocks\BlockUsageScanner;
 use Thallo\Core\Content\Blocks\Migration\BlockMigrationRepository;
@@ -139,7 +140,11 @@ final class BlockTypeController
             ));
 
         return Response::success([
-            'block_types' => $listed,
+            // Each with what it offers, expanded once (hover state spec §2.2.1).
+            'block_types' => array_map(
+                static fn (array $row): array => (array) BlockTypeStylePaths::attach($row),
+                $listed,
+            ),
             // The setting groups a block type made here may be given: the picker is this list.
             'style_capability_options' => CustomBlockStyle::GROUPS,
             // Types whose declaration is code's (theirs is shown read-only, never offered for edit).
@@ -192,7 +197,7 @@ final class BlockTypeController
             $this->applyStyle($uuid, $capabilities);
         }
         return Response::created(
-            ['block_type' => $this->blockTypes->findByUuid($uuid)],
+            ['block_type' => BlockTypeStylePaths::attach($this->blockTypes->findByUuid($uuid))],
             'Block type created.',
         );
     }
@@ -205,7 +210,7 @@ final class BlockTypeController
         $row = $this->blockTypes->findBySlug($slug);
         return $row === null
             ? Response::error('Unknown block type.', 404)
-            : Response::success(['block_type' => $row]);
+            : Response::success(['block_type' => BlockTypeStylePaths::attach($row)]);
     }
 
     #[ApiOperation(
@@ -274,7 +279,7 @@ final class BlockTypeController
             $this->applyStyle((string) $row['uuid'], $capabilities);
         }
         return Response::success(
-            ['block_type' => $this->blockTypes->findBySlug($slug)],
+            ['block_type' => BlockTypeStylePaths::attach($this->blockTypes->findBySlug($slug))],
             'Block type updated.',
         );
     }
@@ -306,7 +311,7 @@ final class BlockTypeController
         }
         $this->blockTypes->setActive((string) $row['uuid'], $active);
         return Response::success(
-            ['block_type' => $this->blockTypes->findBySlug($slug)],
+            ['block_type' => BlockTypeStylePaths::attach($this->blockTypes->findBySlug($slug))],
             $active ? 'Block type activated.' : 'Block type deactivated.',
         );
     }
