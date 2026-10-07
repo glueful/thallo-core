@@ -42,7 +42,14 @@ final class BlockTypeStylePaths
         if ($row === null) {
             return null;
         }
-        $paths = self::for($row);
+        try {
+            $paths = self::for($row);
+        } catch (\InvalidArgumentException) {
+            // A stored declaration the current contract no longer parses (written around the
+            // repository's checks, or by an older release): the type offers nothing, and the list
+            // still loads for every other type.
+            $paths = ['block' => [], 'parts' => []];
+        }
         // `parts` is a map: no parts is `{}` in JSON, never `[]`.
         return $row + ['style_paths' => ['block' => $paths['block'], 'parts' => $paths['parts'] ?: new \stdClass()]];
     }
