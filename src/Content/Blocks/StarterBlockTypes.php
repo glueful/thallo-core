@@ -397,7 +397,7 @@ final class StarterBlockTypes
                     'targets' => ['title' => ['kind' => 'text', 'optional' => true]],
                     'map' => ['typography' => 'title', 'colors.text' => 'title', 'alignment.text' => 'title'],
                 ]) + ['parts' => ['link' => ['label' => 'Link', 'capabilities' => [
-                    'typography', 'colors.text',
+                    'typography', 'colors.text', 'hover',
                     'spacing.padding.top', 'spacing.padding.right', 'spacing.padding.bottom', 'spacing.padding.left',
                 ]]]],
                 'schema' => [
@@ -541,14 +541,16 @@ final class StarterBlockTypes
                 'starter_content' => ['label' => 'Learn more', 'url' => '#'],
                 'style_capabilities' => [
                     'spacing', 'alignment.content', 'visibility', 'radius', 'colors', 'typography', 'shadow',
-                    'layout.item',
+                    'layout.item', 'opacity', 'hover',
                 ],
+                // The control is what the pointer is over: its opacity and its hover look are its own.
                 'style_targets' => StyleTargets::root('row', [
                     'spacing', 'alignment.content', 'visibility', 'layout.item',
                 ], [
                     'targets' => ['control' => ['kind' => 'box']],
                     'map' => ['radius' => 'control', 'colors' => 'control', 'typography' => 'control',
-                        'shadow' => 'control', 'advanced.accessibility.label' => 'control'],
+                        'shadow' => 'control', 'opacity' => 'control', 'hover' => 'control',
+                        'advanced.accessibility.label' => 'control'],
                 ]),
                 'schema' => [
                     ['name' => 'label', 'type' => 'string', 'required' => true],
@@ -736,7 +738,7 @@ final class StarterBlockTypes
                 'style_targets' => StyleTargets::root('row', [
                     'spacing', 'alignment.content', 'visibility', 'layout.item',
                 ]) + ['parts' => ['icon' => ['label' => 'Icon', 'children' => true, 'capabilities' => [
-                    'colors', 'border', 'radius', 'typography.size',
+                    'colors', 'border', 'radius', 'typography.size', 'opacity', 'hover',
                     'spacing.padding.top', 'spacing.padding.right', 'spacing.padding.bottom', 'spacing.padding.left',
                 ]]]],
                 'schema' => [
@@ -970,7 +972,13 @@ final class StarterBlockTypes
                 'category' => 'Media', 'description' => 'A download link to an uploaded file.',
                 'flags' => [],
                 'style_capabilities' => ['spacing', 'visibility', 'layout.item'],
-                'style_targets' => StyleTargets::root('box', ['spacing', 'visibility', 'layout.item']),
+                // The download link's own look, at rest and under the pointer (hover state spec §5).
+                'style_targets' => StyleTargets::root('box', ['spacing', 'visibility', 'layout.item'])
+                    + ['parts' => ['link' => ['label' => 'Link', 'capabilities' => [
+                        'colors', 'radius', 'typography.size', 'opacity', 'hover',
+                        'spacing.padding.top', 'spacing.padding.right', 'spacing.padding.bottom',
+                        'spacing.padding.left',
+                    ]]]],
                 'schema' => [
                     ['name' => 'file', 'type' => 'asset', 'required' => true],
                     ['name' => 'label', 'type' => 'string'],
@@ -1117,7 +1125,7 @@ final class StarterBlockTypes
                     'box',
                     ['spacing', 'visibility', 'colors.text', 'layout.item'],
                 ) + ['parts' => ['icon' => ['label' => 'Icon', 'capabilities' => [
-                    'colors', 'border', 'radius', 'typography.size',
+                    'colors', 'border', 'radius', 'typography.size', 'opacity', 'hover',
                     'spacing.padding.top', 'spacing.padding.right', 'spacing.padding.bottom', 'spacing.padding.left',
                 ]]]],
                 'schema' => [
