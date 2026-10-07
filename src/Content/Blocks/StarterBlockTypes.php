@@ -1052,18 +1052,24 @@ final class StarterBlockTypes
                 // Optional, like the title: a feature with no marker renders no element.
                 'style_capabilities' => [
                     'spacing', 'radius', 'colors', 'border', 'shadow', 'visibility', 'typography', 'layout.item',
-                    'marker',
+                    'marker', 'feature',
                 ],
+                // The marker's colour, background and size are `marker.*` too; `feature.gap` is the
+                // space between the marker and the text, on the root. The description is a part with
+                // its own typography, colour and the space above it (the title's typography is the
+                // block's own Typography).
                 'style_targets' => StyleTargets::root('box', [
                     'spacing', 'radius', 'colors', 'border', 'shadow', 'visibility',
-                    'layout.item',
+                    'layout.item', 'feature',
                 ], [
                     'targets' => [
                         'title' => ['kind' => 'text', 'optional' => true],
                         'marker' => ['kind' => 'box', 'optional' => true],
                     ],
                     'map' => ['typography' => 'title', 'marker' => 'marker'],
-                ]),
+                ]) + ['parts' => ['description' => ['label' => 'Description', 'capabilities' => [
+                    'typography', 'colors.text', 'spacing.margin.top',
+                ]]]],
                 'schema' => [
                     ['name' => 'icon', 'type' => 'string', 'pattern' => '[a-z0-9]+(-[a-z0-9]+)*', 'format' => 'icon'],
                     ['name' => 'title', 'type' => 'string', 'required' => true],
