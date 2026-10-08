@@ -291,6 +291,36 @@ final class FieldValidator
                 continue;
             }
 
+            // A multi-valued option-source string (product grid spec §5.3): a list of strings,
+            // deduplicated in order, at most max_items, each item meeting what a single value of
+            // this field must. Whether each is still an option is the admin's concern (a removed
+            // category stays stored and shows unavailable).
+            if ($field->type === 'string' && $field->multiple) {
+                if (!is_array($value) || !array_is_list($value)) {
+                    $errors[$field->name] = 'must be a list of strings';
+                    continue;
+                }
+                $items = [];
+                foreach ($value as $item) {
+                    $itemError = is_string($item)
+                        ? ($this->checkType($field, $item) ?? $this->checkConstraints($field, $item))
+                        : 'must be a list of strings';
+                    if ($itemError !== null) {
+                        $errors[$field->name] = $itemError;
+                        continue 2;
+                    }
+                    if (!in_array($item, $items, true)) {
+                        $items[] = $item;
+                    }
+                }
+                if ($field->maxItems !== null && count($items) > $field->maxItems) {
+                    $errors[$field->name] = 'must have at most ' . $field->maxItems . ' items';
+                    continue;
+                }
+                $clean[$field->name] = $items;
+                continue;
+            }
+
             // Multi-valued reference/asset: strict ordered uuid array, deduped, capped.
             if (($field->type === 'reference' || $field->type === 'asset') && $field->multiple) {
                 $normalized = $this->normalizeMultiValue($field, $value);

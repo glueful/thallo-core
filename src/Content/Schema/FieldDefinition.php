@@ -41,7 +41,7 @@ final class FieldDefinition implements FieldDescriptor
         public readonly ?string $format = null,
         /** Target content-type slug for a `reference` field (drives the admin picker); null otherwise. */
         public readonly ?string $referenceType = null,
-        /** Whether the field accepts multiple values (reference and asset fields only). */
+        /** Whether the field accepts multiple values (reference, asset, and option-source string fields). */
         public readonly bool $multiple = false,
         /** Maximum number of selected items when `multiple` is true; null means unlimited. */
         public readonly ?int $maxItems = null,
@@ -202,10 +202,14 @@ final class FieldDefinition implements FieldDescriptor
             }
         }
 
-        // `multiple` and `max_items` apply to reference and asset fields only.
+        // `multiple` and `max_items` apply to reference and asset fields, and to a string field
+        // whose choices come from an options source (product grid spec §5.3): its value is a list
+        // of the chosen option values.
         $multiple = false;
         $maxItems = null;
-        if ($type === 'reference' || $type === 'asset') {
+        $optionSourceString = $type === 'string' && is_string($raw['options_source'] ?? null)
+            && $raw['options_source'] !== '';
+        if ($type === 'reference' || $type === 'asset' || $optionSourceString) {
             $multiple = (bool) ($raw['multiple'] ?? false);
             if (array_key_exists('max_items', $raw) && $raw['max_items'] !== null) {
                 $mi = $raw['max_items'];

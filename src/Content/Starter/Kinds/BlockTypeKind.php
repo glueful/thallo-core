@@ -278,6 +278,7 @@ final class BlockTypeKind extends AbstractStarterKind
                 'style_capabilities' => $definition->styleCapabilities,
                 'style_targets' => $definition->styleTargets,
                 'flags' => $definition->flags,
+                'starter_content' => $definition->starterContent,
             ],
         );
     }
