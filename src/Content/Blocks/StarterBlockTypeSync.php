@@ -19,6 +19,10 @@ use Thallo\Core\Content\Starter\Kinds\BlockTypeKind;
  * to own: a row whose declaration differs takes the definition's, so a row seeded before the
  * declarations existed, or synced before a block's conversion, renders its settings after the
  * next sync. `starter_content` is filled only while the row has none.
+ *
+ * A definition that owns its schema (`owns_schema`) is the exception to additive fields: a row whose
+ * schema differs takes the definition's whole, so a release can drop a field or change a field's
+ * choices and an install upgrades by the same sync.
  */
 final class StarterBlockTypeSync
 {
@@ -48,9 +52,13 @@ final class StarterBlockTypeSync
                 $missing[] = $slug;
                 continue;
             }
-            [$schema, $added, $labelled] = self::mergedSchema($row['schema'], $definition['schema']);
+            $replace = ($definition['owns_schema'] ?? false) === true
+                && self::canonical($row['schema']) !== self::canonical($definition['schema']);
+            [$schema, $added, $labelled] = $replace
+                ? [$definition['schema'], [], []]
+                : self::mergedSchema($row['schema'], $definition['schema']);
             $styleKeys = self::staleStyleKeys($row, $definition);
-            if ($added === [] && $labelled === [] && $styleKeys === []) {
+            if (!$replace && $added === [] && $labelled === [] && $styleKeys === []) {
                 $unchanged++;
                 continue;
             }
@@ -63,6 +71,9 @@ final class StarterBlockTypeSync
                     $row['starter_content'] ?? $definition['starter_content'] ?? null,
                 );
             }
+            if (!$dryRun && $replace) {
+                $this->blocks->applyMigratedSchema((string) $row['uuid'], $schema);
+            }
             if (!$dryRun && ($added !== [] || $labelled !== [])) {
                 $this->blocks->updateSchema(
                     (string) $row['uuid'],
@@ -74,6 +85,9 @@ final class StarterBlockTypeSync
                 );
             }
             $parts = [];
+            if ($replace) {
+                $parts[] = 'fields replaced';
+            }
             if ($added !== []) {
                 $parts[] = '+' . count($added) . ': ' . implode(', ', $added);
             }

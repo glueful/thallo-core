@@ -224,8 +224,9 @@ final class BlockTypeRepository
     }
 
     /**
-     * Guard-exempt schema replacement for the MIGRATION flow only (spec §2): the
-     * computed post-op schema legitimately removes/renames fields. Never expose
+     * Guard-exempt schema replacement for the MIGRATION flow (spec §2): the
+     * computed post-op schema legitimately removes/renames fields — and for a starter
+     * definition that owns its schema ({@see StarterBlockTypeSync}). Never expose
      * this through the public update endpoint.
      *
      * @param list<array<string,mixed>> $schema
