@@ -302,9 +302,10 @@ final class FieldValidator
                 }
                 $items = [];
                 foreach ($value as $item) {
-                    $itemError = is_string($item)
+                    // An empty item is never a choice (and would skip the field's pattern).
+                    $itemError = is_string($item) && $item !== ''
                         ? ($this->checkType($field, $item) ?? $this->checkConstraints($field, $item))
-                        : 'must be a list of strings';
+                        : 'must be a list of non-empty strings';
                     if ($itemError !== null) {
                         $errors[$field->name] = $itemError;
                         continue 2;
