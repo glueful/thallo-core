@@ -7,12 +7,14 @@ namespace Thallo\Core\Content\Layouts;
 use Thallo\Contracts\Layouts\LayoutSurface;
 use Thallo\Contracts\Layouts\LayoutSurfaceRegistry;
 use Thallo\Contracts\Style\CascadeResolver;
+use Thallo\Contracts\Style\PageStyleCapabilities;
 use Thallo\Contracts\Style\StyleCapabilities;
 use Thallo\Contracts\Style\StyleSchema;
 use Thallo\Core\Content\Blocks\BlockTypeRepository;
 use Thallo\Core\Content\Schema\ContentTypeSchema;
 use Thallo\Core\Content\Style\Classes\StyleClassReferenceGuard;
 use Thallo\Core\Content\Style\Classes\StyleClassRepository;
+use Thallo\Core\Content\Style\SettingsValidator;
 use Thallo\Core\Content\Validation\FieldValidator;
 use Thallo\Core\Content\Validation\ValidationException;
 
@@ -21,7 +23,8 @@ use Thallo\Core\Content\Validation\ValidationException;
  * blocks and its surface's field blocks, anywhere in its tree; its blocks validate as a page save
  * would; what the surface requires is placed exactly once and each blocks field at most once; and
  * every field a block names exists on the target with a type that block can show. The frame
- * settings are a fixed vocabulary. Errors name the block and its field (`blocks.3.data.field`).
+ * settings are a fixed vocabulary, and its styles a page's. Errors name the block and its field
+ * (`blocks.3.data.field`).
  */
 final class LayoutValidator
 {
@@ -623,13 +626,34 @@ final class LayoutValidator
     }
 
     /**
+     * The frame's choices and its styles: the page's own spacing and background (a page's Styles),
+     * validated as a page's are.
+     *
      * @param array<string,mixed> $settings
-     * @return array<string,string>
+     * @return array<string,mixed>
      */
     private static function settings(array $settings): array
     {
         $clean = [];
         foreach ($settings as $key => $value) {
+            if ($key === 'style') {
+                [$style, $errors] = (new SettingsValidator())->validate(
+                    ['style' => $value],
+                    PageStyleCapabilities::capabilities(),
+                );
+                if ($errors !== []) {
+                    // Its paths are `settings.style.…` already, but for a style that is no object.
+                    $keyed = [];
+                    foreach ($errors as $path => $message) {
+                        $keyed[$path === 'settings' ? 'settings.style' : $path] = $message;
+                    }
+                    throw new ValidationException($keyed);
+                }
+                if (($style['style'] ?? []) !== []) {
+                    $clean['style'] = $style['style'];
+                }
+                continue;
+            }
             $allowed = self::SETTINGS[$key] ?? null;
             if ($allowed === null) {
                 throw new ValidationException(["settings.{$key}" => 'unknown frame setting']);
