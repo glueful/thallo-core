@@ -55,6 +55,12 @@ final class GeneralSettings
         'theme_font_text_family'     => ['thallo.theme.font_text_family', 'string', ''],
         'theme_font_headings_family' => ['thallo.theme.font_headings_family', 'string', ''],
         'theme_background'  => ['thallo.theme.background', 'string', 'plain'],
+        // The palette (custom palette spec §2): JSON values, '' when unset; read by PaletteSettings.
+        'theme_neutral_custom' => ['thallo.theme.neutral_custom', 'string', ''],
+        'theme_dark_base'   => ['thallo.theme.dark_base', 'string', ''],
+        'theme_brand_1'     => ['thallo.theme.brand_1', 'string', ''],
+        'theme_brand_2'     => ['thallo.theme.brand_2', 'string', ''],
+        'theme_brand_3'     => ['thallo.theme.brand_3', 'string', ''],
         // Admin SPA base URL — powers the preview bar's Edit/Design deep links.
         // Auto-populated at web setup (the SPA sends its own origin).
         'admin_url'         => ['render.admin_url', 'string', ''],
@@ -157,6 +163,18 @@ final class GeneralSettings
         return $this->store->get($key);
     }
 
+    /** The raw stored value of a key, '' when no row: the palette keys have no config fallback worth reading. */
+    public function stored(string $key): string
+    {
+        return (string) ($this->store->get($key) ?? '');
+    }
+
+    /** Drop the store's read cache, so the next read sees another request's commit. */
+    public function clearStoreCache(): void
+    {
+        $this->store->clearCache();
+    }
+
     public function themeBackground(): string
     {
         return (string) $this->value('theme_background');
@@ -252,7 +270,12 @@ final class GeneralSettings
                 // "clear to fallback" — the row is DELETED so the config/.env
                 // value shows through (a stored '' would shadow it).
                 // null keeps the usual "unchanged" meaning.
-                if (in_array($key, ['homepage_entry', 'theme'], true) && $partial[$key] === '') {
+                // The palette's JSON keys the same way (custom palette spec §2.1): '' is Reset.
+                $clearable = [
+                    'homepage_entry', 'theme',
+                    'theme_neutral_custom', 'theme_brand_1', 'theme_brand_2', 'theme_brand_3',
+                ];
+                if (in_array($key, $clearable, true) && $partial[$key] === '') {
                     $this->store->forget($key);
                     continue;
                 }

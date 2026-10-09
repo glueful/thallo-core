@@ -70,6 +70,21 @@ final class UpdateGeneralSettingsData implements RequestData
         /** @var string|null Page ground: plain | tinted; enum-validated in the controller. */
         #[Rule('string')]
         public readonly ?string $theme_background = null,
+        /** @var string|null Custom neutral: JSON {bg,surface,surface_2,ink,muted,line} of hex; '' resets it. */
+        #[Rule('string')]
+        public readonly ?string $theme_neutral_custom = null,
+        /** @var string|null Dark-mode base family under Custom; enum-validated in the controller. */
+        #[Rule('string')]
+        public readonly ?string $theme_dark_base = null,
+        /** @var string|null Brand colour 1: JSON {name, hex}; cleared only through Clear (§4). */
+        #[Rule('string')]
+        public readonly ?string $theme_brand_1 = null,
+        /** @var string|null Brand colour 2: JSON {name, hex}. */
+        #[Rule('string')]
+        public readonly ?string $theme_brand_2 = null,
+        /** @var string|null Brand colour 3: JSON {name, hex}. */
+        #[Rule('string')]
+        public readonly ?string $theme_brand_3 = null,
         /** @var string|null Where the admin is, when hosted elsewhere; '' means this site's own, at /admin. */
         #[Rule('string')]
         public readonly ?string $admin_url = null,

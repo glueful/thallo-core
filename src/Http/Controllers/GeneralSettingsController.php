@@ -17,6 +17,7 @@ use Thallo\Contracts\Settings\ThemeAppearanceChanged;
 use Thallo\Contracts\Style\StyleArtifactCompiler;
 use Thallo\Contracts\Style\StyleCompileFailed;
 use Thallo\Contracts\Settings\ThemeChanged;
+use Thallo\Core\Settings\PaletteSettings;
 use Thallo\Render\Theme\ThemeColors;
 use Thallo\Render\Theme\ThemeDesign;
 use Glueful\Routing\Attributes\ApiOperation;
@@ -51,6 +52,8 @@ final class GeneralSettingsController
         private readonly ?\Thallo\Contracts\Fonts\FontLibraryReader $fonts = null,
         /** Taken around every write of Custom's assignments (spec §2.7), as the upgrade takes it. */
         private readonly ?\Thallo\Core\Settings\AppearanceLock $appearanceLock = null,
+        /** The palette's keys (custom palette spec §2): validation and their stored spelling. */
+        private readonly ?\Thallo\Core\Settings\PaletteSettings $palette = null,
     ) {
     }
 
@@ -156,6 +159,19 @@ final class GeneralSettingsController
             'theme_radius' => $input->theme_radius,
             'theme_font' => $input->theme_font,
             'theme_background' => $input->theme_background,
+            'theme_neutral_custom' => $input->theme_neutral_custom === null
+                ? null
+                : PaletteSettings::encodeNeutral($input->theme_neutral_custom),
+            'theme_dark_base' => $input->theme_dark_base,
+            'theme_brand_1' => $input->theme_brand_1 === null
+                ? null
+                : PaletteSettings::encodeBrand($input->theme_brand_1),
+            'theme_brand_2' => $input->theme_brand_2 === null
+                ? null
+                : PaletteSettings::encodeBrand($input->theme_brand_2),
+            'theme_brand_3' => $input->theme_brand_3 === null
+                ? null
+                : PaletteSettings::encodeBrand($input->theme_brand_3),
             'site_name' => $input->site_name,
             'site_preview_url' => $input->site_preview_url,
             'default_per_page' => $input->default_per_page,
@@ -281,9 +297,13 @@ final class GeneralSettingsController
         if ($input->theme_accent !== null && ThemeColors::normalizeSiteAccent($input->theme_accent) === null) {
             $errors['theme_accent'] = 'unknown accent color (a colour family, or a hex like #0a7c66)';
         }
-        if ($input->theme_neutral !== null && ThemeColors::normalizeNeutral($input->theme_neutral) === null) {
+        if (
+            $input->theme_neutral !== null && $input->theme_neutral !== 'custom'
+            && ThemeColors::normalizeNeutral($input->theme_neutral) === null
+        ) {
             $errors['theme_neutral'] = 'unknown neutral color';
         }
+        $errors += $this->palette?->validate($input) ?? [];
         // Design settings (website plan phase 1b): the same closed-enum discipline.
         if ($input->theme_radius !== null && ThemeDesign::normalizeRadius($input->theme_radius) === null) {
             $errors['theme_radius'] = 'unknown radius';

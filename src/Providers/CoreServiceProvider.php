@@ -1409,6 +1409,17 @@ final class CoreServiceProvider extends ServiceProvider implements \Thallo\Contr
                 'shared'   => true,
                 'autowire' => true,
             ],
+            // The palette (custom palette spec §2): the Custom neutral, dark base and brand slots.
+            \Thallo\Contracts\Style\PaletteProvider::class => [
+                'class'    => \Thallo\Core\Settings\PaletteSettings::class,
+                'shared'   => true,
+                'autowire' => true,
+            ],
+            \Thallo\Core\Settings\PaletteSettings::class => [
+                'class'    => \Thallo\Core\Settings\PaletteSettings::class,
+                'shared'   => true,
+                'autowire' => true,
+            ],
             // Global chrome regions (global-regions spec): storage + save
             // validation + the render-pack's soft-bound reader seam.
             RegionRepository::class => [
