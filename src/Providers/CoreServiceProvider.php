@@ -1964,6 +1964,11 @@ final class CoreServiceProvider extends ServiceProvider implements \Thallo\Contr
                 'shared' => true,
                 'autowire' => true,
             ],
+            \Thallo\Core\Content\Palette\PaletteNormalizer::class => [
+                'class' => \Thallo\Core\Content\Palette\PaletteNormalizer::class,
+                'shared' => true,
+                'autowire' => true,
+            ],
             \Thallo\Core\Content\Palette\PaletteState::class => [
                 'class' => \Thallo\Core\Content\Palette\PaletteState::class,
                 'shared' => true,
