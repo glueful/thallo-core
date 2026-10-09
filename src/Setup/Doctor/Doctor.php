@@ -346,6 +346,13 @@ final class Doctor
             )];
         }
         $from = $stored !== '' ? 'chosen on the Appearance page' : "RENDER_THEME={$name}";
+        if ($vocabulary->ignored() !== []) {
+            return [$vocabulary, Check::warn(
+                'theme-vocabulary',
+                "Theme \"{$name}\" ({$from}) maps " . implode(', ', $vocabulary->ignored())
+                . ' — ignored: brand colours are set in Appearance (custom palette).',
+            )];
+        }
         return [$vocabulary, Check::ok(
             'theme-vocabulary',
             "Theme \"{$name}\" ({$from}) maps the platform vocabulary.",
