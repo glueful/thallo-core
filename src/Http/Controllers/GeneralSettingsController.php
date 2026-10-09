@@ -123,6 +123,7 @@ final class GeneralSettingsController
             $this->settings->themeFontHeadingsFamily(),
         ];
         $identityBefore = $this->identity();
+        $paletteBefore = $this->palette?->palette()->fingerprint();
         $searchBefore = $this->settings->searchEnabled();
 
         if ($input->default_locale !== null && $input->default_locale !== $this->settings->defaultLocale()) {
@@ -212,6 +213,8 @@ final class GeneralSettingsController
             // logo, favicon or name was served stale for up to render.cache_ttl. (Custom's families
             // are in the key already.)
             || $this->identity() !== $identityBefore
+            // The palette (custom palette spec §5.3): its values and which brand slots are configured.
+            || $this->palette?->palette()->fingerprint() !== $paletteBefore
         ) {
             $this->events?->dispatch(new ThemeAppearanceChanged(
                 $this->settings->themeAccent(),
