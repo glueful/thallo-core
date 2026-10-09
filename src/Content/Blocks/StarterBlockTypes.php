@@ -172,10 +172,40 @@ final class StarterBlockTypes
                 'category' => 'Layout',
                 'description' => 'Links from a navigation menu (structured source — pick a menu, not links).',
                 'flags' => [],
-                'style_capabilities' => ['spacing', 'alignment.content', 'visibility', 'layout.item'],
+                'style_capabilities' => [
+                    'spacing', 'alignment.content', 'visibility', 'layout.item', 'typography',
+                    'layout.gap.column', 'layout.gap.row',
+                ],
+                // Typography on the block reaches every link; the gap spaces the menu's items, the
+                // theme's until set. The parts style the top-level items (with their hover look),
+                // the current page's item — the pill — and the submenu's panel and items.
                 'style_targets' => StyleTargets::root('row', [
-                    'spacing', 'alignment.content', 'visibility', 'layout.item',
-                ]),
+                    'spacing', 'alignment.content', 'visibility', 'layout.item', 'typography',
+                ], [
+                    'targets' => ['list' => ['kind' => 'stack', 'defaults' => [
+                        'display' => 'flex', 'gap' => ['column' => 'sm', 'row' => 'sm'],
+                    ]]],
+                    'map' => ['layout.gap.column' => 'list', 'layout.gap.row' => 'list'],
+                ]) + ['parts' => [
+                    'item' => ['label' => 'Menu item', 'capabilities' => [
+                        'colors', 'border', 'radius',
+                        'spacing.padding.top', 'spacing.padding.right',
+                        'spacing.padding.bottom', 'spacing.padding.left',
+                        'opacity', 'hover',
+                    ]],
+                    'current' => ['label' => 'Current page', 'capabilities' => ['colors', 'border', 'radius']],
+                    'submenu' => ['label' => 'Submenu', 'capabilities' => [
+                        'colors.surface', 'colors.border', 'border', 'radius', 'shadow', 'typography',
+                        'spacing.padding.top', 'spacing.padding.right',
+                        'spacing.padding.bottom', 'spacing.padding.left',
+                    ]],
+                    'submenu_item' => ['label' => 'Submenu item', 'capabilities' => [
+                        'colors', 'radius',
+                        'spacing.padding.top', 'spacing.padding.right',
+                        'spacing.padding.bottom', 'spacing.padding.left',
+                        'opacity', 'hover',
+                    ]],
+                ]],
                 'schema' => [
                     ['name' => 'menu', 'type' => 'string', 'required' => true,
                         'pattern' => '[a-z0-9]+(-[a-z0-9]+)*'],
