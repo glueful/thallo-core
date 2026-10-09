@@ -247,6 +247,11 @@ final class StarterBlockTypes
                     ['name' => 'type', 'type' => 'enum', 'enum' => ['solid', 'dashed', 'dotted']],
                     ['name' => 'size', 'type' => 'enum', 'enum' => ['xs', 'sm', 'md', 'lg', 'xl']],
                     ['name' => 'icon', 'type' => 'string', 'pattern' => '[a-z0-9]+(-[a-z0-9]+)*', 'format' => 'icon'],
+                    // The whole width, or a short or medium accent line, and where a shorter one sits.
+                    ['name' => 'length', 'label' => 'Length', 'type' => 'enum', 'enum' => ['full', 'medium', 'short'],
+                        'enum_labels' => ['full' => 'Full width', 'medium' => 'Medium', 'short' => 'Short']],
+                    ['name' => 'align', 'label' => 'Align', 'type' => 'enum', 'enum' => ['start', 'center', 'end'],
+                        'enum_labels' => ['start' => 'Start', 'center' => 'Centre', 'end' => 'End']],
                 ]],
             // Nuxt UI Footer shape (refs.md `footer`): a <footer> bar with an optional
             // top band, then left (copyright) / center (links) / right (social) slots.
