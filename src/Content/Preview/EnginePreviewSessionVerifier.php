@@ -39,6 +39,7 @@ final class EnginePreviewSessionVerifier implements PreviewSessionVerifier
             $payload->neutral,
             $payload->expiresAt,
             $payload->design,
+            palette: $payload->palette,
         );
     }
 

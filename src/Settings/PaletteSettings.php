@@ -36,6 +36,26 @@ final class PaletteSettings implements PaletteProvider
         );
     }
 
+    public function preview(array $claim): Palette
+    {
+        $saved = $this->palette();
+        $sent = $claim['neutral_custom'] ?? null;
+        $neutral = array_key_exists('neutral_custom', $claim)
+            ? (is_array($sent) ? self::parseNeutral((string) json_encode($sent)) : null)
+            : $saved->customNeutral;
+        $base = array_key_exists('dark_base', $claim)
+            ? (is_string($claim['dark_base']) ? ThemeColors::normalizeNeutral($claim['dark_base']) : null)
+            : $saved->darkBase;
+        $brands = $saved->brands;
+        foreach (is_array($claim['brands'] ?? null) ? $claim['brands'] : [] as $slot => $brand) {
+            $slot = (int) $slot;
+            if (in_array($slot, Palette::SLOTS, true)) {
+                $brands[$slot] = is_array($brand) ? self::parseBrand((string) json_encode($brand)) : null;
+            }
+        }
+        return new Palette($neutral, $base, $brands);
+    }
+
     /** `#abc` / `#aabbcc` in any case, as lower-case six digits; null for anything else. */
     public static function normalizeHex(string $value): ?string
     {

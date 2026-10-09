@@ -50,6 +50,12 @@ final class MintPreviewData implements RequestData
         /** @var string|null Pending Custom Headings family, the same way. */
         #[Rule('string')]
         public readonly ?string $font_headings_family = null,
+        /**
+         * @var array<string,mixed>|null Pending palette (custom palette spec §5.1): `neutral_custom` (six
+         *      hex colours), `dark_base` (a neutral family), `brands` (slot 1–3 to {name, hex} or null).
+         */
+        #[Rule('array')]
+        public readonly ?array $palette = null,
     ) {
     }
 }

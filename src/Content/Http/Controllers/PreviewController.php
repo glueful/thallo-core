@@ -14,6 +14,7 @@ use Thallo\Core\Content\Preview\PreviewNotFoundException;
 use Thallo\Core\Content\Preview\PreviewReader;
 use Thallo\Core\Content\Preview\PreviewTokenException;
 use Thallo\Core\Http\DTOs\ErrorResponse;
+use Thallo\Core\Settings\PaletteSettings;
 use Glueful\Bootstrap\ApplicationContext;
 use Glueful\Http\Response;
 use Thallo\Contracts\Capability\CapabilityRegistry;
@@ -142,6 +143,19 @@ final class PreviewController
             $design[$name] = $value;
         }
 
+        // A pending palette (custom palette spec §5.1): validated and normalised as a save is, then
+        // signed into the token. Token-only — Save writes the settings.
+        $palette = null;
+        if ($input->palette !== null) {
+            $palette = self::previewPalette($input->palette);
+            if ($palette === null) {
+                return Response::validation([
+                    'palette' => 'a palette is neutral_custom (six hex colours), dark_base (a neutral family) '
+                        . 'and brands (slots 1–3, each a name and a hex colour)',
+                ]);
+            }
+        }
+
         // version_uuid is optional: absent means "mint from the current draft". Existence /
         // ownership of a pinned version is validated by the reader at read time (domain rule).
         $token = $this->minter->mint(
@@ -152,6 +166,7 @@ final class PreviewController
             $accent,
             $neutral,
             $design === [] ? null : $design,
+            $palette === [] ? null : $palette,
         );
         $ttl = $this->minter->ttlSeconds();
         $exp = time() + $ttl;
@@ -220,5 +235,62 @@ final class PreviewController
         }
 
         return Response::success(['preview' => $payload], 'Preview retrieved.');
+    }
+
+    /**
+     * The pending palette, normalised (hex lower-case, names trimmed), or null when any part is
+     * invalid. Only the keys sent are carried; the render falls back to the saved values for the rest.
+     *
+     * @param array<string,mixed> $input
+     * @return array<string,mixed>|null
+     */
+    private static function previewPalette(array $input): ?array
+    {
+        $out = [];
+        foreach ($input as $key => $value) {
+            switch ($key) {
+                case 'neutral_custom':
+                    if ($value === null) {
+                        $out[$key] = null;
+                        break;
+                    }
+                    $six = is_array($value) ? PaletteSettings::parseNeutral((string) json_encode($value)) : null;
+                    if ($six === null) {
+                        return null;
+                    }
+                    $out[$key] = $six;
+                    break;
+                case 'dark_base':
+                    if ($value !== null && (!is_string($value) || ThemeColors::normalizeNeutral($value) === null)) {
+                        return null;
+                    }
+                    $out[$key] = $value;
+                    break;
+                case 'brands':
+                    if (!is_array($value)) {
+                        return null;
+                    }
+                    $brands = [];
+                    foreach ($value as $slot => $brand) {
+                        if (!in_array((string) $slot, ['1', '2', '3'], true)) {
+                            return null;
+                        }
+                        if ($brand === null) {
+                            $brands[(int) $slot] = null;
+                            continue;
+                        }
+                        $parsed = is_array($brand) ? PaletteSettings::parseBrand((string) json_encode($brand)) : null;
+                        if ($parsed === null) {
+                            return null;
+                        }
+                        $brands[(int) $slot] = $parsed->toArray();
+                    }
+                    $out[$key] = $brands;
+                    break;
+                default:
+                    return null;
+            }
+        }
+        return $out;
     }
 }

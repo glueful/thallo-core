@@ -35,6 +35,13 @@ final class PreviewToken
          * @var array<string,string>|null
          */
         public readonly ?array $design = null,
+        /**
+         * A pending palette (custom palette spec §5.1): `neutral_custom`, `dark_base`, `brands`, any
+         * subset; null = none. Previewed from the token and never written anywhere.
+         *
+         * @var array<string,mixed>|null
+         */
+        public readonly ?array $palette = null,
     ) {
     }
 
@@ -59,6 +66,7 @@ final class PreviewToken
         ?string $accent = null,
         ?string $neutral = null,
         ?array $design = null,
+        ?array $palette = null,
     ): string {
         $claims = [
             'e' => $entryUuid,
@@ -75,6 +83,10 @@ final class PreviewToken
         // settings is byte-for-byte what it always was.
         if ($design !== null && $design !== []) {
             $claims['d'] = $design;
+        }
+        // The palette claim the same way (custom palette spec §5.1): absent unless there is one.
+        if ($palette !== null && $palette !== []) {
+            $claims['p'] = $palette;
         }
         $payload = self::b64(json_encode($claims, JSON_THROW_ON_ERROR));
 
@@ -116,7 +128,63 @@ final class PreviewToken
             isset($data['a']) && is_string($data['a']) ? $data['a'] : null,
             isset($data['n']) && is_string($data['n']) ? $data['n'] : null,
             self::designClaim($data['d'] ?? null),
+            self::paletteClaim($data['p'] ?? null),
         );
+    }
+
+    /**
+     * The palette claim, read defensively: exactly the keys `neutral_custom` (null or the six neutral
+     * names to strings), `dark_base` (null or a string) and `brands` (slot 1–3 to null or
+     * {name, hex} strings); anything else is no palette. The minter validated the colours.
+     *
+     * @return array<string,mixed>|null
+     */
+    private static function paletteClaim(mixed $claim): ?array
+    {
+        if (!is_array($claim) || $claim === []) {
+            return null;
+        }
+        foreach ($claim as $key => $value) {
+            $ok = match ($key) {
+                'neutral_custom' => $value === null || (is_array($value) && self::stringMap($value, 6)),
+                'dark_base' => $value === null || is_string($value),
+                'brands' => is_array($value) && self::brandsClaim($value),
+                default => false,
+            };
+            if (!$ok) {
+                return null;
+            }
+        }
+        return $claim;
+    }
+
+    /** @param array<mixed> $map */
+    private static function stringMap(array $map, int $size): bool
+    {
+        if (count($map) !== $size) {
+            return false;
+        }
+        foreach ($map as $k => $v) {
+            if (!is_string($k) || !is_string($v)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** @param array<mixed> $brands */
+    private static function brandsClaim(array $brands): bool
+    {
+        foreach ($brands as $slot => $brand) {
+            if (!in_array((int) $slot, [1, 2, 3], true)) {
+                return false;
+            }
+            $named = is_array($brand) && is_string($brand['name'] ?? null) && is_string($brand['hex'] ?? null);
+            if ($brand !== null && !$named) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /**
