@@ -199,6 +199,11 @@ $router->group(['prefix' => '/v1/admin'], function (Router $router): void {
         $router->get('/style-classes/{id}/jobs/{job}', [StyleClassController::class, 'showJob'])
         ->middleware('content_permission:content.view');
 
+    // The palette (custom palette spec §4): usage, clearing and replacing a brand colour need content.manage.
+        $router->get('/appearance/palette/brand/{slot}/usage', [\Thallo\Core\Content\Palette\Http\PaletteController::class, 'usage'])
+        ->where('slot', '[123]')
+        ->middleware('content_permission:content.manage');
+
     // The font library (block typeface spec §2, §4.6): any editor reads the picker; usage and every
     // change need content.manage.
         $router->get('/fonts', [\Thallo\Core\Content\Fonts\Http\FontLibraryController::class, 'index'])

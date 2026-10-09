@@ -1959,6 +1959,21 @@ final class CoreServiceProvider extends ServiceProvider implements \Thallo\Contr
                 'shared' => true,
                 'autowire' => true,
             ],
+            \Thallo\Core\Content\Palette\ColorTokenWalker::class => [
+                'class' => \Thallo\Core\Content\Palette\ColorTokenWalker::class,
+                'shared' => true,
+                'autowire' => true,
+            ],
+            \Thallo\Core\Content\Palette\BrandColorUsage::class => [
+                'class' => \Thallo\Core\Content\Palette\BrandColorUsage::class,
+                'shared' => true,
+                'autowire' => true,
+            ],
+            \Thallo\Core\Content\Palette\Http\PaletteController::class => [
+                'class' => \Thallo\Core\Content\Palette\Http\PaletteController::class,
+                'shared' => true,
+                'autowire' => true,
+            ],
             \Thallo\Core\Content\Fonts\Http\FontLibraryController::class => [
                 'class' => \Thallo\Core\Content\Fonts\Http\FontLibraryController::class,
                 'shared' => true,
