@@ -370,7 +370,9 @@ final class StarterBlockTypes
                 'style_targets' => StyleTargets::root('text', [
                     'spacing', 'width', 'alignment.self', 'alignment.text', 'typography', 'colors.text', 'visibility',
                     'layout.item',
-                ]) + ['parts' => ['link' => ['label' => 'Link', 'capabilities' => ['colors.text', 'hover']]]],
+                ]) + ['parts' => ['link' => ['label' => 'Link', 'capabilities' => [
+                    'typography.weight', 'typography.decoration', 'colors.text', 'hover',
+                ]]]],
                 'schema' => [
                     ['name' => 'text', 'type' => 'string', 'required' => true],
                     ['name' => 'level', 'type' => 'enum', 'enum' => ['h1', 'h2', 'h3', 'h4', 'h5', 'h6']],
