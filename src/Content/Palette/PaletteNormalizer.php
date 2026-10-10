@@ -64,7 +64,7 @@ final class PaletteNormalizer
                     return $to;
                 }
                 if (!$snapshot->palette->isConfigured($slot) && !in_array($token, $basis[$loc] ?? [], true)) {
-                    $errors[$loc] = "Brand {$slot} is no longer in the palette";
+                    $errors[$loc] = "Brand {$slot} isn't in the palette";
                 }
                 return null;
             },

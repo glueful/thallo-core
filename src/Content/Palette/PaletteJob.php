@@ -25,6 +25,8 @@ final class PaletteJob
         public readonly ?int $completedGeneration = null,
         public readonly ?string $createdAt = null,
         public readonly ?string $finishedAt = null,
+        /** @var array<string,int> documents rewritten, per source, across every run */
+        public readonly array $counts = [],
     ) {
     }
 }

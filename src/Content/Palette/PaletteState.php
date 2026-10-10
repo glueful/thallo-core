@@ -17,6 +17,14 @@ use Thallo\Core\Settings\GeneralSettings;
 final class PaletteState
 {
     private ?int $heldAtLevel = null;
+
+    /**
+     * The connection handle the hold was taken on. A commit that loses its connection drops the
+     * release callbacks with it; the next handle is a new one, so a stale hold never passes for a
+     * new transaction's.
+     */
+    /** @var \WeakReference<\PDO>|null */
+    private ?\WeakReference $heldOn = null;
     private ?\Closure $afterSnapshot = null;
 
     public function __construct(
@@ -82,10 +90,12 @@ final class PaletteState
         $this->ensureRow();
         $this->db->table('palette_state')->where('site', '=', 'site')
             ->update(['updated_at' => gmdate('Y-m-d H:i:s')]);
-        if ($this->heldAtLevel === null) {
+        if (!$this->heldInThisTransaction()) {
             $this->heldAtLevel = $this->db->transactionLevel();
+            $this->heldOn = \WeakReference::create($this->db->getPDO());
             $release = function (): void {
                 $this->heldAtLevel = null;
+                $this->heldOn = null;
             };
             $this->db->afterCommit($release);
             $this->db->afterRollback($release);
@@ -107,7 +117,15 @@ final class PaletteState
 
     public function heldInThisTransaction(): bool
     {
-        return $this->heldAtLevel !== null && $this->db->withinTransaction();
+        if ($this->heldAtLevel === null) {
+            return false;
+        }
+        if (!$this->db->withinTransaction() || $this->heldOn?->get() !== $this->db->getPDO()) {
+            $this->heldAtLevel = null; // released without its callbacks (a lost connection): forget it
+            $this->heldOn = null;
+            return false;
+        }
+        return true;
     }
 
     /**

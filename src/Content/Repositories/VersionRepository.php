@@ -104,6 +104,13 @@ final class VersionRepository
         return $row;
     }
 
+    /** Say what appended a version (an operation, not an editor: custom palette spec §4.4). */
+    public function annotate(string $versionUuid, string $note): void
+    {
+        $this->db->table('entry_versions')->where('uuid', '=', $versionUuid)
+            ->update(['note' => mb_substr($note, 0, 255)]);
+    }
+
     /** @return list<array<string,mixed>> newest first */
     public function versionsFor(string $entryUuid, string $locale): array
     {

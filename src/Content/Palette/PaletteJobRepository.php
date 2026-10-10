@@ -116,12 +116,23 @@ final class PaletteJobRepository
         ]);
     }
 
-    public function incrementDone(string $id): void
+    /**
+     * One document rewritten: this pass's progress, and the per-source count that runs across
+     * passes and resumes (the audit entry reports it).
+     */
+    public function incrementDone(string $id, ?string $source = null): void
     {
         $job = $this->find($id);
         if ($job !== null) {
-            $this->db->table('palette_jobs')->where('id', '=', $id)->where('status', '=', 'running')
-                ->update(['work_items_done' => $job->done + 1, 'heartbeat_at' => gmdate('Y-m-d H:i:s')]);
+            $counts = $job->counts;
+            if ($source !== null) {
+                $counts[$source] = ($counts[$source] ?? 0) + 1;
+            }
+            $this->db->table('palette_jobs')->where('id', '=', $id)->where('status', '=', 'running')->update([
+                'work_items_done' => $job->done + 1,
+                'counts' => json_encode((object) $counts, JSON_THROW_ON_ERROR),
+                'heartbeat_at' => gmdate('Y-m-d H:i:s'),
+            ]);
         }
     }
 
@@ -139,7 +150,8 @@ final class PaletteJobRepository
         }
         $report = $job->failureReport;
         $report[] = ['source' => $source, 'id' => $docId, 'locale' => $locale, 'reason' => $reason];
-        $this->db->table('palette_jobs')->where('id', '=', $id)->update([
+        // Only an active job takes notes: a cancelled or finished one is written nothing.
+        $this->db->table('palette_jobs')->where('id', '=', $id)->whereIn('status', ['running', 'failed'])->update([
             'work_items_failed' => $job->failed + 1,
             'failure_report' => json_encode($report, JSON_THROW_ON_ERROR),
         ]);
@@ -148,7 +160,7 @@ final class PaletteJobRepository
     /** @param array<string,int> $counts per source */
     public function recordCounts(string $id, array $counts): void
     {
-        $this->db->table('palette_jobs')->where('id', '=', $id)
+        $this->db->table('palette_jobs')->where('id', '=', $id)->whereIn('status', ['running', 'completed'])
             ->update(['counts' => json_encode($counts, JSON_THROW_ON_ERROR)]);
     }
 
@@ -156,6 +168,7 @@ final class PaletteJobRepository
     private static function hydrate(array $row): PaletteJob
     {
         $report = is_string($row['failure_report'] ?? null) ? json_decode($row['failure_report'], true) : null;
+        $counts = is_string($row['counts'] ?? null) ? json_decode($row['counts'], true) : null;
         return new PaletteJob(
             (string) $row['id'],
             (int) $row['slot'],
@@ -173,6 +186,7 @@ final class PaletteJobRepository
             isset($row['completed_generation']) ? (int) $row['completed_generation'] : null,
             isset($row['created_at']) ? (string) $row['created_at'] : null,
             isset($row['finished_at']) ? (string) $row['finished_at'] : null,
+            is_array($counts) ? array_map('intval', $counts) : [],
         );
     }
 }

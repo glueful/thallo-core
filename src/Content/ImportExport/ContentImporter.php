@@ -166,8 +166,8 @@ final class ContentImporter implements ImporterInterface, RetryableAdapterInterf
     /**
      * The records that change what a site renders go through the palette fence (custom palette spec
      * §4.3, §4.5): an entry draft (its stored draft the basis); an entry version that is the current
-     * publication (rewriting live content); and a publication pointer, treated as a rollback — the
-     * referenced version normalised with itself as basis, and appended and pinned when a running
+     * publication (rewriting live content); and a publication pointer — the referenced version
+     * normalised with the current publication as basis, and appended and pinned when a running
      * replacement changes it, never repinned with the slot's old colour. History is stored as given.
      *
      * @param array<string,mixed> $data
@@ -243,12 +243,21 @@ final class ContentImporter implements ImporterInterface, RetryableAdapterInterf
         }
         $fields = json_decode((string) $version['fields'], true) ?: [];
         $schema = $this->schemaOf($entry);
+        // The trusted basis is what the site publishes now, not the version itself: a bundle from a
+        // site with other brand colours gets the same verdict for its pointer as for its draft —
+        // refused where it names a slot this site does not configure — while re-importing a site's
+        // own bundle (its live page already naming the colour there) still pins it.
+        $current = $this->db->table('entry_publications')->where('entry_uuid', '=', $entry)
+            ->where('locale', '=', $locale)->first();
+        $live = $current === null ? null : $this->db->table('entry_versions')
+            ->where('uuid', '=', (string) $current['version_uuid'])->first();
+        $liveFields = $live === null ? [] : (json_decode((string) $live['fields'], true) ?: []);
         $this->fence?->write(
             fn (PaletteSnapshot $s): Normalized => $this->normalizer?->normalize(
                 ColorTokenWalker::KIND_ENTRY,
                 $fields,
                 $s,
-                $this->normalizer->basisOf(ColorTokenWalker::KIND_ENTRY, $schema, $fields),
+                $this->normalizer->basisOf(ColorTokenWalker::KIND_ENTRY, $schema, $liveFields),
                 $schema,
             ) ?? new Normalized($fields, false, false),
             function (array $doc) use ($data, $entry, $locale, $fields, $version, $schema): void {

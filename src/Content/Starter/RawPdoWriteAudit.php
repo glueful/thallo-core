@@ -67,6 +67,9 @@ final class RawPdoWriteAudit implements StaticWriteAudit
         // The layout write locks: the same shape (type layouts spec §5.5); layout rows are written
         // through the builder under them.
         'core/src/Content/Layouts/LayoutWriteLock.php',
+        // The palette row's hold: getPDO() is an identity check only (is this still the connection the
+        // row was taken on?); no statement runs through it, and the row is written through the builder.
+        'core/src/Content/Palette/PaletteState.php',
         // The font library's blob lock: a row lock on the framework's (unowned) blobs table only.
         'core/src/Content/Fonts/FontLibrary.php',
         // Storefront-rendering slice 2, Tasks 8/10: PackSlugLifecycleAuthority/

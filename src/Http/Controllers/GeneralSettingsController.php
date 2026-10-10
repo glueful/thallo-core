@@ -56,6 +56,8 @@ final class GeneralSettingsController
         private readonly ?\Thallo\Core\Settings\PaletteSettings $palette = null,
         /** Palette keys are written under the palette row, checked against running replacements (§4.3). */
         private readonly ?\Thallo\Core\Content\Palette\PaletteMutations $paletteMutations = null,
+        /** The palette row, taken first so the palette keys and the default locale commit together. */
+        private readonly ?\Thallo\Core\Content\Palette\PaletteFence $paletteFence = null,
     ) {
     }
 
@@ -128,8 +130,10 @@ final class GeneralSettingsController
         $paletteBefore = $this->palette?->palette()->fingerprint();
         $searchBefore = $this->settings->searchEnabled();
 
-        // The palette's keys first, under the palette row (custom palette spec §4.3): a slot a running
-        // replacement replaces cannot be renamed or re-coloured, and then nothing of this save is written.
+        // The palette's keys and the default locale first, in one transaction that takes the palette
+        // row (custom palette spec §4.3): a slot a running replacement replaces cannot be renamed or
+        // re-coloured (409), a language that cannot be the default is refused (422), and either way
+        // nothing of this save is written.
         $paletteKeys = array_filter([
             'theme_neutral_custom' => $input->theme_neutral_custom === null
                 ? null
@@ -142,22 +146,35 @@ final class GeneralSettingsController
                 $paletteKeys['theme_brand_' . $slot] = PaletteSettings::encodeBrand($brand);
             }
         }
-        try {
+        // Choosing Custom with no dark base: dark mode stays the family the site had (spec §2.2).
+        $currentNeutral = $this->settings->themeNeutral();
+        if (
+            $input->theme_neutral === 'custom' && $currentNeutral !== 'custom' && $input->theme_dark_base === null
+            && ($this->settings->stored('theme_dark_base') ?? '') === ''
+        ) {
+            $paletteKeys['theme_dark_base'] = $currentNeutral;
+        }
+        $locale = $input->default_locale !== null && $input->default_locale !== $this->settings->defaultLocale()
+            ? $input->default_locale
+            : null;
+        $first = function () use ($paletteKeys, $locale): void {
             $this->paletteMutations !== null
                 ? $this->paletteMutations->save($paletteKeys, null)
                 : $this->settings->save($paletteKeys);
-        } catch (\Thallo\Core\Content\Palette\PaletteConflict $e) {
-            return Response::error($e->getMessage(), 409, ['conflict' => $e->getMessage()]);
-        }
-
-        if ($input->default_locale !== null && $input->default_locale !== $this->settings->defaultLocale()) {
-            // Saved separately so a language that cannot be the default is refused before anything
-            // else is written.
-            try {
-                $this->settings->save(['default_locale' => $input->default_locale]);
-            } catch (\InvalidArgumentException $e) {
-                return Response::validation(['default_locale' => $e->getMessage()]);
+            if ($locale !== null) {
+                $this->settings->save(['default_locale' => $locale]);
             }
+        };
+        try {
+            if ($paletteKeys !== [] || $locale !== null) {
+                $this->paletteFence !== null ? $this->paletteFence->within($first) : $first();
+            }
+        } catch (\Thallo\Core\Content\Palette\PaletteConflict $e) {
+            $this->settings->clearStoreCache();
+            return Response::error($e->getMessage(), 409, ['conflict' => $e->getMessage()]);
+        } catch (\InvalidArgumentException $e) {
+            $this->settings->clearStoreCache(); // the transaction rolled the palette keys back too
+            return Response::validation(['default_locale' => $e->getMessage()]);
         }
 
         // Custom's assignments under the appearance lock, so the one-time upgrade never refills one

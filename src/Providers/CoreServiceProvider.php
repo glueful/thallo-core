@@ -2414,6 +2414,9 @@ final class CoreServiceProvider extends ServiceProvider implements \Thallo\Contr
             $container->has(AuditRecorderInterface::class)
                 ? $container->get(AuditRecorderInterface::class)
                 : null,
+            $container->get(\Thallo\Core\Content\Blocks\BlockTypeRepository::class),
+            $container->get(\Thallo\Contracts\Style\BlockStyleRegistry::class),
+            $container->get(\Thallo\Core\Content\Repositories\VersionRepository::class),
         );
     }
 
