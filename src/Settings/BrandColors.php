@@ -25,11 +25,14 @@ final class BrandColors
             return [[], [], 0];
         }
         $colors = [];
+        $unreadable = [];
         foreach (is_array($data['colors'] ?? null) ? $data['colors'] : [] as $row) {
             $id = is_array($row) ? self::id($row['id'] ?? null) : null;
             $slot = $id === null ? null : PaletteSettings::parseBrand((string) json_encode($row));
             if ($slot !== null && !isset($colors[$id])) {
                 $colors[$id] = $slot;
+            } elseif ($id !== null) {
+                $unreadable[] = $id;
             }
         }
         $removed = [];
@@ -38,6 +41,13 @@ final class BrandColors
             $name = is_array($row) && is_string($row['name'] ?? null) ? trim($row['name']) : '';
             if ($id !== null && $name !== '' && !isset($colors[$id])) {
                 $removed[$id] = mb_substr($name, 0, PaletteSettings::NAME_MAX);
+            }
+        }
+        // An entry with an id that no longer parses reads as unset, but its id was issued: it stays
+        // reserved, so it is never given to another colour.
+        foreach ($unreadable as $id) {
+            if (!isset($colors[$id]) && !isset($removed[$id])) {
+                $removed[$id] = "Brand {$id}";
             }
         }
         $revision = is_int($data['revision'] ?? null) && $data['revision'] >= 0 ? $data['revision'] : 0;

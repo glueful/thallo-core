@@ -2419,7 +2419,7 @@ final class CoreServiceProvider extends ServiceProvider implements \Thallo\Contr
         );
     }
 
-    /** Every palette change (custom palette spec §4.3); its audit entry and event are optional. */
+    /** The palette from general settings, under the deployment's brand colour limit (custom palette spec §1). */
     public static function makePaletteSettings(ContainerInterface $container): \Thallo\Core\Settings\PaletteSettings
     {
         return new \Thallo\Core\Settings\PaletteSettings(
@@ -2439,6 +2439,7 @@ final class CoreServiceProvider extends ServiceProvider implements \Thallo\Contr
         return $container->get(\Thallo\Core\Settings\PaletteSettings::class);
     }
 
+    /** Every palette change (custom palette spec §4.3); its audit entry and event are optional. */
     public static function makePaletteMutations(
         ContainerInterface $container,
     ): \Thallo\Core\Content\Palette\PaletteMutations {

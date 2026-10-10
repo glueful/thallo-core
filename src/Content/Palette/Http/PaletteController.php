@@ -52,7 +52,6 @@ final class PaletteController
         tags: ['Thallo Settings'],
     )]
     #[ApiResponse(200, description: 'The usage.')]
-    #[ApiResponse(404, description: 'No such slot.')]
     public function usage(int $id): Response
     {
         return Response::success(['usage' => $this->usage->of($id)]);
@@ -101,7 +100,10 @@ final class PaletteController
         description: 'Cleared; the style schema\'s palette block and the stored brand colour list this Clear '
             . 'wrote (`brand_colors`).',
     )]
-    #[ApiResponse(409, description: 'In use (`usage`), or part of a running replacement (`conflict`).')]
+    #[ApiResponse(
+        409,
+        description: 'In use (`usage`), part of a running replacement (`conflict`), or already cleared (`conflict`).',
+    )]
     public function clear(int $id, ?Request $request = null): Response
     {
         $slot = $id;
@@ -116,7 +118,13 @@ final class PaletteController
         } catch (PaletteConflict $e) {
             return Response::error($e->getMessage(), 409, ['conflict' => $e->getMessage()]);
         }
-        // The list this Clear wrote, captured in its transaction (null when the id was not a colour).
+        if ($written === null) {
+            // Not a colour (cleared already, perhaps by someone else, or never issued here): saying
+            // "cleared" would let the page take a list it never received as its own.
+            $message = 'This colour was already cleared — reload to see the latest';
+            return Response::error($message, 409, ['conflict' => $message]);
+        }
+        // The list this Clear wrote, captured in its transaction.
         return Response::success(
             ['palette' => $this->schema?->paletteBlock(), 'brand_colors' => $written],
             'Brand colour cleared.',
