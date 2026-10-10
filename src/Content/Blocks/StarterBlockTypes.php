@@ -349,6 +349,9 @@ final class StarterBlockTypes
                 ]),
                 'schema' => [
                     ['name' => 'body', 'type' => 'text', 'format' => 'rich'],
+                    // The whole block as a link: a cover over it, the body's own links above it.
+                    ['name' => 'url', 'type' => 'string', 'label' => 'Link'],
+                    ['name' => 'new_tab', 'type' => 'boolean', 'label' => 'Open the link in a new tab'],
                 ]],
             // A single heading/label — the lightweight alternative to reaching for a
             // rich_text block just to place one line. Level defaults to h2 at render
@@ -368,6 +371,9 @@ final class StarterBlockTypes
                 'schema' => [
                     ['name' => 'text', 'type' => 'string', 'required' => true],
                     ['name' => 'level', 'type' => 'enum', 'enum' => ['h1', 'h2', 'h3', 'h4', 'h5', 'h6']],
+                    // The heading's text as a link.
+                    ['name' => 'url', 'type' => 'string', 'label' => 'Link'],
+                    ['name' => 'new_tab', 'type' => 'boolean', 'label' => 'Open the link in a new tab'],
                     // Alignment and colour are settings (visual builder spec §7.2, group one).
                 ]],
             ['slug' => 'card', 'label' => 'Card', 'icon' => 'i-lucide-rectangle-horizontal',
