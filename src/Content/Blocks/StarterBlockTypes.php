@@ -1111,9 +1111,17 @@ final class StarterBlockTypes
                         'marker' => ['kind' => 'box', 'optional' => true],
                     ],
                     'map' => ['typography' => 'title', 'marker' => 'marker'],
-                ]) + ['parts' => ['description' => ['label' => 'Description', 'capabilities' => [
-                    'typography', 'colors.text', 'spacing.margin.top',
-                ]]]],
+                ]) + ['parts' => [
+                    'description' => ['label' => 'Description', 'capabilities' => [
+                        'typography', 'colors.text', 'spacing.margin.top',
+                    ]],
+                    // A number badge's lettering, on the badge beside the marker target. Not its size:
+                    // that is the marker's Size. Offered only while the marker is a number (`when`).
+                    'number' => ['label' => 'Number', 'when' => ['field' => 'marker', 'equals' => 'number'],
+                        'capabilities' => [
+                            'typography.family', 'typography.style', 'typography.weight', 'typography.transform',
+                        ]],
+                ]],
                 'schema' => [
                     ['name' => 'icon', 'type' => 'string', 'pattern' => '[a-z0-9]+(-[a-z0-9]+)*', 'format' => 'icon'],
                     ['name' => 'title', 'type' => 'string', 'required' => true],
