@@ -57,14 +57,15 @@ final class PaletteNormalizer
                 if ($job !== null) {
                     $to = Palette::isContrastToken($token) ? $job->contrastTo : $job->to;
                     if ($to === null) {
-                        $errors[$loc] = "Text on Brand {$slot} has no replacement in the running replacement";
+                        $errors[$loc] = "Text on {$snapshot->palette->labelOf($slot)} has no replacement "
+                            . 'in the running replacement';
                         return null;
                     }
                     $rewrites[] = ['location' => $loc, 'from' => $token, 'to' => $to];
                     return $to;
                 }
                 if (!$snapshot->palette->isConfigured($slot) && !in_array($token, $basis[$loc] ?? [], true)) {
-                    $errors[$loc] = "Brand {$slot} isn't in the palette";
+                    $errors[$loc] = "{$snapshot->palette->labelOf($slot)} isn't in the palette";
                 }
                 return null;
             },
