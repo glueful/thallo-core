@@ -199,20 +199,21 @@ $router->group(['prefix' => '/v1/admin'], function (Router $router): void {
         $router->get('/style-classes/{id}/jobs/{job}', [StyleClassController::class, 'showJob'])
         ->middleware('content_permission:content.view');
 
-    // The palette (custom palette spec §4): usage, clearing and replacing a brand colour need content.manage.
-        $router->get('/appearance/palette/brand/{slot}/usage', [\Thallo\Core\Content\Palette\Http\PaletteController::class, 'usage'])
-        ->where('slot', '[123]')
+    // The palette (custom palette spec §4): usage, clearing and replacing a brand colour (by its permanent
+    // id) need content.manage.
+        $router->get('/appearance/palette/brand/{id}/usage', [\Thallo\Core\Content\Palette\Http\PaletteController::class, 'usage'])
+        ->where('id', '[1-9][0-9]{0,3}')
         ->middleware('content_permission:content.manage');
     // The completed replacements an editor is missing (custom palette spec §5.3): the style schema's read rule.
         $router->get('/appearance/palette/replacements', [\Thallo\Core\Content\Palette\Http\PaletteController::class, 'replacements'])
         ->middleware('content_permission:content.edit,content.manage,templates.manage,styles.manage');
-        $router->delete('/appearance/palette/brand/{slot}', [\Thallo\Core\Content\Palette\Http\PaletteController::class, 'clear'])
-        ->where('slot', '[123]')
+        $router->delete('/appearance/palette/brand/{id}', [\Thallo\Core\Content\Palette\Http\PaletteController::class, 'clear'])
+        ->where('id', '[1-9][0-9]{0,3}')
         ->middleware('content_permission:content.manage');
         $router->post('/appearance/palette/preview', [\Thallo\Core\Content\Palette\Http\PaletteController::class, 'preview'])
         ->middleware('content_permission:content.manage');
-        $router->post('/appearance/palette/brand/{slot}/replace', [\Thallo\Core\Content\Palette\Http\PaletteController::class, 'replace'])
-        ->where('slot', '[123]')
+        $router->post('/appearance/palette/brand/{id}/replace', [\Thallo\Core\Content\Palette\Http\PaletteController::class, 'replace'])
+        ->where('id', '[1-9][0-9]{0,3}')
         ->middleware('content_permission:content.manage');
         $router->get('/appearance/palette/jobs', [\Thallo\Core\Content\Palette\Http\PaletteController::class, 'jobs'])
         ->middleware('content_permission:content.manage');

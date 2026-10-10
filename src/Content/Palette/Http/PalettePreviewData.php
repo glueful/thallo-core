@@ -26,7 +26,8 @@ final class PalettePreviewData implements RequestData
         public readonly ?string $theme_background = null,
         /**
          * @var array<string,mixed>|null `neutral_custom` (six hex colours), `dark_base` (a neutral
-         *      family), `brands` (slot 1–3 to {name, hex} or null) — as a preview token's palette.
+         *      family), `brands` (a list of {id, name, hex} in display order — the whole pending list;
+         *      absent reads the saved one) — as a preview token's palette.
          */
         #[Rule('array')]
         public readonly ?array $palette = null,

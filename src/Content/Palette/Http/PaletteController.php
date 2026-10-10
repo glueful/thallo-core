@@ -44,7 +44,7 @@ final class PaletteController
     ) {
     }
 
-    /** GET /v1/admin/appearance/palette/brand/{slot}/usage */
+    /** GET /v1/admin/appearance/palette/brand/{id}/usage */
     #[ApiOperation(
         summary: 'Where a brand colour is used',
         description: 'Blocking documents (drafts, current publications, regions, layouts, saved sections, style '
@@ -53,12 +53,9 @@ final class PaletteController
     )]
     #[ApiResponse(200, description: 'The usage.')]
     #[ApiResponse(404, description: 'No such slot.')]
-    public function usage(int $slot): Response
+    public function usage(int $id): Response
     {
-        if (!in_array($slot, [1, 2, 3], true)) {
-            return Response::notFound('No such brand colour.');
-        }
-        return Response::success(['usage' => $this->usage->of($slot)]);
+        return Response::success(['usage' => $this->usage->of($id)]);
     }
 
     /** GET /v1/admin/appearance/palette/replacements?after=&through= */
@@ -90,7 +87,7 @@ final class PaletteController
         }
     }
 
-    /** DELETE /v1/admin/appearance/palette/brand/{slot} */
+    /** DELETE /v1/admin/appearance/palette/brand/{id} */
     #[ApiOperation(
         summary: 'Clear a brand colour',
         description: 'Clears the slot when nothing blocking names it (drafts, current publications, regions, '
@@ -105,9 +102,10 @@ final class PaletteController
             . 'wrote (`brand_colors`).',
     )]
     #[ApiResponse(409, description: 'In use (`usage`), or part of a running replacement (`conflict`).')]
-    public function clear(int $slot, ?Request $request = null): Response
+    public function clear(int $id, ?Request $request = null): Response
     {
-        if (!in_array($slot, [1, 2, 3], true) || $this->mutations === null) {
+        $slot = $id;
+        if ($this->mutations === null) {
             return Response::notFound('No such brand colour.');
         }
         try {
@@ -152,7 +150,7 @@ final class PaletteController
         $claim = $input->palette === null ? [] : PaletteSettings::previewClaim($input->palette);
         if ($claim === null) {
             $errors['palette'] = 'a palette is neutral_custom (six hex colours), dark_base (a neutral family) '
-                . 'and brands (slots 1–3, each a name and a hex colour)';
+                . 'and brands (a list of {id, name, hex})';
         }
         if ($errors !== []) {
             return Response::validation($errors);
@@ -170,7 +168,7 @@ final class PaletteController
         ], 'Palette preview.');
     }
 
-    /** POST /v1/admin/appearance/palette/brand/{slot}/replace */
+    /** POST /v1/admin/appearance/palette/brand/{id}/replace */
     #[ApiOperation(
         summary: 'Replace a brand colour',
         description: 'Starts a job that rewrites every current document naming the slot (drafts, current '
@@ -183,9 +181,10 @@ final class PaletteController
     #[ApiResponse(202, description: 'The job, started.')]
     #[ApiResponse(409, description: 'Part of a running replacement, or not configured.')]
     #[ApiResponse(422, description: 'A destination the rules refuse; or contrast_to is required.')]
-    public function replace(ReplaceBrandData $input, int $slot, ?Request $request = null): Response
+    public function replace(ReplaceBrandData $input, int $id, ?Request $request = null): Response
     {
-        if (!in_array($slot, [1, 2, 3], true) || $this->replace === null) {
+        $slot = $id;
+        if ($this->replace === null) {
             return Response::notFound('No such brand colour.');
         }
         try {

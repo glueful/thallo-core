@@ -134,8 +134,9 @@ final class PreviewToken
 
     /**
      * The palette claim, read defensively: exactly the keys `neutral_custom` (null or the six neutral
-     * names to strings), `dark_base` (null or a string) and `brands` (slot 1–3 to null or
-     * {name, hex} strings); anything else is no palette. The minter validated the colours.
+     * names to strings), `dark_base` (null or a string) and `brands` (a list of {id, name, hex} in
+     * display order — the whole pending list — with distinct ids from 1 to 9999); anything else is no
+     * palette. The minter validated the colours.
      *
      * @return array<string,mixed>|null
      */
@@ -175,14 +176,17 @@ final class PreviewToken
     /** @param array<mixed> $brands */
     private static function brandsClaim(array $brands): bool
     {
-        foreach ($brands as $slot => $brand) {
-            if (!in_array((int) $slot, [1, 2, 3], true)) {
-                return false;
-            }
+        if (!array_is_list($brands)) {
+            return false;
+        }
+        $ids = [];
+        foreach ($brands as $brand) {
+            $id = is_array($brand) ? \Thallo\Core\Settings\BrandColors::id($brand['id'] ?? null) : null;
             $named = is_array($brand) && is_string($brand['name'] ?? null) && is_string($brand['hex'] ?? null);
-            if ($brand !== null && !$named) {
+            if ($id === null || !$named || isset($ids[$id])) {
                 return false;
             }
+            $ids[$id] = true;
         }
         return true;
     }

@@ -58,10 +58,15 @@ final class PaletteSettings implements PaletteProvider
             ? (is_string($claim['dark_base']) ? ThemeColors::normalizeNeutral($claim['dark_base']) : null)
             : $saved->darkBase;
         $brands = $saved->brands;
-        foreach (is_array($claim['brands'] ?? null) ? $claim['brands'] : [] as $slot => $brand) {
-            $slot = (int) $slot;
-            if (BrandColors::id($slot) !== null) {
-                $brands[$slot] = is_array($brand) ? self::parseBrand((string) json_encode($brand)) : null;
+        if (is_array($claim['brands'] ?? null)) {
+            // The whole pending list, in its order (custom palette spec §5.1).
+            $brands = [];
+            foreach ($claim['brands'] as $brand) {
+                $id = is_array($brand) ? BrandColors::id($brand['id'] ?? null) : null;
+                $parsed = $id === null ? null : self::parseBrand((string) json_encode($brand));
+                if ($parsed !== null) {
+                    $brands[$id] = $parsed;
+                }
             }
         }
         return new Palette($neutral, $base, $brands, $saved->removed, $saved->limit);
@@ -137,25 +142,23 @@ final class PaletteSettings implements PaletteProvider
                     $out[$key] = $value;
                     break;
                 case 'brands':
-                    if (!is_array($value)) {
+                    if (!is_array($value) || !array_is_list($value)) {
                         return null;
                     }
                     $brands = [];
-                    foreach ($value as $slot => $brand) {
-                        if (!in_array((string) $slot, ['1', '2', '3'], true)) {
+                    foreach ($value as $brand) {
+                        $id = is_array($brand) ? BrandColors::id($brand['id'] ?? null) : null;
+                        $parsed = $id === null ? null : self::parseBrand((string) json_encode($brand));
+                        if ($parsed === null || isset($brands[$id])) {
                             return null;
                         }
-                        if ($brand === null) {
-                            $brands[(int) $slot] = null;
-                            continue;
-                        }
-                        $parsed = is_array($brand) ? self::parseBrand((string) json_encode($brand)) : null;
-                        if ($parsed === null) {
-                            return null;
-                        }
-                        $brands[(int) $slot] = $parsed->toArray();
+                        $brands[$id] = $parsed;
                     }
-                    $out[$key] = $brands;
+                    $out[$key] = array_map(
+                        static fn (int $id, BrandSlot $b): array => ['id' => $id] + $b->toArray(),
+                        array_keys($brands),
+                        array_values($brands),
+                    );
                     break;
                 default:
                     return null;

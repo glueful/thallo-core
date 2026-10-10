@@ -151,7 +151,7 @@ final class PreviewController
             if ($palette === null) {
                 return Response::validation([
                     'palette' => 'a palette is neutral_custom (six hex colours), dark_base (a neutral family) '
-                        . 'and brands (slots 1–3, each a name and a hex colour)',
+                        . 'and brands (a list of {id, name, hex})',
                 ]);
             }
         }
