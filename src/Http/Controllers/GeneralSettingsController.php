@@ -140,6 +140,7 @@ final class GeneralSettingsController
                 : PaletteSettings::encodeNeutral($input->theme_neutral_custom),
             'theme_dark_base' => $input->theme_dark_base,
         ], static fn (?string $v): bool => $v !== null);
+        // the revision-4 keys: removed with the list's save (next task)
         foreach ([1, 2, 3] as $slot) {
             $brand = $input->{'theme_brand_' . $slot};
             if ($brand !== null) {

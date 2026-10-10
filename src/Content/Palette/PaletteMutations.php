@@ -10,6 +10,7 @@ use Glueful\Extensions\Audit\Contracts\AuditRecorderInterface;
 use Glueful\Extensions\Audit\Support\AuditEntry;
 use Thallo\Contracts\Settings\ThemeAppearanceChanged;
 use Thallo\Contracts\Style\Palette;
+use Thallo\Core\Settings\BrandColors;
 use Thallo\Core\Settings\GeneralSettings;
 use Thallo\Core\Settings\PaletteSettings;
 
@@ -47,7 +48,8 @@ final class PaletteMutations
         }
         return $this->fence->within(function () use ($pairs): bool {
             $held = $this->state->lock();
-            foreach (Palette::SLOTS as $slot) {
+            // the revision-4 keys: removed with the list's save (next task)
+            foreach ([1, 2, 3] as $slot) {
                 $key = 'theme_brand_' . $slot;
                 if (!array_key_exists($key, $pairs)) {
                     continue;
@@ -93,7 +95,10 @@ final class PaletteMutations
             if (($usage['blocking']['total'] ?? 0) > 0) {
                 throw new BrandColorInUse($usage); // the transaction, and the bump, roll back
             }
-            $this->settings->save(['theme_brand_' . $slot => '']);
+            // Moved to removed, keeping its name (spec §2.3); lock() cleared the store's read cache.
+            $this->settings->save([
+                'theme_brand_colors' => BrandColors::cleared($this->settings->stored('theme_brand_colors'), $slot),
+            ]);
             $name = $brand->name;
         });
         if ($name === null) {

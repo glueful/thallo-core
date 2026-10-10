@@ -11,28 +11,39 @@ use Thallo\Core\Http\DTOs\UpdateGeneralSettingsData;
 use Thallo\Render\Theme\ThemeColors;
 
 /**
- * The palette from general settings (custom palette spec §2): six keys, read like the other theme
- * keys. A stored value that no longer parses (hand-edited, imported) reads as unset.
+ * The palette from general settings (custom palette spec §2): the neutral keys and the brand colour
+ * list (`theme_brand_colors`), read like the other theme keys, under the deployment's limit. A stored
+ * value that no longer parses (hand-edited, imported) reads as unset.
  */
 final class PaletteSettings implements PaletteProvider
 {
     public const NAME_MAX = 32;
 
-    public function __construct(private readonly GeneralSettings $settings)
+    public function __construct(
+        private readonly GeneralSettings $settings,
+        private readonly int $brandLimit = Palette::DEFAULT_LIMIT,
+    ) {
+    }
+
+    /** The deployment's limit (custom palette spec §1): 0–12, the default for anything not a number. */
+    public static function limitFrom(mixed $raw): int
     {
+        if (!is_int($raw) && !(is_string($raw) && is_numeric(trim($raw)))) {
+            return Palette::DEFAULT_LIMIT;
+        }
+        return max(0, min(Palette::LIMIT_CEILING, (int) $raw));
     }
 
     public function palette(): Palette
     {
-        $brands = [];
-        foreach (Palette::SLOTS as $slot) {
-            $brands[$slot] = self::parseBrand($this->settings->stored('theme_brand_' . $slot));
-        }
+        [$colors, $removed] = BrandColors::parse($this->settings->stored('theme_brand_colors'));
         $base = $this->settings->stored('theme_dark_base');
         return new Palette(
             self::parseNeutral($this->settings->stored('theme_neutral_custom')),
             ThemeColors::normalizeNeutral($base) === null ? null : $base,
-            $brands,
+            $colors,
+            $removed,
+            $this->brandLimit,
         );
     }
 
@@ -49,11 +60,11 @@ final class PaletteSettings implements PaletteProvider
         $brands = $saved->brands;
         foreach (is_array($claim['brands'] ?? null) ? $claim['brands'] : [] as $slot => $brand) {
             $slot = (int) $slot;
-            if (in_array($slot, Palette::SLOTS, true)) {
+            if (BrandColors::id($slot) !== null) {
                 $brands[$slot] = is_array($brand) ? self::parseBrand((string) json_encode($brand)) : null;
             }
         }
-        return new Palette($neutral, $base, $brands);
+        return new Palette($neutral, $base, $brands, $saved->removed, $saved->limit);
     }
 
     /** `#abc` / `#aabbcc` in any case, as lower-case six digits; null for anything else. */
@@ -171,7 +182,8 @@ final class PaletteSettings implements PaletteProvider
         if ($input->theme_dark_base !== null && ThemeColors::normalizeNeutral($input->theme_dark_base) === null) {
             $errors['theme_dark_base'] = 'unknown neutral family';
         }
-        foreach (Palette::SLOTS as $slot) {
+        // the revision-4 keys: removed with the list's save (next task)
+        foreach ([1, 2, 3] as $slot) {
             $key = 'theme_brand_' . $slot;
             $value = $input->{$key};
             if ($value === null) {

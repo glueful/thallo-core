@@ -8,4 +8,9 @@ return [
     'color_mode' => [
         'enabled' => (bool) env('THALLO_COLOR_MODE_ENABLED', true),
     ],
+    // Brand colours (custom palette spec §1): how many a workspace may have at once — a budget the
+    // operator sets, not a site setting. Clamped to 0–12; 0 turns brand colours off.
+    'brand_colors' => [
+        'max' => env('THALLO_BRAND_COLORS_MAX', 3),
+    ],
 ];

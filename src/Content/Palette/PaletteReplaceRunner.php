@@ -15,6 +15,7 @@ use Thallo\Core\Content\Blocks\Sources\DocumentRef;
 use Thallo\Core\Content\Blocks\Sources\PublishedEntriesSource;
 use Thallo\Core\Content\Repositories\VersionRepository;
 use Thallo\Core\Content\Style\Classes\StyleClassLocked;
+use Thallo\Core\Settings\BrandColors;
 use Thallo\Core\Settings\GeneralSettings;
 
 /**
@@ -175,7 +176,8 @@ final class PaletteReplaceRunner
             } catch (JobFenced) {
                 return 'fenced';
             } catch (PaletteRefusal) {
-                $this->failure($job, $current, "a text colour on Brand {$job->slot} arrived after the replacement "
+                $label = $this->state->snapshot()->palette->labelOf($job->slot);
+                $this->failure($job, $current, "a text colour on {$label} arrived after the replacement "
                     . 'started; cancel and choose a text colour');
                 return 'failed';
             } catch (StyleClassLocked) {
@@ -234,8 +236,15 @@ final class PaletteReplaceRunner
                 if (!$this->jobs->transition($job->id, 'completed', $generation)) {
                     throw new JobFenced($job->id); // cancelled or finished meanwhile: roll the bump back
                 }
-                $name = $held->palette->brand($job->slot)?->name ?? "Brand {$job->slot}";
-                $this->settings->save(['theme_brand_' . $job->slot => '']);
+                $name = $held->palette->labelOf($job->slot);
+                // Moved to removed, keeping its name (custom palette spec §2.3): lock() cleared the
+                // store's read cache, so this is the committed list.
+                $this->settings->save([
+                    'theme_brand_colors' => BrandColors::cleared(
+                        $this->settings->stored('theme_brand_colors'),
+                        $job->slot,
+                    ),
+                ]);
                 return 'completed';
             });
         } catch (JobFenced) {
@@ -276,12 +285,12 @@ final class PaletteReplaceRunner
     private function fail(PaletteJob $job): void
     {
         $this->fence->within(function () use ($job): void {
-            $this->state->lock();
+            $held = $this->state->lock();
             if (!$this->jobs->transition($job->id, 'failed')) {
                 return;
             }
             foreach ($this->naming($job->slot) as [, $ref]) {
-                $this->failure($job, $ref, "still names Brand {$job->slot}");
+                $this->failure($job, $ref, "still names {$held->palette->labelOf($job->slot)}");
             }
         });
     }
@@ -300,7 +309,7 @@ final class PaletteReplaceRunner
             return;
         }
         $palette = $this->state->snapshot()->palette;
-        $from = $palette->brand($job->slot)?->name ?? "Brand {$job->slot}";
+        $from = $palette->labelOf($job->slot);
         $this->versions->annotate((string) $pin['version_uuid'], "Replaced {$from} with {$this->labelOf($job->to)}");
     }
 
@@ -308,7 +317,7 @@ final class PaletteReplaceRunner
     {
         $slot = Palette::slotOf($token);
         if ($slot !== null) {
-            return $this->state->snapshot()->palette->brand($slot)?->name ?? "Brand {$slot}";
+            return $this->state->snapshot()->palette->labelOf($slot);
         }
         $name = (string) preg_replace('/^color\./', '', $token);
         return \Thallo\Render\Http\Controllers\StyleSchemaController::LABELS[$name] ?? $name;

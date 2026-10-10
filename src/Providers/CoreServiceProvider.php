@@ -1410,15 +1410,14 @@ final class CoreServiceProvider extends ServiceProvider implements \Thallo\Contr
                 'autowire' => true,
             ],
             // The palette (custom palette spec §2): the Custom neutral, dark base and brand slots.
+            // One instance under both names, carrying the deployment's brand colour limit (spec §1).
             \Thallo\Contracts\Style\PaletteProvider::class => [
-                'class'    => \Thallo\Core\Settings\PaletteSettings::class,
-                'shared'   => true,
-                'autowire' => true,
+                'shared'  => true,
+                'factory' => [self::class, 'makePaletteProvider'],
             ],
             \Thallo\Core\Settings\PaletteSettings::class => [
-                'class'    => \Thallo\Core\Settings\PaletteSettings::class,
-                'shared'   => true,
-                'autowire' => true,
+                'shared'  => true,
+                'factory' => [self::class, 'makePaletteSettings'],
             ],
             // Global chrome regions (global-regions spec): storage + save
             // validation + the render-pack's soft-bound reader seam.
@@ -2421,6 +2420,25 @@ final class CoreServiceProvider extends ServiceProvider implements \Thallo\Contr
     }
 
     /** Every palette change (custom palette spec §4.3); its audit entry and event are optional. */
+    public static function makePaletteSettings(ContainerInterface $container): \Thallo\Core\Settings\PaletteSettings
+    {
+        return new \Thallo\Core\Settings\PaletteSettings(
+            $container->get(\Thallo\Core\Settings\GeneralSettings::class),
+            \Thallo\Core\Settings\PaletteSettings::limitFrom(
+                config(
+                    $container->get(ApplicationContext::class),
+                    'theme.brand_colors.max',
+                    \Thallo\Contracts\Style\Palette::DEFAULT_LIMIT,
+                ),
+            ),
+        );
+    }
+
+    public static function makePaletteProvider(ContainerInterface $container): \Thallo\Contracts\Style\PaletteProvider
+    {
+        return $container->get(\Thallo\Core\Settings\PaletteSettings::class);
+    }
+
     public static function makePaletteMutations(
         ContainerInterface $container,
     ): \Thallo\Core\Content\Palette\PaletteMutations {
