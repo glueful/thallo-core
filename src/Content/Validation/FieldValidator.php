@@ -488,7 +488,7 @@ final class FieldValidator
         }
         $prefix = $domain . '.';
         $name = str_starts_with($value['value'], $prefix) ? substr($value['value'], strlen($prefix)) : null;
-        if ($name === null || !in_array($name, Vocabulary::names($domain), true)) {
+        if ($name === null || !Vocabulary::isBaseline($value['value'])) {
             return 'must be one of: ' . implode(', ', array_map(
                 static fn (string $n): string => $prefix . $n,
                 Vocabulary::names($domain),

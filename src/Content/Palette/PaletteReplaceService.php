@@ -53,7 +53,7 @@ final class PaletteReplaceService
             $held = $this->state->lock();
             $brand = $held->palette->brand($slot);
             if ($brand === null) {
-                throw new PaletteConflict("Brand {$slot} is not configured");
+                throw new PaletteConflict("{$held->palette->labelOf($slot)} is not configured");
             }
             if ($held->jobReplacing($slot) !== null || in_array($slot, $held->reservedSlots(), true)) {
                 throw new PaletteConflict("{$brand->name} is already part of a replacement");
@@ -69,7 +69,7 @@ final class PaletteReplaceService
             foreach (array_filter([$to, $mapping]) as $destination) {
                 $d = Palette::slotOf($destination);
                 if ($d !== null && (!$held->palette->isConfigured($d) || $held->jobReplacing($d) !== null)) {
-                    throw new PaletteConflict("Brand {$d} cannot be a destination right now");
+                    throw new PaletteConflict("{$held->palette->labelOf($d)} cannot be a destination right now");
                 }
             }
             $this->state->bump();
@@ -151,8 +151,7 @@ final class PaletteReplaceService
     /** The destination rules (custom palette spec §4.2) against an unlocked read. */
     private function assertDestination(PaletteSnapshot $read, int $slot, string $token, string $field): void
     {
-        $names = array_map(static fn (string $n): string => 'color.' . $n, Vocabulary::names('color'));
-        if (!in_array($token, $names, true)) {
+        if (Vocabulary::domain($token) !== 'color' || !Vocabulary::isBaseline($token)) {
             throw new \InvalidArgumentException("{$field}: {$token} is not a colour");
         }
         $destination = Palette::slotOf($token);
@@ -163,10 +162,10 @@ final class PaletteReplaceService
             throw new \InvalidArgumentException("{$field}: choose a colour, not a text colour");
         }
         if ($destination !== null && !$read->palette->isConfigured($destination)) {
-            throw new \InvalidArgumentException("{$field}: Brand {$destination} is not configured");
+            throw new \InvalidArgumentException("{$field}: {$read->palette->labelOf($destination)} is not configured");
         }
         if ($destination !== null && $read->jobReplacing($destination) !== null) {
-            throw new \InvalidArgumentException("{$field}: Brand {$destination} is being replaced");
+            throw new \InvalidArgumentException("{$field}: {$read->palette->labelOf($destination)} is being replaced");
         }
     }
 }
