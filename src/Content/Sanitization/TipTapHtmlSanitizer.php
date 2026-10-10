@@ -25,7 +25,7 @@ final class TipTapHtmlSanitizer implements RichHtmlSanitizer
             // The engine's DEFAULT max input length silently truncates long
             // documents (spec §2 pinned gotcha) — set it explicitly.
             ->withMaxInputLength(1_000_000)
-            ->allowLinkSchemes(['http', 'https', 'mailto'])
+            ->allowLinkSchemes(['http', 'https', 'mailto', 'tel', 'sms'])
             ->allowRelativeLinks(true);
 
         foreach (
