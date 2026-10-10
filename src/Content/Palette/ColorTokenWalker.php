@@ -28,9 +28,6 @@ final class ColorTokenWalker
     public const KIND_SECTION = 'saved_section';
     public const KIND_CLASS = 'style_class';
 
-    /** @var array<string, list<string>>|null block type => its colour token field names */
-    private ?array $tokenFields = null;
-
     public function __construct(
         private readonly BlockStyleRegistry $registry,
         private readonly BlockTypeRepository $blockTypes,
@@ -171,17 +168,20 @@ final class ColorTokenWalker
     /** @return list<string> */
     private function tokenFieldsOf(string $type): array
     {
-        if ($this->tokenFields === null) {
-            $this->tokenFields = [];
-            foreach ($this->blockTypes->schemasBySlug() as $slug => $schema) {
-                foreach ($schema->fields() as $field) {
-                    if ($field->type === 'token' && $field->domain === 'color') {
-                        $this->tokenFields[$slug][] = $field->name;
-                    }
-                }
+        // Read through the repository's own memo — reset whenever block types change, and per test —
+        // never a second copy here: a long-lived walker (a queue worker running Replace) would keep
+        // a type installed after it first looked out of sight.
+        $schema = $this->blockTypes->schemasBySlug()[$type] ?? null;
+        if ($schema === null) {
+            return [];
+        }
+        $out = [];
+        foreach ($schema->fields() as $field) {
+            if ($field->type === 'token' && $field->domain === 'color') {
+                $out[] = $field->name;
             }
         }
-        return $this->tokenFields[$type] ?? [];
+        return $out;
     }
 
     /** @param array<string,mixed> $doc */
