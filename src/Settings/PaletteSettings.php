@@ -95,6 +95,64 @@ final class PaletteSettings implements PaletteProvider
         return new BrandSlot($name, $hex);
     }
 
+    /**
+     * A pending palette (custom palette spec §5.1) as a preview claim, normalised (hex lower-case,
+     * names trimmed), or null when any part is invalid. Only the keys sent are carried; the render
+     * falls back to the saved values for the rest.
+     *
+     * @param array<string,mixed> $input
+     * @return array<string,mixed>|null
+     */
+    public static function previewClaim(array $input): ?array
+    {
+        $out = [];
+        foreach ($input as $key => $value) {
+            switch ($key) {
+                case 'neutral_custom':
+                    if ($value === null) {
+                        $out[$key] = null;
+                        break;
+                    }
+                    $six = is_array($value) ? self::parseNeutral((string) json_encode($value)) : null;
+                    if ($six === null) {
+                        return null;
+                    }
+                    $out[$key] = $six;
+                    break;
+                case 'dark_base':
+                    if ($value !== null && (!is_string($value) || ThemeColors::normalizeNeutral($value) === null)) {
+                        return null;
+                    }
+                    $out[$key] = $value;
+                    break;
+                case 'brands':
+                    if (!is_array($value)) {
+                        return null;
+                    }
+                    $brands = [];
+                    foreach ($value as $slot => $brand) {
+                        if (!in_array((string) $slot, ['1', '2', '3'], true)) {
+                            return null;
+                        }
+                        if ($brand === null) {
+                            $brands[(int) $slot] = null;
+                            continue;
+                        }
+                        $parsed = is_array($brand) ? self::parseBrand((string) json_encode($brand)) : null;
+                        if ($parsed === null) {
+                            return null;
+                        }
+                        $brands[(int) $slot] = $parsed->toArray();
+                    }
+                    $out[$key] = $brands;
+                    break;
+                default:
+                    return null;
+            }
+        }
+        return $out;
+    }
+
     /** @return array<string,string> field => message */
     public function validate(UpdateGeneralSettingsData $input): array
     {

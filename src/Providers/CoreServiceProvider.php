@@ -2022,6 +2022,10 @@ final class CoreServiceProvider extends ServiceProvider implements \Thallo\Contr
                 'shared' => true,
                 'autowire' => true,
             ],
+            \Thallo\Core\Content\Palette\PaletteMutations::class => [
+                'shared' => true,
+                'factory' => [self::class, 'makePaletteMutations'],
+            ],
             \Thallo\Core\Content\Fonts\Http\FontLibraryController::class => [
                 'class' => \Thallo\Core\Content\Fonts\Http\FontLibraryController::class,
                 'shared' => true,
@@ -2335,6 +2339,23 @@ final class CoreServiceProvider extends ServiceProvider implements \Thallo\Contr
         return new OperatorBypass(
             $container->get(ApplicationContext::class),
             $permissions instanceof PermissionManager ? $permissions : null,
+            $container->has(AuditRecorderInterface::class)
+                ? $container->get(AuditRecorderInterface::class)
+                : null,
+        );
+    }
+
+    /** Every palette change (custom palette spec §4.3); its audit entry and event are optional. */
+    public static function makePaletteMutations(
+        ContainerInterface $container,
+    ): \Thallo\Core\Content\Palette\PaletteMutations {
+        return new \Thallo\Core\Content\Palette\PaletteMutations(
+            $container->get(\Glueful\Database\Connection::class),
+            $container->get(\Thallo\Core\Content\Palette\PaletteFence::class),
+            $container->get(\Thallo\Core\Content\Palette\PaletteState::class),
+            $container->get(\Thallo\Core\Settings\GeneralSettings::class),
+            $container->get(\Thallo\Core\Content\Palette\BrandColorUsage::class),
+            $container->has(EventService::class) ? $container->get(EventService::class) : null,
             $container->has(AuditRecorderInterface::class)
                 ? $container->get(AuditRecorderInterface::class)
                 : null,

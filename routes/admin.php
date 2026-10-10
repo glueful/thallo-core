@@ -206,6 +206,11 @@ $router->group(['prefix' => '/v1/admin'], function (Router $router): void {
     // The completed replacements an editor is missing (custom palette spec §5.3): the style schema's read rule.
         $router->get('/appearance/palette/replacements', [\Thallo\Core\Content\Palette\Http\PaletteController::class, 'replacements'])
         ->middleware('content_permission:content.edit,content.manage,templates.manage,styles.manage');
+        $router->delete('/appearance/palette/brand/{slot}', [\Thallo\Core\Content\Palette\Http\PaletteController::class, 'clear'])
+        ->where('slot', '[123]')
+        ->middleware('content_permission:content.manage');
+        $router->post('/appearance/palette/preview', [\Thallo\Core\Content\Palette\Http\PaletteController::class, 'preview'])
+        ->middleware('content_permission:content.manage');
 
     // The font library (block typeface spec §2, §4.6): any editor reads the picker; usage and every
     // change need content.manage.

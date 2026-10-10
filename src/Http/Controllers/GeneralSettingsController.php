@@ -54,6 +54,8 @@ final class GeneralSettingsController
         private readonly ?\Thallo\Core\Settings\AppearanceLock $appearanceLock = null,
         /** The palette's keys (custom palette spec §2): validation and their stored spelling. */
         private readonly ?\Thallo\Core\Settings\PaletteSettings $palette = null,
+        /** Palette keys are written under the palette row, checked against running replacements (§4.3). */
+        private readonly ?\Thallo\Core\Content\Palette\PaletteMutations $paletteMutations = null,
     ) {
     }
 
@@ -126,6 +128,28 @@ final class GeneralSettingsController
         $paletteBefore = $this->palette?->palette()->fingerprint();
         $searchBefore = $this->settings->searchEnabled();
 
+        // The palette's keys first, under the palette row (custom palette spec §4.3): a slot a running
+        // replacement replaces cannot be renamed or re-coloured, and then nothing of this save is written.
+        $paletteKeys = array_filter([
+            'theme_neutral_custom' => $input->theme_neutral_custom === null
+                ? null
+                : PaletteSettings::encodeNeutral($input->theme_neutral_custom),
+            'theme_dark_base' => $input->theme_dark_base,
+        ], static fn (?string $v): bool => $v !== null);
+        foreach ([1, 2, 3] as $slot) {
+            $brand = $input->{'theme_brand_' . $slot};
+            if ($brand !== null) {
+                $paletteKeys['theme_brand_' . $slot] = PaletteSettings::encodeBrand($brand);
+            }
+        }
+        try {
+            $this->paletteMutations !== null
+                ? $this->paletteMutations->save($paletteKeys, null)
+                : $this->settings->save($paletteKeys);
+        } catch (\Thallo\Core\Content\Palette\PaletteConflict $e) {
+            return Response::error($e->getMessage(), 409, ['conflict' => $e->getMessage()]);
+        }
+
         if ($input->default_locale !== null && $input->default_locale !== $this->settings->defaultLocale()) {
             // Saved separately so a language that cannot be the default is refused before anything
             // else is written.
@@ -160,19 +184,6 @@ final class GeneralSettingsController
             'theme_radius' => $input->theme_radius,
             'theme_font' => $input->theme_font,
             'theme_background' => $input->theme_background,
-            'theme_neutral_custom' => $input->theme_neutral_custom === null
-                ? null
-                : PaletteSettings::encodeNeutral($input->theme_neutral_custom),
-            'theme_dark_base' => $input->theme_dark_base,
-            'theme_brand_1' => $input->theme_brand_1 === null
-                ? null
-                : PaletteSettings::encodeBrand($input->theme_brand_1),
-            'theme_brand_2' => $input->theme_brand_2 === null
-                ? null
-                : PaletteSettings::encodeBrand($input->theme_brand_2),
-            'theme_brand_3' => $input->theme_brand_3 === null
-                ? null
-                : PaletteSettings::encodeBrand($input->theme_brand_3),
             'site_name' => $input->site_name,
             'site_preview_url' => $input->site_preview_url,
             'default_per_page' => $input->default_per_page,
