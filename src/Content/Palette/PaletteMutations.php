@@ -33,39 +33,44 @@ final class PaletteMutations
     }
 
     /**
-     * Save palette keys already validated and in their stored spelling (`theme_brand_N`,
-     * `theme_neutral_custom`, `theme_dark_base`). A slot a running replacement replaces cannot be
-     * renamed or re-coloured; a reserved one can; the neutrals are never blocked.
+     * Save palette keys already validated: `theme_neutral_custom` and `theme_dark_base` in their
+     * stored spelling, `theme_brand_colors` as submitted — resolved here, under the row, against the
+     * stored list (BrandColors::applied). A colour a running replacement replaces cannot be renamed
+     * or re-coloured; a reserved one can; the neutrals are never blocked. The result carries what
+     * was written, captured in this transaction (plan ruling 13).
      *
      * @param array<string,string> $pairs
-     * @return bool whether the palette changed
      * @throws PaletteConflict
+     * @throws BrandColorsRefused
      */
-    public function save(array $pairs, ?string $actor): bool
+    public function save(array $pairs, ?string $actor): PaletteSaved
     {
         if ($pairs === []) {
-            return false;
+            return new PaletteSaved(false, null);
         }
-        return $this->fence->within(function () use ($pairs): bool {
+        return $this->fence->within(function () use ($pairs): PaletteSaved {
             $held = $this->state->lock();
-            // the revision-4 keys: removed with the list's save (next task)
-            foreach ([1, 2, 3] as $slot) {
-                $key = 'theme_brand_' . $slot;
-                if (!array_key_exists($key, $pairs)) {
-                    continue;
-                }
-                $current = $held->palette->brand($slot);
-                $next = PaletteSettings::parseBrand($pairs[$key]);
-                if ($current?->toArray() !== $next?->toArray() && $held->jobReplacing($slot) !== null) {
-                    throw new PaletteConflict(($current?->name ?? "Brand {$slot}") . ' is being replaced');
-                }
+            $brandColors = null;
+            if (array_key_exists('theme_brand_colors', $pairs)) {
+                $submitted = PaletteSettings::parseSubmitted($pairs['theme_brand_colors'])
+                    ?? throw new BrandColorsRefused('a list of brand colours is required');
+                // lock() cleared the store's read cache: this is the committed list and its revision.
+                [, , $revision] = BrandColors::parse($this->settings->stored('theme_brand_colors'));
+                $pairs['theme_brand_colors'] = BrandColors::applied(
+                    $held->palette,
+                    $revision,
+                    $submitted['base'],
+                    $submitted['rows'],
+                    static fn (int $id): bool => $held->jobReplacing($id) !== null,
+                );
+                $brandColors = $pairs['theme_brand_colors'];
             }
             $this->settings->save($pairs);
             $changed = $this->state->snapshot()->palette->fingerprint() !== $held->palette->fingerprint();
             if ($changed) {
                 $this->state->bump();
             }
-            return $changed;
+            return new PaletteSaved($changed, $brandColors);
         });
     }
 
@@ -75,13 +80,16 @@ final class PaletteMutations
      * class names it — scanned inside the transaction, after the bump, so a save that committed first
      * is seen and one racing after is refused by the fence. Historical versions never block.
      *
+     * @return string|null the stored list this Clear wrote, captured in its transaction; null when
+     *     the id was not a colour
      * @throws BrandColorInUse
      * @throws PaletteConflict
      */
-    public function clear(int $slot, ?string $actor): void
+    public function clear(int $slot, ?string $actor): ?string
     {
         $name = null;
-        $this->fence->within(function () use ($slot, &$name): void {
+        $written = null;
+        $this->fence->within(function () use ($slot, &$name, &$written): void {
             $held = $this->state->lock();
             $brand = $held->palette->brand($slot);
             if ($brand === null) {
@@ -95,14 +103,14 @@ final class PaletteMutations
             if (($usage['blocking']['total'] ?? 0) > 0) {
                 throw new BrandColorInUse($usage); // the transaction, and the bump, roll back
             }
-            // Moved to removed, keeping its name (spec §2.3); lock() cleared the store's read cache.
-            $this->settings->save([
-                'theme_brand_colors' => BrandColors::cleared($this->settings->stored('theme_brand_colors'), $slot),
-            ]);
+            // Moved to removed, keeping its name (spec §2.3); lock() cleared the store's read cache. What
+            // was written is what the response describes (plan ruling 13).
+            $written = BrandColors::cleared($this->settings->stored('theme_brand_colors'), $slot);
+            $this->settings->save(['theme_brand_colors' => $written]);
             $name = $brand->name;
         });
         if ($name === null) {
-            return;
+            return null;
         }
         $this->db->afterCommit(function () use ($slot, $name, $actor): void {
             $this->audit?->record(new AuditEntry(
@@ -119,5 +127,6 @@ final class PaletteMutations
                 $this->settings->themeNeutral(),
             ));
         });
+        return $written;
     }
 }

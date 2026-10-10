@@ -182,27 +182,53 @@ final class PaletteSettings implements PaletteProvider
         if ($input->theme_dark_base !== null && ThemeColors::normalizeNeutral($input->theme_dark_base) === null) {
             $errors['theme_dark_base'] = 'unknown neutral family';
         }
-        // the revision-4 keys: removed with the list's save (next task)
-        foreach ([1, 2, 3] as $slot) {
-            $key = 'theme_brand_' . $slot;
-            $value = $input->{$key};
-            if ($value === null) {
-                continue;
-            }
-            if ($value === '') {
-                $errors[$key] = 'clear a brand colour with Clear, which checks where it is used';
-            } elseif (self::parseBrand($value) === null) {
-                $errors[$key] = 'a name (1–' . self::NAME_MAX . ' characters) and a hex colour are required';
-            }
+        $list = $input->theme_brand_colors;
+        if ($list === '') {
+            $errors['theme_brand_colors'] = 'clear a brand colour with Clear, which checks where it is used';
+        } elseif ($list !== null && self::parseSubmitted($list) === null) {
+            $errors['theme_brand_colors'] = 'a list of brand colours, each a name (1–'
+                . self::NAME_MAX . ' characters) and a hex colour, and the revision it was edited from';
         }
         return $errors;
     }
 
-    /** The stored spelling of a submitted brand slot: trimmed name, normalised hex. */
-    public static function encodeBrand(string $json): string
+    /**
+     * A submitted brand colour list (custom palette spec §2.3) and the revision it was edited from,
+     * normalised — names trimmed, hex lower-case — or null when it names no base revision or is not a
+     * list of valid colours with distinct ids. A missing or null id is a new colour; `removed` is the
+     * server's and is ignored.
+     *
+     * @return array{base: int, rows: list<array{id: ?int, name: string, hex: string}>}|null
+     */
+    public static function parseSubmitted(string $json): ?array
     {
-        $slot = self::parseBrand($json) ?? throw new \InvalidArgumentException('invalid brand slot');
-        return (string) json_encode($slot->toArray());
+        $data = json_decode($json, true);
+        if (
+            !is_array($data) || !is_int($data['base'] ?? null) || $data['base'] < 0
+            || !is_array($data['colors'] ?? null) || !array_is_list($data['colors'])
+        ) {
+            return null;
+        }
+        $rows = [];
+        $ids = [];
+        foreach ($data['colors'] as $row) {
+            if (!is_array($row)) {
+                return null;
+            }
+            $id = $row['id'] ?? null;
+            if ($id !== null && (BrandColors::id($id) === null || in_array($id, $ids, true))) {
+                return null;
+            }
+            $slot = self::parseBrand((string) json_encode($row));
+            if ($slot === null) {
+                return null;
+            }
+            if ($id !== null) {
+                $ids[] = $id;
+            }
+            $rows[] = ['id' => $id, 'name' => $slot->name, 'hex' => $slot->hex];
+        }
+        return ['base' => $data['base'], 'rows' => $rows];
     }
 
     /** The stored spelling of the six neutral values; '' stays '' (Reset). */

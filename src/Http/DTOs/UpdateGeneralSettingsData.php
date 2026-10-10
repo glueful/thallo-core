@@ -76,15 +76,14 @@ final class UpdateGeneralSettingsData implements RequestData
         /** @var string|null Dark-mode base family under Custom; enum-validated in the controller. */
         #[Rule('string')]
         public readonly ?string $theme_dark_base = null,
-        /** @var string|null Brand colour 1: JSON {name, hex}; cleared only through Clear (§4). */
+        /**
+         * @var string|null The brand colour list (custom palette spec §2.3): `{"base": <revision>,
+         * "colors": [{"id"?, "name", "hex"}, …]}` in display order; a colour without an id is new;
+         * `base` is the stored revision the list was edited from (a stale one is a 409). Removing one
+         * is Clear's.
+         */
         #[Rule('string')]
-        public readonly ?string $theme_brand_1 = null,
-        /** @var string|null Brand colour 2: JSON {name, hex}. */
-        #[Rule('string')]
-        public readonly ?string $theme_brand_2 = null,
-        /** @var string|null Brand colour 3: JSON {name, hex}. */
-        #[Rule('string')]
-        public readonly ?string $theme_brand_3 = null,
+        public readonly ?string $theme_brand_colors = null,
         /** @var string|null Where the admin is, when hosted elsewhere; '' means this site's own, at /admin. */
         #[Rule('string')]
         public readonly ?string $admin_url = null,

@@ -140,12 +140,8 @@ final class GeneralSettingsController
                 : PaletteSettings::encodeNeutral($input->theme_neutral_custom),
             'theme_dark_base' => $input->theme_dark_base,
         ], static fn (?string $v): bool => $v !== null);
-        // the revision-4 keys: removed with the list's save (next task)
-        foreach ([1, 2, 3] as $slot) {
-            $brand = $input->{'theme_brand_' . $slot};
-            if ($brand !== null) {
-                $paletteKeys['theme_brand_' . $slot] = PaletteSettings::encodeBrand($brand);
-            }
+        if ($input->theme_brand_colors !== null) {
+            $paletteKeys['theme_brand_colors'] = $input->theme_brand_colors; // resolved under the palette row
         }
         // Choosing Custom with no dark base: dark mode stays the family the site had (spec §2.2).
         $currentNeutral = $this->settings->themeNeutral();
@@ -158,10 +154,14 @@ final class GeneralSettingsController
         $locale = $input->default_locale !== null && $input->default_locale !== $this->settings->defaultLocale()
             ? $input->default_locale
             : null;
-        $first = function () use ($paletteKeys, $locale): void {
-            $this->paletteMutations !== null
-                ? $this->paletteMutations->save($paletteKeys, null)
-                : $this->settings->save($paletteKeys);
+        $saved = null;
+        $first = function () use ($paletteKeys, $locale, &$saved): void {
+            // A retried attempt overwrites $saved, so it holds the committed one (plan ruling 13).
+            if ($this->paletteMutations !== null) {
+                $saved = $this->paletteMutations->save($paletteKeys, null);
+            } else {
+                $this->settings->save($paletteKeys);
+            }
             if ($locale !== null) {
                 $this->settings->save(['default_locale' => $locale]);
             }
@@ -173,6 +173,9 @@ final class GeneralSettingsController
         } catch (\Thallo\Core\Content\Palette\PaletteConflict $e) {
             $this->settings->clearStoreCache();
             return Response::error($e->getMessage(), 409, ['conflict' => $e->getMessage()]);
+        } catch (\Thallo\Core\Content\Palette\BrandColorsRefused $e) {
+            $this->settings->clearStoreCache(); // the transaction rolled the palette keys back
+            return Response::validation(['theme_brand_colors' => $e->getMessage()]);
         } catch (\InvalidArgumentException $e) {
             $this->settings->clearStoreCache(); // the transaction rolled the palette keys back too
             return Response::validation(['default_locale' => $e->getMessage()]);
@@ -261,10 +264,12 @@ final class GeneralSettingsController
             RouteManifest::reset();
         }
 
-        return Response::success(
-            ['settings' => $this->settings->all()],
-            'General settings saved.',
-        );
+        $settings = $this->settings->all();
+        if ($saved?->brandColors !== null) {
+            // What this save committed (plan ruling 13): another request may have changed the list since.
+            $settings['theme_brand_colors'] = $saved->brandColors;
+        }
+        return Response::success(['settings' => $settings], 'General settings saved.');
     }
 
     /**

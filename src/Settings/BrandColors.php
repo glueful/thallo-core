@@ -6,6 +6,8 @@ namespace Thallo\Core\Settings;
 
 use Thallo\Contracts\Style\BrandSlot;
 use Thallo\Contracts\Style\Palette;
+use Thallo\Core\Content\Palette\BrandColorsRefused;
+use Thallo\Core\Content\Palette\PaletteConflict;
 
 /**
  * The stored brand colour list (custom palette spec §2, §2.3): `theme_brand_colors`, as
@@ -74,6 +76,69 @@ final class BrandColors
         $removed[$id] = $colors[$id]->name;
         unset($colors[$id]);
         return self::encode($colors, $removed, $revision + 1);
+    }
+
+    /**
+     * A submitted list (custom palette spec §2.3) applied to the palette held under its row, as the
+     * value to store. New colours (no id) take the ids above the highest the workspace has ever
+     * issued, in the order submitted; configured colours may be renamed, re-coloured and reordered;
+     * a colour may leave only through Clear, so a list that omits one is refused; an id that is not
+     * configured is refused by its name; a save that adds a colour must stay within the limit,
+     * while colours above a lowered limit stay editable. A colour being replaced may move but not
+     * change. A list edited from an older revision is refused whatever it changes, so a save never
+     * reverts what someone else saved meanwhile (plan ruling 3).
+     *
+     * @param int $revision the stored list's revision, read under the palette row
+     * @param int $base the revision the submitted list was edited from
+     * @param list<array{id: ?int, name: string, hex: string}> $rows
+     * @param \Closure(int): bool $replacing whether a running replacement replaces the id
+     * @return string the value to store, at `$revision + 1`
+     * @throws BrandColorsRefused
+     * @throws PaletteConflict
+     */
+    public static function applied(Palette $held, int $revision, int $base, array $rows, \Closure $replacing): string
+    {
+        if ($base !== $revision) {
+            throw new PaletteConflict('Brand colours changed since you opened this page — reload to see the latest');
+        }
+        if ($held->limit === 0) {
+            throw new BrandColorsRefused('Brand colours are turned off on this site');
+        }
+        $sent = array_values(array_filter(array_column($rows, 'id'), 'is_int'));
+        foreach ($held->brands as $id => $brand) {
+            if (!in_array($id, $sent, true)) {
+                throw new BrandColorsRefused(
+                    "Remove a brand colour with Clear: {$brand->name} is missing from this save",
+                );
+            }
+        }
+        foreach ($sent as $id) {
+            if (!isset($held->brands[$id])) {
+                throw new BrandColorsRefused("{$held->labelOf($id)} isn't in the palette");
+            }
+        }
+        if (count($rows) > count($sent) && count($rows) > $held->limit) {
+            $unit = $held->limit === 1 ? 'brand colour' : 'brand colours';
+            throw new BrandColorsRefused("This site allows {$held->limit} {$unit}");
+        }
+        $next = $held->highestIssued();
+        $colors = [];
+        foreach ($rows as $row) {
+            $slot = new BrandSlot($row['name'], $row['hex']);
+            if ($row['id'] === null) {
+                if (++$next > Palette::MAX_ID) {
+                    throw new BrandColorsRefused('No brand colour ids are left on this site');
+                }
+                $colors[$next] = $slot;
+                continue;
+            }
+            $current = $held->brands[$row['id']];
+            if ($current->toArray() !== $slot->toArray() && $replacing($row['id'])) {
+                throw new PaletteConflict("{$current->name} is being replaced");
+            }
+            $colors[$row['id']] = $slot;
+        }
+        return self::encode($colors, $held->removed, $revision + 1);
     }
 
     /** An id from 1 to Palette::MAX_ID, else null. */

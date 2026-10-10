@@ -99,7 +99,11 @@ final class PaletteController
             . 'Requires `content.manage`.',
         tags: ['Thallo Settings'],
     )]
-    #[ApiResponse(200, description: 'Cleared; the style schema\'s palette block.')]
+    #[ApiResponse(
+        200,
+        description: 'Cleared; the style schema\'s palette block and the stored brand colour list this Clear '
+            . 'wrote (`brand_colors`).',
+    )]
     #[ApiResponse(409, description: 'In use (`usage`), or part of a running replacement (`conflict`).')]
     public function clear(int $slot, ?Request $request = null): Response
     {
@@ -107,13 +111,18 @@ final class PaletteController
             return Response::notFound('No such brand colour.');
         }
         try {
-            $this->mutations->clear($slot, $request === null ? null : ActorHelper::uuidFromRequest($request));
+            $actor = $request === null ? null : ActorHelper::uuidFromRequest($request);
+            $written = $this->mutations->clear($slot, $actor);
         } catch (BrandColorInUse $e) {
             return Response::error('The brand colour is still in use.', 409, ['usage' => $e->usage]);
         } catch (PaletteConflict $e) {
             return Response::error($e->getMessage(), 409, ['conflict' => $e->getMessage()]);
         }
-        return Response::success(['palette' => $this->schema?->paletteBlock()], 'Brand colour cleared.');
+        // The list this Clear wrote, captured in its transaction (null when the id was not a colour).
+        return Response::success(
+            ['palette' => $this->schema?->paletteBlock(), 'brand_colors' => $written],
+            'Brand colour cleared.',
+        );
     }
 
     /** POST /v1/admin/appearance/palette/preview */
