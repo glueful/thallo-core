@@ -39,6 +39,9 @@ final class StyleClassJobRunner
         private readonly BlockStyleRegistry $registry,
         private readonly ?RenderedPageCachePurge $purge = null,
         private readonly ?WriteBarrier $barrier = null,
+        /** The palette fence (custom palette spec §4.3): a detach copies class colours into documents. */
+        private readonly ?\Thallo\Core\Content\Palette\PaletteFence $fence = null,
+        private readonly ?\Thallo\Core\Content\Palette\PaletteNormalizer $normalizer = null,
     ) {
     }
 
@@ -120,7 +123,7 @@ final class StyleClassJobRunner
             if (!$changed) {
                 return;
             }
-            if (!$source->persist($ref, $fields)) {
+            if (!$this->persistDetached($kind, $source, $ref, $fields)) {
                 $reason = 'document changed concurrently; retried on the next pass';
                 $this->jobs->recordFailure($jobId, $ref->sourceType, $ref->sourceId, $ref->locale, $reason);
                 return;
@@ -130,6 +133,34 @@ final class StyleClassJobRunner
         } catch (\Throwable $e) {
             $this->jobs->recordFailure($jobId, $ref->sourceType, $ref->sourceId, $ref->locale, $e->getMessage());
         }
+    }
+
+    /**
+     * A detach copies the class's values into the document's own style — colours included — so it
+     * writes through the palette fence (custom palette spec §4.3): a running replacement's source is
+     * mapped; the document as read is the trusted basis. A remove adds no value and writes as before.
+     *
+     * @param array<string,mixed> $fields
+     */
+    private function persistDetached(string $kind, BlockDocumentSource $source, DocumentRef $ref, array $fields): bool
+    {
+        if ($kind !== 'detach' || $this->fence === null || $this->normalizer === null) {
+            return $source->persist($ref, $fields);
+        }
+        $walk = in_array($ref->sourceType, ['entry_draft', 'entry_published', 'entry_version'], true)
+            ? \Thallo\Core\Content\Palette\ColorTokenWalker::KIND_ENTRY
+            : \Thallo\Core\Content\Palette\ColorTokenWalker::KIND_SECTION;
+        return $this->fence->write(
+            fn (\Thallo\Core\Content\Palette\PaletteSnapshot $s): \Thallo\Core\Content\Palette\Normalized
+                => $this->normalizer->normalize(
+                    $walk,
+                    $fields,
+                    $s,
+                    $this->normalizer->basisOf($walk, $ref->schema, $ref->fields),
+                    $ref->schema,
+                ),
+            fn (array $doc): bool => $source->persist($ref, $doc),
+        );
     }
 
     /**

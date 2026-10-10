@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Thallo\Core\Content\Http\Controllers;
 
+use Thallo\Core\Content\Palette\Normalized;
+use Thallo\Core\Content\Palette\PaletteSnapshot;
 use Glueful\Http\Response;
 use Glueful\Routing\Attributes\ApiOperation;
 use Glueful\Routing\Attributes\ApiResponse;
@@ -47,7 +49,36 @@ final class StyleClassController
         private readonly ?StyleClassJobRepository $jobs = null,
         /** Refuses an edit that would hide a layout's required block (type layouts plan C1). */
         private readonly ?RequiredBlockClassGuard $layouts = null,
+        /** The palette fence (custom palette spec §4.3); null = unfenced. */
+        private readonly ?\Thallo\Core\Content\Palette\PaletteFence $fence = null,
+        private readonly ?\Thallo\Core\Content\Palette\PaletteNormalizer $normalizer = null,
     ) {
+    }
+
+    /**
+     * A class style through the palette fence (custom palette spec §4.3, §4.5): a running replacement's
+     * source mapped, a fresh reference to a cleared colour refused; the class as stored is the basis.
+     *
+     * @template T
+     * @param array<string,mixed> $style
+     * @param callable(array<string,mixed>): T $write
+     * @return T
+     */
+    private function fencedStyle(array $style, ?string $id, callable $write): mixed
+    {
+        if ($this->fence === null || $this->normalizer === null) {
+            return $write($style);
+        }
+        $kind = \Thallo\Core\Content\Palette\ColorTokenWalker::KIND_CLASS;
+        return $this->fence->write(
+            function (PaletteSnapshot $s) use ($style, $id, $kind): Normalized {
+                $stored = $id === null ? [] : (array) ($this->classes->find($id)['style'] ?? []);
+                $basis = $this->normalizer?->basisOf($kind, null, ['style' => $stored]) ?? [];
+                return $this->normalizer?->normalize($kind, ['style' => $style], $s, $basis)
+                    ?? new Normalized(['style' => $style], false, false);
+            },
+            fn (array $doc) => $write((array) ($doc['style'] ?? [])),
+        );
     }
 
     #[ApiOperation(
@@ -76,11 +107,13 @@ final class StyleClassController
             return Response::validation($errors);
         }
         try {
-            $class = $this->classes->create([
+            $class = $this->fencedStyle($style, null, fn (array $style): array => $this->classes->create([
                 'name' => $input->name,
                 'description' => $input->description,
                 'style' => $style,
-            ]);
+            ]));
+        } catch (\Thallo\Core\Content\Palette\PaletteRefusal $e) {
+            return \Thallo\Core\Content\Palette\PaletteRefusalResponse::from($e);
         } catch (StyleClassNameTaken $e) {
             return Response::validation(['name' => $e->getMessage()]);
         } catch (\InvalidArgumentException $e) {
@@ -135,7 +168,16 @@ final class StyleClassController
             $changes['style'] = $style;
         }
         try {
-            $class = $this->classes->update($id, $input->version, $changes);
+            $class = isset($changes['style'])
+                ? $this->fencedStyle(
+                    $changes['style'],
+                    $id,
+                    fn (array $style): array => $this->classes
+                        ->update($id, $input->version, ['style' => $style] + $changes),
+                )
+                : $this->classes->update($id, $input->version, $changes);
+        } catch (\Thallo\Core\Content\Palette\PaletteRefusal $e) {
+            return \Thallo\Core\Content\Palette\PaletteRefusalResponse::from($e);
         } catch (StyleClassNotFound) {
             return Response::notFound('Style class not found.');
         } catch (StyleClassVersionConflict $e) {

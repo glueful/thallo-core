@@ -183,6 +183,8 @@ final class LayoutAdminController
                 $pair,
                 ActorHelper::uuidFromRequest($request),
             );
+        } catch (\Thallo\Core\Content\Palette\PaletteRefusal $e) {
+            return \Thallo\Core\Content\Palette\PaletteRefusalResponse::from($e);
         } catch (LayoutVersionConflict $e) {
             return self::conflict($e);
         } catch (ValidationException $e) {

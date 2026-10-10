@@ -187,6 +187,8 @@ final class RegionAdminController
         );
         try {
             $committed = $saver->save($posted, $expected, null);
+        } catch (\Thallo\Core\Content\Palette\PaletteRefusal $e) {
+            return \Thallo\Core\Content\Palette\PaletteRefusalResponse::from($e);
         } catch (\Thallo\Core\Content\Regions\RegionVersionConflict $e) {
             return Response::error('A region changed since it was loaded.', Response::HTTP_CONFLICT, [
                 'code' => 'REGION_VERSION_CONFLICT',

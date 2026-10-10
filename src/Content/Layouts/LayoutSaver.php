@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 namespace Thallo\Core\Content\Layouts;
 
+use Thallo\Core\Content\Palette\ColorTokenWalker;
+use Thallo\Core\Content\Palette\PaletteFence;
+use Thallo\Core\Content\Palette\PaletteNormalizer;
+use Thallo\Core\Content\Palette\PaletteState;
 use Glueful\Database\Connection;
 use Thallo\Core\Content\Preview\LayoutPreviewStore;
 use Thallo\Core\Content\Preview\LayoutPreviewToken;
@@ -28,7 +32,24 @@ final class LayoutSaver
         private readonly LayoutValidator $validator,
         private readonly LayoutPreviewStore $store,
         private readonly LayoutChanges $changes,
+        /** The palette fence (custom palette spec §4.3); null = unfenced (tests, minimal wiring). */
+        private readonly ?PaletteFence $fence = null,
+        private readonly ?PaletteState $state = null,
+        private readonly ?PaletteNormalizer $normalizer = null,
     ) {
+    }
+
+    /** @var list<array{location: string, from: string, to: string}> */
+    private array $rewrites = [];
+
+    /**
+     * What the last save's palette normalisation changed (custom palette spec §4.5), for the editor.
+     *
+     * @return list<array{location: string, from: string, to: string}>
+     */
+    public function rewrites(): array
+    {
+        return $this->rewrites;
     }
 
     /**
@@ -52,7 +73,10 @@ final class LayoutSaver
         $surface = $claims->surface;
         $target = $claims->target;
         $cleared = false;
-        $layout = $this->locked($surface, $target, function () use (
+        $this->rewrites = [];
+        // The palette row first, then the layout locks (docs/internal/palette-lock-order.md).
+        $fenced = $this->fence !== null && $this->state !== null && $this->normalizer !== null;
+        $layout = $this->fencedIf($fenced, $surface, $target, function () use (
             $claims,
             $surface,
             $target,
@@ -71,6 +95,20 @@ final class LayoutSaver
                 throw new LayoutVersionConflict($current);
             }
             $clean = $this->validator->validate($surface, $target, $blocks, $settings, $stored['blocks'] ?? []);
+            if ($this->state !== null && $this->normalizer !== null && $this->state->heldInThisTransaction()) {
+                $normalized = $this->normalizer->normalize(
+                    ColorTokenWalker::KIND_LAYOUT,
+                    ['blocks' => $clean['blocks'], 'settings' => $clean['settings']],
+                    $this->state->lock(),
+                    $this->normalizer->basisOf(ColorTokenWalker::KIND_LAYOUT, null, [
+                        'blocks' => $stored['blocks'] ?? [],
+                        'settings' => $stored['settings'] ?? [],
+                    ]),
+                );
+                $clean['blocks'] = $normalized->doc['blocks'];
+                $clean['settings'] = $normalized->doc['settings'];
+                $this->rewrites = $normalized->rewrites;
+            }
             $version = $this->layouts->saveExpected(
                 $surface,
                 $target,
@@ -121,6 +159,19 @@ final class LayoutSaver
             });
             return $version;
         });
+    }
+
+    /**
+     * The layout locks, under the palette row when fenced (docs/internal/palette-lock-order.md).
+     *
+     * @template T
+     * @param callable(): T $fn
+     * @return T
+     */
+    private function fencedIf(bool $fenced, string $surface, string $target, callable $fn): mixed
+    {
+        $locked = fn (): mixed => $this->locked($surface, $target, $fn);
+        return $fenced && $this->fence !== null ? $this->fence->within($locked) : $locked();
     }
 
     /**

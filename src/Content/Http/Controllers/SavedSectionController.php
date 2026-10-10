@@ -57,6 +57,9 @@ final class SavedSectionController
         private readonly ?LayoutValidator $layouts = null,
         /** What the fields a `layout` section shows are called where it is saved from. */
         private readonly ?LayoutFieldLabels $fieldLabels = null,
+        /** The palette fence (custom palette spec §4.3); null = unfenced. */
+        private readonly ?\Thallo\Core\Content\Palette\PaletteFence $fence = null,
+        private readonly ?\Thallo\Core\Content\Palette\PaletteNormalizer $normalizer = null,
     ) {
     }
 
@@ -122,9 +125,36 @@ final class SavedSectionController
         $shows = $surface === null
             ? null
             : $this->fieldLabels?->ofBlocks($surface, (string) $input->target, [$block]);
-        // As a page save: no class that is archived, or held by a job rewriting every document.
-        try {
+        // As a page save: no class that is archived, or held by a job rewriting every document. Through
+        // the palette fence (custom palette spec §4.3): a new section has no trusted basis.
+        $store = function (array $block) use ($labels, $region, $request, $surface, $shows): string {
             $this->classGuard?->assertBlocksWritable([], [$block]);
+            return $this->sections->create(
+                (string) $labels['name'],
+                $labels['category'] ?? self::DEFAULT_CATEGORY,
+                $labels['description'] ?? null,
+                $block,
+                $region,
+                ActorHelper::uuidFromRequest($request),
+                $surface,
+                $shows,
+            );
+        };
+        try {
+            $id = $this->fence === null || $this->normalizer === null
+                ? $store($block)
+                : $this->fence->write(
+                    fn (\Thallo\Core\Content\Palette\PaletteSnapshot $s): \Thallo\Core\Content\Palette\Normalized
+                        => $this->normalizer->normalize(
+                            \Thallo\Core\Content\Palette\ColorTokenWalker::KIND_SECTION,
+                            ['blocks' => [$block]],
+                            $s,
+                            [],
+                        ),
+                    fn (array $doc): string => $store((array) ($doc['blocks'][0] ?? $block)),
+                );
+        } catch (\Thallo\Core\Content\Palette\PaletteRefusal $e) {
+            return \Thallo\Core\Content\Palette\PaletteRefusalResponse::from($e);
         } catch (StyleClassLocked $e) {
             return Response::error('A job holds a style class this section applies.', Response::HTTP_CONFLICT, [
                 'code' => 'STYLE_CLASS_LOCKED',
@@ -134,16 +164,6 @@ final class SavedSectionController
         } catch (StyleClassArchived $e) {
             return Response::validation(['block' => $e->getMessage()]);
         }
-        $id = $this->sections->create(
-            (string) $labels['name'],
-            $labels['category'] ?? self::DEFAULT_CATEGORY,
-            $labels['description'] ?? null,
-            $block,
-            $region,
-            ActorHelper::uuidFromRequest($request),
-            $surface,
-            $shows,
-        );
         return Response::created(['section' => $this->entry($id)], 'Section saved.');
     }
 

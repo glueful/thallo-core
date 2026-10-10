@@ -1583,6 +1583,9 @@ final class CoreServiceProvider extends ServiceProvider implements \Thallo\Contr
             $container->get(\Thallo\Core\Content\Layouts\LayoutValidator::class),
             $container->get(\Thallo\Core\Content\Preview\LayoutPreviewStore::class),
             $container->get(\Thallo\Core\Content\Layouts\LayoutChanges::class),
+            $container->get(\Thallo\Core\Content\Palette\PaletteFence::class),
+            $container->get(\Thallo\Core\Content\Palette\PaletteState::class),
+            $container->get(\Thallo\Core\Content\Palette\PaletteNormalizer::class),
         );
     }
 
@@ -2514,6 +2517,12 @@ final class CoreServiceProvider extends ServiceProvider implements \Thallo\Contr
             ],
             GeneralSettingsController::class => [
                 'class' => GeneralSettingsController::class,
+                'shared' => true,
+                'autowire' => true,
+            ],
+            // Fenced region saves (custom palette spec §4.3): the controller receives a wired saver.
+            \Thallo\Core\Content\Regions\RegionSaver::class => [
+                'class' => \Thallo\Core\Content\Regions\RegionSaver::class,
                 'shared' => true,
                 'autowire' => true,
             ],
