@@ -4,6 +4,11 @@ declare(strict_types=1);
 
 namespace Thallo\Core\Content\Services;
 
+use Thallo\Core\Content\Palette\ColorTokenWalker;
+use Thallo\Core\Content\Palette\Normalized;
+use Thallo\Core\Content\Palette\PaletteFence;
+use Thallo\Core\Content\Palette\PaletteNormalizer;
+use Thallo\Core\Content\Palette\PaletteSnapshot;
 use Thallo\Core\Content\Blocks\BlockMigrationGate;
 use Thallo\Core\Content\Blocks\BlockRestoreProjector;
 use Thallo\Core\Content\Events\EntryPublished;
@@ -37,6 +42,9 @@ final class PublishService
         private readonly ?BlockRestoreProjector $blockRestore = null,
         /** Restored references are checked for a job's lock at the write (spec §4.5); null = unchecked. */
         private readonly ?\Thallo\Core\Content\Style\Classes\StyleClassReferenceGuard $guard = null,
+        /** The palette fence (custom palette spec §4.3); null = unfenced (tests, minimal wiring). */
+        private readonly ?PaletteFence $fence = null,
+        private readonly ?PaletteNormalizer $normalizer = null,
     ) {
     }
 
@@ -87,51 +95,78 @@ final class PublishService
         $typeUuid = (string) $entry['content_type_uuid'];
         $schema = $this->types->schemaFor($typeUuid);
 
-        // Block-migration write gate (spec §3): publish snapshots the stored draft —
-        // publishing an un-backfilled draft under a flipped block schema would strip
-        // the old keys. The backfill's own republish bypasses PublishService, so
-        // this can never deadlock a migration's convergence.
-        $this->blockGate?->assertWritable((array) $draft['fields'], $schema);
+        // The palette fence (custom palette spec §4.3): the draft IS the payload, re-read on every call,
+        // so a palette change committed after the read normalises the draft as stored now; its own
+        // colours are its trusted basis (a restored, unavailable colour publishes as it is).
+        $publish = function (array $fields) use ($entryUuid, $locale, $actor, $schema, $typeUuid, &$version): string {
+            $draft = $this->entries->findDraft($entryUuid, $locale)
+                ?? throw new \RuntimeException("no draft for {$entryUuid}/{$locale}");
+            // Block-migration write gate (spec §3): publish snapshots the stored draft —
+            // publishing an un-backfilled draft under a flipped block schema would strip
+            // the old keys. The backfill's own republish bypasses PublishService, so
+            // this can never deadlock a migration's convergence.
+            $this->blockGate?->assertWritable($fields, $schema);
 
-        // Project a draft still on an OLDER schema up to the current shape before validating, so a
-        // draft behind a lagging/failed backfill (e.g. a renamed field) doesn't silently lose the
-        // renamed data — FieldValidator only keeps keys the current schema declares. A draft already
-        // at the current version is untouched (no projection, same stored version) → behaviour
-        // unchanged for the normal path. The snapshot then records the CURRENT version, so delivery
-        // read-projection stays a no-op instead of double-projecting.
-        $fields = $draft['fields'];
-        $storeVersion = (int) $draft['schema_version'];
-        if ($this->projector !== null) {
-            $typeRow = $this->types->findByUuid($typeUuid);
-            $currentVersion = $typeRow === null ? $storeVersion : (int) $typeRow['schema_version'];
-            if ($storeVersion < $currentVersion) {
-                $fields = $this->projector->project($typeUuid, $storeVersion, $fields);
-                $storeVersion = $currentVersion;
+            // Project a draft still on an OLDER schema up to the current shape before validating, so a
+            // draft behind a lagging/failed backfill (e.g. a renamed field) doesn't silently lose the
+            // renamed data — FieldValidator only keeps keys the current schema declares. A draft already
+            // at the current version is untouched (no projection, same stored version) → behaviour
+            // unchanged for the normal path. The snapshot then records the CURRENT version, so delivery
+            // read-projection stays a no-op instead of double-projecting.
+            $storeVersion = (int) $draft['schema_version'];
+            if ($this->projector !== null) {
+                $typeRow = $this->types->findByUuid($typeUuid);
+                $currentVersion = $typeRow === null ? $storeVersion : (int) $typeRow['schema_version'];
+                if ($storeVersion < $currentVersion) {
+                    $fields = $this->projector->project($typeUuid, $storeVersion, $fields);
+                    $storeVersion = $currentVersion;
+                }
             }
-        }
 
-        // Throws ValidationException before any write if the draft is invalid. Publish is the strict
-        // gate: unlike draft saves, a present-but-empty required field or a dangling reference is
-        // rejected here so invalid content can't go live (draft saves stay permissive).
-        $clean = $this->validator->validate($schema, $fields, true);
+            // Throws ValidationException before any write if the draft is invalid. Publish is the strict
+            // gate: unlike draft saves, a present-but-empty required field or a dangling reference is
+            // rejected here so invalid content can't go live (draft saves stay permissive).
+            $clean = $this->validator->validate($schema, $fields, true);
 
+            $version = 0;
+            $versionUuid = db($this->context)->transaction(
+                function () use ($entryUuid, $locale, $clean, $storeVersion, $actor, $schema, &$version): string {
+                    $version = $this->versions->reserveNextVersionNumber($entryUuid, $locale);
+                    $versionUuid = $this->versions->appendVersion(
+                        $entryUuid,
+                        $locale,
+                        $version,
+                        $clean,
+                        $storeVersion,
+                        $actor,
+                    );
+                    $this->versions->pin($entryUuid, $locale, $versionUuid, $actor);
+                    $this->references->rebuildForEntry($entryUuid, $schema, $clean, $locale);
+                    return $versionUuid;
+                }
+            );
+            return $versionUuid;
+        };
         $version = 0;
-        $versionUuid = db($this->context)->transaction(
-            function () use ($entryUuid, $locale, $clean, $storeVersion, $actor, $schema, &$version): string {
-                $version = $this->versions->reserveNextVersionNumber($entryUuid, $locale);
-                $versionUuid = $this->versions->appendVersion(
-                    $entryUuid,
-                    $locale,
-                    $version,
-                    $clean,
-                    $storeVersion,
-                    $actor,
-                );
-                $this->versions->pin($entryUuid, $locale, $versionUuid, $actor);
-                $this->references->rebuildForEntry($entryUuid, $schema, $clean, $locale);
-                return $versionUuid;
-            }
-        );
+        if ($this->fence === null || $this->normalizer === null) {
+            $versionUuid = $publish((array) $draft['fields']);
+        } else {
+            $versionUuid = $this->fence->write(
+                function (PaletteSnapshot $s) use ($entryUuid, $locale, $schema): Normalized {
+                    $current = $this->entries->findDraft($entryUuid, $locale)
+                        ?? throw new \RuntimeException("no draft for {$entryUuid}/{$locale}");
+                    $fields = (array) $current['fields'];
+                    return $this->normalizer->normalize(
+                        ColorTokenWalker::KIND_ENTRY,
+                        $fields,
+                        $s,
+                        $this->normalizer->basisOf(ColorTokenWalker::KIND_ENTRY, $schema, $fields),
+                        $schema,
+                    );
+                },
+                fn (array $fields): string => $publish($fields),
+            );
+        }
 
         // Primary domain event, dispatched on the OUTERMOST commit only. If publish()
         // owns the outermost transaction the commit already happened, so afterCommit
@@ -212,7 +247,13 @@ final class PublishService
 
         $pinnedUuid = $versionUuid;
         $pinnedNumber = isset($version['version']) ? (int) $version['version'] : 0;
-        db($this->context)->transaction(function () use (
+        // The palette fence (custom palette spec §4.3, §4.5): the version is the payload and its own
+        // basis (a re-pinned version may keep the cleared colours it holds); a running replacement
+        // maps its source, which changes the content — so the changed fields are appended and pinned,
+        // never the old version re-pinned.
+        $restored = $projectedFields ?? (array) $version['fields'];
+        $repin = function (array $doc) use (
+            $restored,
             $entryUuid,
             $locale,
             $versionUuid,
@@ -224,6 +265,9 @@ final class PublishService
             &$pinnedUuid,
             &$pinnedNumber
         ): void {
+            if ($doc !== $restored) {
+                $projectedFields = $doc;
+            }
             // A restore's references are trusted (spec §4.5): a retained revision may name an
             // archived class, never a locked one. Checked against the current publication.
             if ($this->guard !== null && $schema !== null) {
@@ -270,7 +314,21 @@ final class PublishService
                 }
                 $this->references->rebuildForEntry($entryUuid, $schema, $fields, $locale);
             }
-        });
+        };
+        if ($this->fence === null || $this->normalizer === null || $schema === null) {
+            db($this->context)->transaction(fn () => $repin($restored));
+        } else {
+            $this->fence->write(
+                fn (PaletteSnapshot $s): Normalized => $this->normalizer->normalize(
+                    ColorTokenWalker::KIND_ENTRY,
+                    $restored,
+                    $s,
+                    $this->normalizer->basisOf(ColorTokenWalker::KIND_ENTRY, $schema, $restored),
+                    $schema,
+                ),
+                fn (array $doc) => db($this->context)->transaction(fn () => $repin($doc)),
+            );
+        }
         // Re-publishing a prior version is a publish for downstream consumers (V1_DESIGN §5).
         // The event carries the ACTUALLY pinned version (materialized or requested).
         $this->events?->emitAfterCommit(new EntryPublished(

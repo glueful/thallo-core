@@ -85,6 +85,8 @@ final class PublicationController
         }
         try {
             $versionUuid = $this->publisher->publish($uuid, $locale, $this->actor($request));
+        } catch (\Thallo\Core\Content\Palette\PaletteRefusal $e) {
+            return \Thallo\Core\Content\Palette\PaletteRefusalResponse::from($e);
         } catch (ValidationException $e) {
             return Response::validation($e->errors());
         } catch (PublishBlocked $e) {
@@ -168,6 +170,8 @@ final class PublicationController
         // Whether the version belongs to this entry+locale is a domain rule and stays here.
         try {
             $pinned = $this->publisher->rollback($uuid, $locale, $input->version_uuid, $this->actor($request));
+        } catch (\Thallo\Core\Content\Palette\PaletteRefusal $e) {
+            return \Thallo\Core\Content\Palette\PaletteRefusalResponse::from($e);
         } catch (UnknownBlockTypeException $e) {
             // Precedes the generic catch to document the contract (block-migrations
             // spec §5): the version references a hard-deleted block type — blocked

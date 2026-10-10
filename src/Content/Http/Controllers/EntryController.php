@@ -307,8 +307,9 @@ final class EntryController
             return Response::validation($e->errors());
         }
         $type = $this->types->findByUuid((string) $entry['content_type_uuid']);
+        $rewrites = [];
         try {
-            $this->entries->saveDraft(
+            $rewrites = $this->entries->saveDraft(
                 $uuid,
                 $locale,
                 $clean,
@@ -316,6 +317,8 @@ final class EntryController
                 $input->lock_version ?? -1,
                 $this->actor($request),
             );
+        } catch (\Thallo\Core\Content\Palette\PaletteRefusal $e) {
+            return \Thallo\Core\Content\Palette\PaletteRefusalResponse::from($e);
         } catch (OptimisticLockException) {
             return Response::error('Draft was modified by another writer.', Response::HTTP_CONFLICT, [
                 'code' => 'STALE_DRAFT',
@@ -338,6 +341,8 @@ final class EntryController
         return Response::success([
             'draft' => $this->entries->findDraft($uuid, $locale),
             'preview_cleared' => $cleared,
+            // What the palette normalised (custom palette spec §4.5), for the editor to adopt.
+            'palette_rewrites' => $rewrites,
         ], 'Draft saved.');
     }
 
@@ -631,6 +636,8 @@ final class EntryController
                 $input->overwrite,
                 $schema,
             );
+        } catch (\Thallo\Core\Content\Palette\PaletteRefusal $e) {
+            return \Thallo\Core\Content\Palette\PaletteRefusalResponse::from($e);
         } catch (\InvalidArgumentException $e) {
             return Response::validation(['source_locale' => $e->getMessage()]);
         } catch (\RuntimeException $e) {

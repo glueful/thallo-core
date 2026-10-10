@@ -1969,6 +1969,11 @@ final class CoreServiceProvider extends ServiceProvider implements \Thallo\Contr
                 'shared' => true,
                 'autowire' => true,
             ],
+            \Thallo\Core\Content\Palette\PaletteFence::class => [
+                'class' => \Thallo\Core\Content\Palette\PaletteFence::class,
+                'shared' => true,
+                'autowire' => true,
+            ],
             \Thallo\Core\Content\Palette\PaletteState::class => [
                 'class' => \Thallo\Core\Content\Palette\PaletteState::class,
                 'shared' => true,
@@ -3240,6 +3245,9 @@ final class CoreServiceProvider extends ServiceProvider implements \Thallo\Contr
             $c->has(\Thallo\Core\Content\Style\Classes\StyleClassReferenceGuard::class)
                 ? $c->get(\Thallo\Core\Content\Style\Classes\StyleClassReferenceGuard::class)
                 : null,
+            // The palette fence (custom palette spec §4.3): publish and rollback normalise under it.
+            $c->get(\Thallo\Core\Content\Palette\PaletteFence::class),
+            $c->get(\Thallo\Core\Content\Palette\PaletteNormalizer::class),
         );
     }
 

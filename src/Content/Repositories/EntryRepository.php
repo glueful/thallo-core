@@ -4,6 +4,11 @@ declare(strict_types=1);
 
 namespace Thallo\Core\Content\Repositories;
 
+use Thallo\Core\Content\Palette\ColorTokenWalker;
+use Thallo\Core\Content\Palette\Normalized;
+use Thallo\Core\Content\Palette\PaletteFence;
+use Thallo\Core\Content\Palette\PaletteNormalizer;
+use Thallo\Core\Content\Palette\PaletteSnapshot;
 use Thallo\Core\Content\Blocks\Migration\BlockInstanceWalker;
 use Thallo\Core\Content\Events\AssetAttached;
 use Thallo\Core\Content\Events\AssetDetached;
@@ -30,6 +35,9 @@ final class EntryRepository
         private readonly ?\Thallo\Core\Content\Style\Classes\StyleClassReferenceGuard $guard = null,
         /** Finds images placed inside blocks; without it only top-level asset fields count. */
         private readonly ?BlockInstanceWalker $blocks = null,
+        /** The palette fence (custom palette spec §4.3); null = unfenced (tests, minimal wiring). */
+        private readonly ?PaletteFence $fence = null,
+        private readonly ?PaletteNormalizer $normalizer = null,
     ) {
     }
 
@@ -67,6 +75,60 @@ final class EntryRepository
     }
 
     /**
+     * Save a draft through the palette fence (custom palette spec §4.3, §4.5): the submitted fields are
+     * normalised — a running replacement's source mapped, a fresh reference to a cleared brand colour
+     * refused (PaletteRefusal) — against the draft as stored, which is the trusted basis. Returns what
+     * normalisation changed, for the editor to adopt.
+     *
+     * @param array<string,mixed> $fields
+     * @return list<array{location: string, from: string, to: string}>
+     */
+    public function saveDraft(
+        string $entryUuid,
+        string $locale,
+        array $fields,
+        int $schemaVersion,
+        int $expectedLockVersion,
+        ?string $actor,
+    ): array {
+        if ($this->fence === null || $this->normalizer === null) {
+            $this->persistDraft($entryUuid, $locale, $fields, $schemaVersion, $expectedLockVersion, $actor);
+            return [];
+        }
+        $schema = $this->entrySchema($entryUuid);
+        $last = null;
+        $this->fence->write(
+            function (PaletteSnapshot $s) use ($entryUuid, $locale, $fields, $schema, &$last): Normalized {
+                // The ORIGINAL submitted fields, every time; the basis re-read, so a second call sees the
+                // draft as stored under the held lock.
+                return $last = $this->normalizer->normalize(
+                    ColorTokenWalker::KIND_ENTRY,
+                    $fields,
+                    $s,
+                    $this->normalizer->basisOf(
+                        ColorTokenWalker::KIND_ENTRY,
+                        $schema,
+                        $this->draftFields($entryUuid, $locale),
+                    ),
+                    $schema,
+                );
+            },
+            function (array $doc) use ($entryUuid, $locale, $schemaVersion, $expectedLockVersion, $actor): void {
+                $this->persistDraft($entryUuid, $locale, $doc, $schemaVersion, $expectedLockVersion, $actor);
+            },
+        );
+        return $last?->rewrites ?? [];
+    }
+
+    /** The entry's content type schema, or null. */
+    private function entrySchema(string $entryUuid): ?ContentTypeSchema
+    {
+        $entry = $this->findEntry($entryUuid);
+        $type = $entry === null ? null : $this->types->findByUuid((string) $entry['content_type_uuid']);
+        return $type === null ? null : ContentTypeSchema::fromArray((array) $type['schema']);
+    }
+
+    /**
      * Save the draft working copy under optimistic concurrency. The caller passes the
      * lock_version it last read; if the row has moved on, throw (controller -> 409).
      *
@@ -76,7 +138,7 @@ final class EntryRepository
      *
      * @param array<string,mixed> $fields already-validated, cleaned payload
      */
-    public function saveDraft(
+    private function persistDraft(
         string $entryUuid,
         string $locale,
         array $fields,
@@ -278,34 +340,68 @@ final class EntryRepository
             throw new \RuntimeException('Draft already exists for locale.');
         }
 
-        $fields = [];
-        if ($sourceLocale !== null) {
+        $seeded = function () use ($entryUuid, $sourceLocale, $schema): array {
+            if ($sourceLocale === null) {
+                return [];
+            }
             $source = $this->findDraft($entryUuid, $sourceLocale);
             if ($source === null) {
                 throw new \InvalidArgumentException('Source draft not found.');
             }
-            $fields = $schema === null
+            return $schema === null
                 ? (array) $source['fields']
                 : $this->seeder->seed((array) $source['fields'], $schema);
-        }
+        };
 
-        $data = [
-            'entry_uuid' => $entryUuid,
-            'locale' => $locale,
-            'fields' => json_encode($fields, JSON_THROW_ON_ERROR),
-            'schema_version' => $schemaVersion,
-            'lock_version' => 0,
-            'updated_by' => $actor,
-            'updated_at' => $this->now(),
-        ];
+        $write = function (array $fields) use ($entryUuid, $locale, $schemaVersion, $actor): void {
+            $this->db->transaction(function () use ($entryUuid, $locale, $fields, $schemaVersion, $actor): void {
+                $data = [
+                    'entry_uuid' => $entryUuid,
+                    'locale' => $locale,
+                    'fields' => json_encode($fields, JSON_THROW_ON_ERROR),
+                    'schema_version' => $schemaVersion,
+                    'lock_version' => 0,
+                    'updated_by' => $actor,
+                    'updated_at' => $this->now(),
+                ];
+                $current = $this->findDraft($entryUuid, $locale);
+                if ($current === null) {
+                    $this->db->table('entry_drafts')->insert($data);
+                    return;
+                }
+                // An overwrite is conditional on the row it read (custom palette plan ruling 13): a save
+                // that landed in between wins, and this copy is refused rather than clobbering it.
+                $lock = (int) ($current['lock_version'] ?? 0);
+                $affected = $this->db->table('entry_drafts')
+                    ->where('entry_uuid', '=', $entryUuid)
+                    ->where('locale', '=', $locale)
+                    ->where('lock_version', '=', $lock)
+                    ->update(['lock_version' => $lock + 1] + $data);
+                if ($affected < 1) {
+                    throw new OptimisticLockException();
+                }
+            });
+        };
 
-        if ($existing === null) {
-            $this->db->table('entry_drafts')->insert($data);
+        if ($this->fence === null || $this->normalizer === null) {
+            $write($seeded());
         } else {
-            $this->db->table('entry_drafts')
-                ->where('entry_uuid', '=', $entryUuid)
-                ->where('locale', '=', $locale)
-                ->update($data);
+            // The palette fence (custom palette spec §4.3): the copy is the source locale's draft, re-read
+            // on every call, and that draft is its trusted basis.
+            $typeSchema = $schema ?? $this->entrySchema($entryUuid);
+            $this->fence->write(
+                function (PaletteSnapshot $s) use ($seeded, $typeSchema): Normalized {
+                    $fields = $seeded();
+                    return $this->normalizer->normalize(
+                        ColorTokenWalker::KIND_ENTRY,
+                        $fields,
+                        $s,
+                        $this->normalizer->basisOf(ColorTokenWalker::KIND_ENTRY, $typeSchema, $fields),
+                        $typeSchema,
+                    );
+                },
+                fn (array $doc) => $write($doc),
+            );
         }
 
         return $this->findDraft($entryUuid, $locale) ?? [];
