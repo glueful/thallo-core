@@ -339,13 +339,15 @@ final class StarterBlockTypes
                 'category' => 'Content', 'description' => 'Free-form formatted text.',
                 'flags' => [],
                 'starter_content' => ['body' => '<p>Start writing.</p>'],
+                // Made a link, the block is what the pointer is over (its cover spans it), so its hover
+                // look is the block's — drawn only while it is a link (the template's `hover:`).
                 'style_capabilities' => [
                     'spacing', 'width', 'alignment.self', 'alignment.text', 'typography', 'colors.text', 'visibility',
-                    'layout.item',
+                    'layout.item', 'hover',
                 ],
                 'style_targets' => StyleTargets::root('text', [
                     'spacing', 'width', 'alignment.self', 'alignment.text', 'typography', 'colors.text', 'visibility',
-                    'layout.item',
+                    'layout.item', 'hover',
                 ]),
                 'schema' => [
                     ['name' => 'body', 'type' => 'text', 'format' => 'rich'],
@@ -364,10 +366,11 @@ final class StarterBlockTypes
                     'spacing', 'width', 'alignment.self', 'alignment.text', 'typography', 'colors.text',
                     'visibility', 'layout.item',
                 ],
+                // Made a link, its text is the link: the Link part styles it, at rest and on hover.
                 'style_targets' => StyleTargets::root('text', [
                     'spacing', 'width', 'alignment.self', 'alignment.text', 'typography', 'colors.text', 'visibility',
                     'layout.item',
-                ]),
+                ]) + ['parts' => ['link' => ['label' => 'Link', 'capabilities' => ['colors.text', 'hover']]]],
                 'schema' => [
                     ['name' => 'text', 'type' => 'string', 'required' => true],
                     ['name' => 'level', 'type' => 'enum', 'enum' => ['h1', 'h2', 'h3', 'h4', 'h5', 'h6']],
