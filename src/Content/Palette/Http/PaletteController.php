@@ -14,7 +14,10 @@ use Thallo\Core\Content\Palette\BrandColorInUse;
 use Thallo\Core\Content\Palette\BrandColorUsage;
 use Thallo\Core\Content\Palette\PaletteConflict;
 use Thallo\Core\Content\Palette\PaletteHistoryExpired;
+use Thallo\Core\Content\Palette\PaletteJob;
+use Thallo\Core\Content\Palette\PaletteJobRepository;
 use Thallo\Core\Content\Palette\PaletteMutations;
+use Thallo\Core\Content\Palette\PaletteReplaceService;
 use Thallo\Core\Content\Palette\PaletteReplacements;
 use Thallo\Core\Settings\GeneralSettings;
 use Thallo\Core\Settings\PaletteSettings;
@@ -36,6 +39,8 @@ final class PaletteController
         private readonly ?PaletteProvider $palette = null,
         /** The style schema's palette block, which a Clear answers with; null without the render pack. */
         private readonly ?\Thallo\Render\Http\Controllers\StyleSchemaController $schema = null,
+        private readonly ?PaletteReplaceService $replace = null,
+        private readonly ?PaletteJobRepository $jobs = null,
     ) {
     }
 
@@ -154,5 +159,132 @@ final class PaletteController
             'swatches' => $effective->swatches(),
             'values' => ['light' => $effective->values('light'), 'dark' => $effective->values('dark')],
         ], 'Palette preview.');
+    }
+
+    /** POST /v1/admin/appearance/palette/brand/{slot}/replace */
+    #[ApiOperation(
+        summary: 'Replace a brand colour',
+        description: 'Starts a job that rewrites every current document naming the slot (drafts, current '
+            . 'publications — as new versions — regions, layouts, saved sections, style classes) to `to`, its '
+            . 'text colour to `contrast_to` (or the destination\'s own pair), then clears the slot. History is '
+            . 'never rewritten. 409 while the slot or a destination is part of a replacement; 422 for a '
+            . 'destination the rules refuse. Requires `content.manage`.',
+        tags: ['Thallo Settings'],
+    )]
+    #[ApiResponse(202, description: 'The job, started.')]
+    #[ApiResponse(409, description: 'Part of a running replacement, or not configured.')]
+    #[ApiResponse(422, description: 'A destination the rules refuse; or contrast_to is required.')]
+    public function replace(ReplaceBrandData $input, int $slot, ?Request $request = null): Response
+    {
+        if (!in_array($slot, [1, 2, 3], true) || $this->replace === null) {
+            return Response::notFound('No such brand colour.');
+        }
+        try {
+            $id = $this->replace->start(
+                $slot,
+                $input->to,
+                $input->contrast_to,
+                $request === null ? null : ActorHelper::uuidFromRequest($request),
+            );
+        } catch (PaletteConflict $e) {
+            return Response::error($e->getMessage(), 409, ['conflict' => $e->getMessage()]);
+        } catch (\InvalidArgumentException $e) {
+            return Response::validation(['to' => $e->getMessage()]);
+        }
+        return Response::success(['job' => $this->jobJson($id)], 'Replacement started.')->setStatusCode(202);
+    }
+
+    /** GET /v1/admin/appearance/palette/jobs */
+    #[ApiOperation(
+        summary: 'The running brand colour replacements',
+        description: 'Every replacement that is running, interrupted or failed. Requires `content.manage`.',
+        tags: ['Thallo Settings'],
+    )]
+    #[ApiResponse(200, description: 'The jobs.')]
+    public function jobs(): Response
+    {
+        $jobs = array_map(self::present(...), $this->jobs?->active() ?? []);
+        return Response::success(['jobs' => $jobs], 'Replacements retrieved.');
+    }
+
+    /** GET /v1/admin/appearance/palette/jobs/{id} */
+    #[ApiOperation(
+        summary: 'One brand colour replacement',
+        description: 'Its progress and failures; a running job whose worker stopped reporting is '
+            . '`interrupted`, and can be resumed. Requires `content.manage`.',
+        tags: ['Thallo Settings'],
+    )]
+    #[ApiResponse(200, description: 'The job.')]
+    #[ApiResponse(404, description: 'No such job.')]
+    public function job(string $id): Response
+    {
+        $json = $this->jobJson($id);
+        return $json === null ? Response::notFound('No such replacement.') : Response::success(['job' => $json]);
+    }
+
+    /** POST /v1/admin/appearance/palette/jobs/{id}/cancel */
+    #[ApiOperation(
+        summary: 'Cancel a brand colour replacement',
+        description: 'Stops the job before its next write; what it already rewrote stays rewritten, and the '
+            . 'slot stays configured. 409 when it already finished. Requires `content.manage`.',
+        tags: ['Thallo Settings'],
+    )]
+    #[ApiResponse(200, description: 'Cancelled.')]
+    #[ApiResponse(409, description: 'Already finished.')]
+    public function cancel(string $id): Response
+    {
+        return $this->transitionResponse($id, fn () => $this->replace?->cancel($id), 'Replacement cancelled.');
+    }
+
+    /** POST /v1/admin/appearance/palette/jobs/{id}/resume */
+    #[ApiOperation(
+        summary: 'Resume a brand colour replacement',
+        description: 'Runs a failed or interrupted job again. 409 for any other. Requires `content.manage`.',
+        tags: ['Thallo Settings'],
+    )]
+    #[ApiResponse(200, description: 'Resumed.')]
+    #[ApiResponse(409, description: 'Not failed or interrupted.')]
+    public function resume(string $id): Response
+    {
+        return $this->transitionResponse($id, fn () => $this->replace?->resume($id), 'Replacement resumed.');
+    }
+
+    private function transitionResponse(string $id, callable $change, string $message): Response
+    {
+        if ($this->jobs?->find($id) === null) {
+            return Response::notFound('No such replacement.');
+        }
+        try {
+            $change();
+        } catch (PaletteConflict $e) {
+            return Response::error($e->getMessage(), 409, ['conflict' => $e->getMessage()]);
+        }
+        return Response::success(['job' => $this->jobJson($id)], $message);
+    }
+
+    /** @return array<string,mixed>|null */
+    private function jobJson(string $id): ?array
+    {
+        $job = $this->jobs?->find($id);
+        return $job === null ? null : self::present($job);
+    }
+
+    /** @return array<string,mixed> */
+    private static function present(PaletteJob $job): array
+    {
+        return [
+            'id' => $job->id,
+            'slot' => $job->slot,
+            'to' => $job->to,
+            'contrast_to' => $job->contrastTo,
+            'status' => PaletteReplaceService::displayStatus($job),
+            'passes' => $job->passes,
+            'work_items_total' => $job->total,
+            'work_items_done' => $job->done,
+            'work_items_failed' => $job->failed,
+            'failure_report' => $job->failureReport,
+            'created_at' => $job->createdAt,
+            'finished_at' => $job->finishedAt,
+        ];
     }
 }

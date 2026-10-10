@@ -2026,6 +2026,40 @@ final class CoreServiceProvider extends ServiceProvider implements \Thallo\Contr
                 'shared' => true,
                 'factory' => [self::class, 'makePaletteMutations'],
             ],
+            // Replace with… (custom palette spec §4.4): the documents it rewrites, the job and its runner.
+            \Thallo\Core\Content\Palette\Sources\RegionSettingsSource::class => [
+                'class' => \Thallo\Core\Content\Palette\Sources\RegionSettingsSource::class,
+                'shared' => true,
+                'autowire' => true,
+            ],
+            \Thallo\Core\Content\Palette\Sources\LayoutSettingsSource::class => [
+                'class' => \Thallo\Core\Content\Palette\Sources\LayoutSettingsSource::class,
+                'shared' => true,
+                'autowire' => true,
+            ],
+            \Thallo\Core\Content\Palette\Sources\StyleClassesSource::class => [
+                'class' => \Thallo\Core\Content\Palette\Sources\StyleClassesSource::class,
+                'shared' => true,
+                'autowire' => true,
+            ],
+            \Thallo\Core\Content\Palette\PaletteDocumentSources::class => [
+                'shared' => true,
+                'factory' => [self::class, 'makePaletteDocumentSources'],
+            ],
+            \Thallo\Core\Content\Palette\PaletteCacheEffects::class => [
+                'class' => \Thallo\Core\Content\Palette\PaletteCacheEffects::class,
+                'shared' => true,
+                'autowire' => true,
+            ],
+            \Thallo\Core\Content\Palette\PaletteReplaceService::class => [
+                'class' => \Thallo\Core\Content\Palette\PaletteReplaceService::class,
+                'shared' => true,
+                'autowire' => true,
+            ],
+            \Thallo\Core\Content\Palette\PaletteReplaceRunner::class => [
+                'shared' => true,
+                'factory' => [self::class, 'makePaletteReplaceRunner'],
+            ],
             \Thallo\Core\Content\Fonts\Http\FontLibraryController::class => [
                 'class' => \Thallo\Core\Content\Fonts\Http\FontLibraryController::class,
                 'shared' => true,
@@ -2339,6 +2373,44 @@ final class CoreServiceProvider extends ServiceProvider implements \Thallo\Contr
         return new OperatorBypass(
             $container->get(ApplicationContext::class),
             $permissions instanceof PermissionManager ? $permissions : null,
+            $container->has(AuditRecorderInterface::class)
+                ? $container->get(AuditRecorderInterface::class)
+                : null,
+        );
+    }
+
+    /** What Replace rewrites (custom palette spec §4.4): every current document, never history. */
+    public static function makePaletteDocumentSources(
+        ContainerInterface $container,
+    ): \Thallo\Core\Content\Palette\PaletteDocumentSources {
+        return new \Thallo\Core\Content\Palette\PaletteDocumentSources(
+            $container->get(\Thallo\Core\Content\Blocks\Sources\EntryDraftsSource::class),
+            $container->get(\Thallo\Core\Content\Blocks\Sources\PublishedEntriesSource::class),
+            $container->get(\Thallo\Core\Content\Blocks\Sources\RegionsSource::class),
+            $container->get(\Thallo\Core\Content\Blocks\Sources\SavedSectionsSource::class),
+            $container->get(\Thallo\Core\Content\Blocks\Sources\LayoutsSource::class),
+            $container->get(\Thallo\Core\Content\Palette\Sources\RegionSettingsSource::class),
+            $container->get(\Thallo\Core\Content\Palette\Sources\LayoutSettingsSource::class),
+            $container->get(\Thallo\Core\Content\Palette\Sources\StyleClassesSource::class),
+        );
+    }
+
+    /** The replace job's runner (custom palette spec §4.4); its audit entry and event are optional. */
+    public static function makePaletteReplaceRunner(
+        ContainerInterface $container,
+    ): \Thallo\Core\Content\Palette\PaletteReplaceRunner {
+        return new \Thallo\Core\Content\Palette\PaletteReplaceRunner(
+            $container->get(\Glueful\Database\Connection::class),
+            $container->get(\Thallo\Core\Content\Palette\PaletteJobRepository::class),
+            $container->get(\Thallo\Core\Content\Palette\PaletteDocumentSources::class),
+            $container->get(\Thallo\Core\Content\Palette\PaletteFence::class),
+            $container->get(\Thallo\Core\Content\Palette\PaletteState::class),
+            $container->get(\Thallo\Core\Content\Palette\PaletteNormalizer::class),
+            $container->get(\Thallo\Core\Content\Palette\ColorTokenWalker::class),
+            $container->get(\Thallo\Core\Content\Palette\BrandColorUsage::class),
+            $container->get(\Thallo\Core\Settings\GeneralSettings::class),
+            $container->get(\Thallo\Core\Content\Palette\PaletteCacheEffects::class),
+            $container->has(EventService::class) ? $container->get(EventService::class) : null,
             $container->has(AuditRecorderInterface::class)
                 ? $container->get(AuditRecorderInterface::class)
                 : null,

@@ -23,6 +23,8 @@ final class PaletteJob
         public readonly ?string $createdBy = null,
         public readonly ?string $heartbeatAt = null,
         public readonly ?int $completedGeneration = null,
+        public readonly ?string $createdAt = null,
+        public readonly ?string $finishedAt = null,
     ) {
     }
 }

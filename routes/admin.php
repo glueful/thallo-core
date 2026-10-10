@@ -211,6 +211,17 @@ $router->group(['prefix' => '/v1/admin'], function (Router $router): void {
         ->middleware('content_permission:content.manage');
         $router->post('/appearance/palette/preview', [\Thallo\Core\Content\Palette\Http\PaletteController::class, 'preview'])
         ->middleware('content_permission:content.manage');
+        $router->post('/appearance/palette/brand/{slot}/replace', [\Thallo\Core\Content\Palette\Http\PaletteController::class, 'replace'])
+        ->where('slot', '[123]')
+        ->middleware('content_permission:content.manage');
+        $router->get('/appearance/palette/jobs', [\Thallo\Core\Content\Palette\Http\PaletteController::class, 'jobs'])
+        ->middleware('content_permission:content.manage');
+        $router->get('/appearance/palette/jobs/{id}', [\Thallo\Core\Content\Palette\Http\PaletteController::class, 'job'])
+        ->middleware('content_permission:content.manage');
+        $router->post('/appearance/palette/jobs/{id}/cancel', [\Thallo\Core\Content\Palette\Http\PaletteController::class, 'cancel'])
+        ->middleware('content_permission:content.manage');
+        $router->post('/appearance/palette/jobs/{id}/resume', [\Thallo\Core\Content\Palette\Http\PaletteController::class, 'resume'])
+        ->middleware('content_permission:content.manage');
 
     // The font library (block typeface spec §2, §4.6): any editor reads the picker; usage and every
     // change need content.manage.

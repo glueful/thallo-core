@@ -136,6 +136,26 @@ class LayoutRepository
             ]) >= 1);
     }
 
+    /**
+     * A layout's frame settings, only while it is still at the version read (custom palette spec
+     * §4.4: Replace rewrites a frame's colours): false when it moved on or became a tombstone.
+     *
+     * @param array<string,mixed> $settings
+     */
+    public function persistSettings(string $surface, string $target, int $expected, array $settings): bool
+    {
+        return $this->lock->within($surface, $target, fn (): bool => $this->db->table('layouts')
+            ->where('surface', '=', $surface)
+            ->where('target', '=', $target)
+            ->where('lock_version', '=', $expected)
+            ->whereNotNull('blocks')
+            ->update([
+                'settings' => json_encode((object) $settings, JSON_THROW_ON_ERROR),
+                'lock_version' => $expected + 1,
+                'updated_at' => gmdate('Y-m-d H:i:s'),
+            ]) >= 1);
+    }
+
     /** @return list<array<string,mixed>> every layout that is not a tombstone */
     public function live(): array
     {

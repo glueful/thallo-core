@@ -171,6 +171,8 @@ final class PaletteJobRepository
             isset($row['created_by']) ? (string) $row['created_by'] : null,
             isset($row['heartbeat_at']) ? (string) $row['heartbeat_at'] : null,
             isset($row['completed_generation']) ? (int) $row['completed_generation'] : null,
+            isset($row['created_at']) ? (string) $row['created_at'] : null,
+            isset($row['finished_at']) ? (string) $row['finished_at'] : null,
         );
     }
 }
