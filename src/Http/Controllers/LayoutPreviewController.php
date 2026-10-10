@@ -36,6 +36,8 @@ use Thallo\Core\Http\DTOs\LayoutSessionData;
  */
 final class LayoutPreviewController
 {
+    use \Thallo\Core\Content\Palette\CarriesPaletteFields;
+
     use ResolvesPreviewKey;
 
     public function __construct(
@@ -51,6 +53,8 @@ final class LayoutPreviewController
         private readonly ?LayoutTargets $targets = null,
         /** The target's content type, for its name and its fields' labels; null names none. */
         private readonly ?ContentTypeRepository $types = null,
+        /** The palette fields its responses carry (custom palette plan Task 12). */
+        private readonly ?\Thallo\Core\Content\Palette\PaletteResponseFields $paletteFields = null,
     ) {
     }
 
@@ -83,7 +87,7 @@ final class LayoutPreviewController
             return Response::validation(['surface' => "unknown layout surface '{$input->surface}'"]);
         }
         $target = $this->targets?->find($surface, $input->target) ?? self::target($surface, $input->target);
-        $row = $this->layouts->find($input->surface, $input->target);
+        [$row, $palette] = $this->paletteLoad(fn (): ?array => $this->layouts->find($input->surface, $input->target));
         // A closed target opens only while its pages are off the site and it keeps a saved layout — to
         // remove it (Save and apply stay refused). A target closed for missing blocks is still live
         // and opens nothing, as before; with no layout there is nothing to open.
@@ -153,7 +157,7 @@ final class LayoutPreviewController
             // Why this layout's pages are off the site, when they are: it can be removed, not edited.
             'closed' => $closed,
             'style_generation' => $this->styleClasses?->snapshot()->generation ?? 0,
-        ], 'Layout editing session opened.');
+        ] + $palette, 'Layout editing session opened.');
     }
 
     /** POST /v1/admin/layouts/preview/apply */

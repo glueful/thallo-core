@@ -39,6 +39,8 @@ use Thallo\Core\Support\ActorHelper;
  */
 final class SavedSectionController
 {
+    use \Thallo\Core\Content\Palette\CarriesPaletteFields;
+
     private const MAX_NAME = 120;
     private const MAX_CATEGORY = 60;
     private const MAX_DESCRIPTION = 500;
@@ -60,6 +62,8 @@ final class SavedSectionController
         /** The palette fence (custom palette spec §4.3); null = unfenced. */
         private readonly ?\Thallo\Core\Content\Palette\PaletteFence $fence = null,
         private readonly ?\Thallo\Core\Content\Palette\PaletteNormalizer $normalizer = null,
+        /** The palette fields its responses carry (custom palette plan Task 12). */
+        private readonly ?\Thallo\Core\Content\Palette\PaletteResponseFields $paletteFields = null,
     ) {
     }
 
@@ -141,7 +145,7 @@ final class SavedSectionController
             );
         };
         try {
-            $id = $this->fence === null || $this->normalizer === null
+            [$id, $palette] = $this->paletteSave(fn (): string => $this->fence === null || $this->normalizer === null
                 ? $store($block)
                 : $this->fence->write(
                     fn (\Thallo\Core\Content\Palette\PaletteSnapshot $s): \Thallo\Core\Content\Palette\Normalized
@@ -152,7 +156,7 @@ final class SavedSectionController
                             [],
                         ),
                     fn (array $doc): string => $store((array) ($doc['blocks'][0] ?? $block)),
-                );
+                ), $input->palette_through);
         } catch (\Thallo\Core\Content\Palette\PaletteRefusal $e) {
             return \Thallo\Core\Content\Palette\PaletteRefusalResponse::from($e);
         } catch (StyleClassLocked $e) {
@@ -164,7 +168,7 @@ final class SavedSectionController
         } catch (StyleClassArchived $e) {
             return Response::validation(['block' => $e->getMessage()]);
         }
-        return Response::created(['section' => $this->entry($id)], 'Section saved.');
+        return Response::created(['section' => $this->entry($id)] + $palette, 'Section saved.');
     }
 
     /** PATCH /v1/admin/saved-sections/{id} */

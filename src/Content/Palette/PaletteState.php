@@ -110,6 +110,34 @@ final class PaletteState
         return $this->heldAtLevel !== null && $this->db->withinTransaction();
     }
 
+    /**
+     * Runs `$read` between two generation reads, again until they match (custom palette plan Task 12):
+     * every completion bumps the generation in the transaction that clears the slot, after its rewrites
+     * have committed, so equal readings mean the result reflects exactly the records at or below that
+     * generation. What every editor load returns its document with.
+     *
+     * @template T
+     * @param callable(): T $read
+     * @return array{0: T, 1: int}
+     */
+    public function consistentRead(callable $read): array
+    {
+        for ($attempt = 0; $attempt < 5; $attempt++) {
+            $this->ensureRow();
+            $before = $this->generationNow();
+            if ($this->afterSnapshot !== null) {
+                $fn = $this->afterSnapshot;
+                $this->afterSnapshot = null;
+                $fn();
+            }
+            $result = $read();
+            if ($this->generationNow() === $before) {
+                return [$result, $before];
+            }
+        }
+        throw new \RuntimeException('the palette kept changing while the document was read');
+    }
+
     /** A plain unlocked read of the generation. */
     public function generationNow(): int
     {

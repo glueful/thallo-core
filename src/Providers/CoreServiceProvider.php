@@ -1967,6 +1967,21 @@ final class CoreServiceProvider extends ServiceProvider implements \Thallo\Contr
                 'shared' => true,
                 'autowire' => true,
             ],
+            \Thallo\Core\Content\Palette\PaletteResponseFields::class => [
+                'class' => \Thallo\Core\Content\Palette\PaletteResponseFields::class,
+                'shared' => true,
+                'autowire' => true,
+            ],
+            \Thallo\Core\Content\Services\DraftRestore::class => [
+                'class' => \Thallo\Core\Content\Services\DraftRestore::class,
+                'shared' => true,
+                'autowire' => true,
+            ],
+            \Thallo\Core\Content\Palette\PaletteReplacements::class => [
+                'class' => \Thallo\Core\Content\Palette\PaletteReplacements::class,
+                'shared' => true,
+                'autowire' => true,
+            ],
             \Thallo\Core\Content\Palette\PaletteNormalizer::class => [
                 'class' => \Thallo\Core\Content\Palette\PaletteNormalizer::class,
                 'shared' => true,
@@ -1989,6 +2004,11 @@ final class CoreServiceProvider extends ServiceProvider implements \Thallo\Contr
             ],
             \Thallo\Contracts\Style\PaletteStatusReader::class => [
                 'class' => \Thallo\Core\Content\Palette\EnginePaletteStatusReader::class,
+                'shared' => true,
+                'autowire' => true,
+            ],
+            \Thallo\Contracts\Style\PaletteHistoryReader::class => [
+                'class' => \Thallo\Core\Content\Palette\EnginePaletteHistoryReader::class,
                 'shared' => true,
                 'autowire' => true,
             ],
@@ -2836,6 +2856,16 @@ final class CoreServiceProvider extends ServiceProvider implements \Thallo\Contr
                 'shared' => true,
                 'autowire' => true,
             ],
+            \Thallo\Core\Content\Console\PrunePaletteHistoryCommand::class => [
+                'class' => \Thallo\Core\Content\Console\PrunePaletteHistoryCommand::class,
+                'shared' => true,
+                'autowire' => true,
+            ],
+            \Thallo\Core\Content\Palette\PaletteHistoryPruner::class => [
+                'class' => \Thallo\Core\Content\Palette\PaletteHistoryPruner::class,
+                'shared' => true,
+                'autowire' => true,
+            ],
             \Thallo\Core\Content\Console\PruneFormSubmissionsCommand::class => [
                 'class' => \Thallo\Core\Content\Console\PruneFormSubmissionsCommand::class,
                 'shared' => true,
@@ -3457,6 +3487,7 @@ final class CoreServiceProvider extends ServiceProvider implements \Thallo\Contr
             ResyncCommand::class,
             \Thallo\Core\Content\Console\MediaUsageRebuildCommand::class,
             PruneVersionsCommand::class,
+            \Thallo\Core\Content\Console\PrunePaletteHistoryCommand::class,
             \Thallo\Core\Content\Console\ListBlockTypesCommand::class,
             \Thallo\Core\Content\Console\PruneFormSubmissionsCommand::class,
             \Thallo\Core\Capabilities\Console\CapabilitiesCommand::class,

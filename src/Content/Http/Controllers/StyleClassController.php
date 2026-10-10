@@ -40,6 +40,8 @@ use Thallo\Core\Http\DTOs\ErrorResponse;
  */
 final class StyleClassController
 {
+    use \Thallo\Core\Content\Palette\CarriesPaletteFields;
+
     public function __construct(
         private readonly StyleClassRepository $classes,
         private readonly StyleClassProvider $provider,
@@ -52,6 +54,8 @@ final class StyleClassController
         /** The palette fence (custom palette spec §4.3); null = unfenced. */
         private readonly ?\Thallo\Core\Content\Palette\PaletteFence $fence = null,
         private readonly ?\Thallo\Core\Content\Palette\PaletteNormalizer $normalizer = null,
+        /** The palette fields its responses carry (custom palette plan Task 12). */
+        private readonly ?\Thallo\Core\Content\Palette\PaletteResponseFields $paletteFields = null,
     ) {
     }
 
@@ -91,9 +95,11 @@ final class StyleClassController
     {
         $this->provider->refresh();
         $snapshot = $this->provider->snapshot();
-        return Response::success([
+        // The classes read consistently with the palette generation (custom palette plan Task 12).
+        [$classes, $palette] = $this->paletteLoad(fn (): array => $this->classes->all());
+        return Response::success($palette + [
             'generation' => $snapshot->generation,
-            'style_classes' => $this->classes->all(),
+            'style_classes' => $classes,
         ], 'Style classes retrieved.');
     }
 
@@ -107,11 +113,15 @@ final class StyleClassController
             return Response::validation($errors);
         }
         try {
-            $class = $this->fencedStyle($style, null, fn (array $style): array => $this->classes->create([
-                'name' => $input->name,
-                'description' => $input->description,
-                'style' => $style,
-            ]));
+            [$class, $palette] = $this->paletteSave(fn (): array => $this->fencedStyle(
+                $style,
+                null,
+                fn (array $style): array => $this->classes->create([
+                    'name' => $input->name,
+                    'description' => $input->description,
+                    'style' => $style,
+                ]),
+            ), $input->palette_through);
         } catch (\Thallo\Core\Content\Palette\PaletteRefusal $e) {
             return \Thallo\Core\Content\Palette\PaletteRefusalResponse::from($e);
         } catch (StyleClassNameTaken $e) {
@@ -119,7 +129,7 @@ final class StyleClassController
         } catch (\InvalidArgumentException $e) {
             return Response::validation(['name' => $e->getMessage()]);
         }
-        return Response::created(['style_class' => $class], 'Style class created.');
+        return Response::created(['style_class' => $class] + $palette, 'Style class created.');
     }
 
     #[ApiOperation(summary: 'One style class', tags: ['Thallo Admin'])]
@@ -127,11 +137,11 @@ final class StyleClassController
     #[ApiResponse(404, schema: ErrorResponse::class, envelope: false, description: 'Unknown id.')]
     public function show(Request $request, string $id): Response
     {
-        $class = $this->classes->find($id);
+        [$class, $palette] = $this->paletteLoad(fn (): ?array => $this->classes->find($id));
         if ($class === null) {
             return Response::notFound('Style class not found.');
         }
-        return Response::success(['style_class' => $class], 'Style class retrieved.');
+        return Response::success(['style_class' => $class] + $palette, 'Style class retrieved.');
     }
 
     #[ApiOperation(
@@ -168,14 +178,14 @@ final class StyleClassController
             $changes['style'] = $style;
         }
         try {
-            $class = isset($changes['style'])
+            [$class, $palette] = $this->paletteSave(fn (): array => isset($changes['style'])
                 ? $this->fencedStyle(
                     $changes['style'],
                     $id,
                     fn (array $style): array => $this->classes
                         ->update($id, $input->version, ['style' => $style] + $changes),
                 )
-                : $this->classes->update($id, $input->version, $changes);
+                : $this->classes->update($id, $input->version, $changes), $input->palette_through);
         } catch (\Thallo\Core\Content\Palette\PaletteRefusal $e) {
             return \Thallo\Core\Content\Palette\PaletteRefusalResponse::from($e);
         } catch (StyleClassNotFound) {
@@ -190,7 +200,7 @@ final class StyleClassController
         } catch (StyleClassNameTaken | \InvalidArgumentException $e) {
             return Response::validation(['name' => $e->getMessage()]);
         }
-        return Response::success(['style_class' => $class], 'Style class updated.');
+        return Response::success(['style_class' => $class] + $palette, 'Style class updated.');
     }
 
     #[ApiOperation(

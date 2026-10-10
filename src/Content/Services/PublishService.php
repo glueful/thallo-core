@@ -142,6 +142,10 @@ final class PublishService
                     );
                     $this->versions->pin($entryUuid, $locale, $versionUuid, $actor);
                     $this->references->rebuildForEntry($entryUuid, $schema, $clean, $locale);
+                    // A publish is the draft's new baseline: its restore basis goes (custom palette §4.5).
+                    db($this->context)->table('entry_drafts')
+                        ->where('entry_uuid', '=', $entryUuid)->where('locale', '=', $locale)
+                        ->update(['restore_basis' => null]);
                     return $versionUuid;
                 }
             );

@@ -96,10 +96,11 @@ final class LayoutSaver
             }
             $clean = $this->validator->validate($surface, $target, $blocks, $settings, $stored['blocks'] ?? []);
             if ($this->state !== null && $this->normalizer !== null && $this->state->heldInThisTransaction()) {
+                $held = $this->state->lock();
                 $normalized = $this->normalizer->normalize(
                     ColorTokenWalker::KIND_LAYOUT,
                     ['blocks' => $clean['blocks'], 'settings' => $clean['settings']],
-                    $this->state->lock(),
+                    $held,
                     $this->normalizer->basisOf(ColorTokenWalker::KIND_LAYOUT, null, [
                         'blocks' => $stored['blocks'] ?? [],
                         'settings' => $stored['settings'] ?? [],
@@ -108,6 +109,7 @@ final class LayoutSaver
                 $clean['blocks'] = $normalized->doc['blocks'];
                 $clean['settings'] = $normalized->doc['settings'];
                 $this->rewrites = $normalized->rewrites;
+                $this->fence?->report($normalized, $held);
             }
             $version = $this->layouts->saveExpected(
                 $surface,

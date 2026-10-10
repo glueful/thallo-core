@@ -33,6 +33,9 @@ final class SaveDraftData implements RequestData
          */
         #[Rule('nullable|integer')]
         public readonly ?int $preview_revision = null,
+        /** The editor's palette ledger boundary (custom palette plan Task 12): records newer than it are sent. */
+        #[Rule('nullable|integer')]
+        public readonly ?int $palette_through = null,
     ) {
     }
 }

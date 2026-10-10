@@ -35,6 +35,9 @@ final class SaveSectionData implements RequestData
         public readonly ?string $surface = null,
         #[Rule('string')]
         public readonly ?string $target = null,
+        /** The editor's palette ledger boundary (custom palette plan Task 12): records newer than it are sent. */
+        #[Rule('nullable|integer')]
+        public readonly ?int $palette_through = null,
     ) {
     }
 }

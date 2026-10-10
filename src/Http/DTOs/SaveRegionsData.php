@@ -25,6 +25,9 @@ final class SaveRegionsData implements RequestData
         /** @var array{epoch: string, revision: int}|null */
         #[Rule('nullable|array')]
         public readonly ?array $preview_revision = null,
+        /** The editor's palette ledger boundary (custom palette plan Task 12): records newer than it are sent. */
+        #[Rule('nullable|integer')]
+        public readonly ?int $palette_through = null,
     ) {
     }
 }

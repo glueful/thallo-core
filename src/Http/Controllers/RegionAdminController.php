@@ -26,6 +26,8 @@ use Glueful\Routing\Attributes\ApiResponse;
  */
 final class RegionAdminController
 {
+    use \Thallo\Core\Content\Palette\CarriesPaletteFields;
+
     public function __construct(
         private readonly ApplicationContext $context,
         private readonly RegionRepository $regions,
@@ -34,6 +36,8 @@ final class RegionAdminController
         private readonly ?\Thallo\Contracts\Style\StyleClassProvider $styleClasses = null,
         private readonly ?\Thallo\Core\Content\Regions\RegionSaver $saver = null,
         private readonly ?\Thallo\Core\Content\Preview\RegionPreviewStore $previews = null,
+        /** The palette fields its responses carry (custom palette plan Task 12). */
+        private readonly ?\Thallo\Core\Content\Palette\PaletteResponseFields $paletteFields = null,
     ) {
     }
 
@@ -48,9 +52,16 @@ final class RegionAdminController
     #[ApiResponse(200, description: 'Regions with palettes.')]
     public function index(): Response
     {
+        [$rows, $palette] = $this->paletteLoad(function (): array {
+            $rows = [];
+            foreach (RegionDefinitions::slugs() as $slug) {
+                $rows[$slug] = $this->regions->find($slug);
+            }
+            return $rows;
+        });
         $out = [];
         foreach (RegionDefinitions::slugs() as $slug) {
-            $row = $this->regions->find($slug);
+            $row = $rows[$slug];
             $out[] = [
                 'slug' => $slug,
                 'blocks' => $row['blocks'] ?? [],
@@ -62,7 +73,7 @@ final class RegionAdminController
                 'lock_version' => $row['lock_version'] ?? null,
             ];
         }
-        return Response::success(['regions' => $out], 'Regions retrieved.');
+        return Response::success(['regions' => $out] + $palette, 'Regions retrieved.');
     }
 
     /** PUT /v1/admin/regions/{slug} */
@@ -89,11 +100,11 @@ final class RegionAdminController
         if (!is_array($input->expected) || !self::namesBoth($input->expected)) {
             return Response::validation(['expected' => 'both regions\' versions are required']);
         }
-        $result = $this->runSave(
+        [$result, $palette] = $this->paletteSave(fn (): array|Response => $this->runSave(
             [$slug => ['blocks' => $input->blocks, 'settings' => $input->settings]],
             $input->expected,
             $slug,
-        );
+        ), $input->palette_through);
         if ($result instanceof Response) {
             return $result;
         }
@@ -109,7 +120,7 @@ final class RegionAdminController
                 'settings_keys' => RegionDefinitions::SETTINGS_KEYS[$slug],
                 'style_capabilities' => RegionStyle::CAPABILITIES,
             ],
-        ], 'Region saved.');
+        ] + $palette, 'Region saved.');
     }
 
     /** PUT /v1/admin/regions */
@@ -145,7 +156,10 @@ final class RegionAdminController
             }
             $posted[$slug] = $region;
         }
-        $committed = $this->runSave($posted, $input->expected);
+        [$committed, $palette] = $this->paletteSave(
+            fn (): array|Response => $this->runSave($posted, $input->expected),
+            $input->palette_through,
+        );
         if ($committed instanceof Response) {
             return $committed;
         }
@@ -166,7 +180,7 @@ final class RegionAdminController
                 $committed,
             ),
             'preview_cleared' => $cleared,
-        ], 'Regions saved.');
+        ] + $palette, 'Regions saved.');
     }
 
     /**

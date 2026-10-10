@@ -17,6 +17,13 @@ final class DraftSaveResultData implements ResponseData
          *      (custom palette spec §4.5): each colour a running replacement mapped, located by block id.
          */
         public readonly array $palette_rewrites,
+        /** The palette generation the save held (custom palette plan Task 12). */
+        public readonly int $palette_generation,
+        /**
+         * @var array<string,mixed> The complete batch of replacement records newer than the request's
+         *      `palette_through`, bounded by `palette_generation` — or `{expired: true}`.
+         */
+        public readonly array $palette_replacements,
     ) {
     }
 }

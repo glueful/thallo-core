@@ -24,6 +24,9 @@ final class UpdateRegionData implements RequestData
         /** @var array<string, ?int> BOTH regions' lock_version as loaded (regions-stage spec §4.5). */
         #[Rule('array')]
         public readonly ?array $expected = null,
+        /** The editor's palette ledger boundary (custom palette plan Task 12): records newer than it are sent. */
+        #[Rule('nullable|integer')]
+        public readonly ?int $palette_through = null,
     ) {
     }
 }

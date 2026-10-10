@@ -109,6 +109,7 @@ final class RegionSaver
                     $clean[$slug]['blocks'] = $normalized->doc['blocks'];
                     $clean[$slug]['settings'] = $normalized->doc['settings'];
                     array_push($this->rewrites, ...$normalized->rewrites);
+                    $this->fence?->report($normalized, $palette);
                 }
             }
 

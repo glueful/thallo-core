@@ -33,6 +33,7 @@ use Thallo\Core\Http\DTOs\RegionSessionData;
 final class RegionPreviewController
 {
     use ResolvesPreviewKey;
+    use \Thallo\Core\Content\Palette\CarriesPaletteFields;
 
     public function __construct(
         private readonly ApplicationContext $context,
@@ -44,6 +45,8 @@ final class RegionPreviewController
         private readonly HomepageEntryProvider $homepage,
         private readonly LocaleManagerInterface $locales,
         private readonly ?StyleClassProvider $styleClasses = null,
+        /** The palette fields its responses carry (custom palette plan Task 12). */
+        private readonly ?\Thallo\Core\Content\Palette\PaletteResponseFields $paletteFields = null,
     ) {
     }
 
@@ -66,15 +69,19 @@ final class RegionPreviewController
         $key = $this->previewKey($this->context);
         $token = RegionPreviewToken::mint($session, $page, $this->defaultLocale(), $exp, $key);
 
-        $baseline = [];
-        foreach (RegionDefinitions::slugs() as $slug) {
-            $row = $this->regions->find($slug);
-            $baseline[$slug] = [
-                'blocks' => $row['blocks'] ?? [],
-                'settings' => $row['settings'] ?? [],
-                'lock_version' => $row['lock_version'] ?? null,
-            ];
-        }
+        // Both regions read consistently with the palette generation (custom palette plan Task 12).
+        [$baseline, $palette] = $this->paletteLoad(function (): array {
+            $baseline = [];
+            foreach (RegionDefinitions::slugs() as $slug) {
+                $row = $this->regions->find($slug);
+                $baseline[$slug] = [
+                    'blocks' => $row['blocks'] ?? [],
+                    'settings' => $row['settings'] ?? [],
+                    'lock_version' => $row['lock_version'] ?? null,
+                ];
+            }
+            return $baseline;
+        });
         $this->store->putBaseline($session, $baseline, $exp);
 
         $renderEnabled = app($this->context, CapabilityRegistry::class)->isEnabled('thallo.render');
@@ -91,7 +98,7 @@ final class RegionPreviewController
                 'footer' => ($presentation['footer'] ?? null) === 'hidden',
             ],
             'style_generation' => $this->styleClasses?->snapshot()->generation ?? 0,
-        ], 'Regions stage session opened.');
+        ] + $palette, 'Regions stage session opened.');
     }
 
     /** POST /v1/admin/regions/preview/apply */

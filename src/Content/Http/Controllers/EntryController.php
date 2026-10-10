@@ -12,6 +12,7 @@ use Thallo\Core\Content\Http\DTOs\Requests\EntryListQuery;
 use Thallo\Core\Content\Http\DTOs\Responses\Entries\EntryListData;
 use Thallo\Core\Content\Http\DTOs\ApplyPreviewData;
 use Thallo\Core\Content\Http\DTOs\CopyLocaleData;
+use Thallo\Core\Content\Http\DTOs\RestoreDraftData;
 use Thallo\Core\Content\Http\DTOs\SaveDraftData;
 use Thallo\Core\Content\Http\DTOs\Responses\Entries\DraftResultData;
 use Thallo\Core\Content\Http\DTOs\Responses\Entries\DraftSaveResultData;
@@ -82,6 +83,9 @@ final class EntryController
         private readonly ?StyleClassProvider $styleClasses = null,
         /** Whether the entry renders through its type's layout (type layouts spec §6.3). */
         private readonly ?\Thallo\Core\Content\Layouts\EntryLayoutStatus $layouts = null,
+        /** The palette fields editor responses carry (custom palette plan Task 12). */
+        private readonly ?\Thallo\Core\Content\Palette\PaletteResponseFields $palette = null,
+        private readonly ?\Thallo\Core\Content\Services\DraftRestore $restorer = null,
     ) {
     }
 
@@ -231,7 +235,9 @@ final class EntryController
         if (($errors = $this->locales->validate($locale)) !== []) {
             return Response::validation($errors);
         }
-        $draft = $this->entries->findDraft($uuid, $locale);
+        // The draft and the palette generation read consistently (custom palette plan Task 12).
+        [$draft, $paletteFields] = $this->palette?->forLoad(fn () => $this->entries->findDraft($uuid, $locale))
+            ?? [$this->entries->findDraft($uuid, $locale), []];
         if ($draft !== null && $this->schemaProjector !== null) {
             $entry = $this->entries->findEntry($uuid);
             if ($entry !== null) {
@@ -244,7 +250,7 @@ final class EntryController
         }
         return $draft === null
             ? Response::notFound('Draft not found.')
-            : Response::success(['draft' => $draft], 'Draft retrieved.');
+            : Response::success(['draft' => $draft] + $paletteFields, 'Draft retrieved.');
     }
 
     /**
@@ -307,9 +313,9 @@ final class EntryController
             return Response::validation($e->errors());
         }
         $type = $this->types->findByUuid((string) $entry['content_type_uuid']);
-        $rewrites = [];
+        $outcome = null;
         try {
-            $rewrites = $this->entries->saveDraft(
+            $outcome = $this->entries->saveDraft(
                 $uuid,
                 $locale,
                 $clean,
@@ -341,9 +347,69 @@ final class EntryController
         return Response::success([
             'draft' => $this->entries->findDraft($uuid, $locale),
             'preview_cleared' => $cleared,
-            // What the palette normalised (custom palette spec §4.5), for the editor to adopt.
+        ] + $this->paletteFields(
+            $outcome?->rewrites ?? [],
+            $input->palette_through,
+            $outcome?->generation,
+        ), 'Draft saved.');
+    }
+
+    /** POST /v1/admin/entries/{uuid}/draft/{locale}/restore */
+    #[ApiOperation(
+        summary: 'Restore a version into the draft',
+        description: 'Loads one of this entry\'s retained versions by id, on the server, and saves it as the '
+            . 'draft (its brand colours stay trusted for later saves). Requires `content.edit`.',
+        tags: ['Thallo Admin'],
+    )]
+    #[ApiResponse(200, description: 'The restored draft, with the palette fields.')]
+    #[ApiResponse(404, schema: ErrorResponse::class, envelope: false, description: 'Not this entry\'s version.')]
+    #[ApiResponse(409, schema: ErrorResponse::class, envelope: false, description: 'Stale draft.')]
+    #[ApiResponse(422, schema: ErrorResponse::class, envelope: false, description: 'Palette refusal.')]
+    public function restoreDraft(RestoreDraftData $input, Request $request, string $uuid, string $locale): Response
+    {
+        if ($this->restorer === null) {
+            return Response::error('Restore is unavailable.', 503);
+        }
+        try {
+            $result = $this->restorer->restore(
+                $uuid,
+                $locale,
+                $input->version_uuid,
+                $input->lock_version,
+                $this->actor($request),
+            );
+        } catch (\Thallo\Core\Content\Services\VersionNotFound) {
+            return Response::notFound('Version not found.');
+        } catch (\Thallo\Core\Content\Palette\PaletteRefusal $e) {
+            return \Thallo\Core\Content\Palette\PaletteRefusalResponse::from($e);
+        } catch (OptimisticLockException) {
+            return Response::error('Draft was modified by another writer.', Response::HTTP_CONFLICT, [
+                'code' => 'STALE_DRAFT',
+                'current' => $this->entries->findDraft($uuid, $locale),
+            ]);
+        } catch (ValidationException $e) {
+            return Response::validation($e->errors());
+        }
+        $outcome = $result['outcome'];
+        return Response::success([
+            'draft' => ['fields' => $result['fields'], 'lock_version' => $result['lock_version']],
+        ] + $this->paletteFields($outcome->rewrites, $input->palette_through, $outcome->generation), 'Draft restored.');
+    }
+
+    /**
+     * The palette fields a save or restore response carries; without the palette services (minimal
+     * wiring) an empty, complete batch at generation 0.
+     *
+     * @param list<array{location: string, from: string, to: string}> $rewrites
+     * @return array<string,mixed>
+     */
+    private function paletteFields(array $rewrites, ?int $through, ?int $held): array
+    {
+        return $this->palette?->forSave($rewrites, $through, $held) ?? [
             'palette_rewrites' => $rewrites,
-        ], 'Draft saved.');
+            'palette_generation' => 0,
+            'palette_replacements' => ['after' => 0, 'through' => 0, 'records' => []],
+        ];
     }
 
     /**

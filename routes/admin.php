@@ -203,6 +203,9 @@ $router->group(['prefix' => '/v1/admin'], function (Router $router): void {
         $router->get('/appearance/palette/brand/{slot}/usage', [\Thallo\Core\Content\Palette\Http\PaletteController::class, 'usage'])
         ->where('slot', '[123]')
         ->middleware('content_permission:content.manage');
+    // The completed replacements an editor is missing (custom palette spec §5.3): the style schema's read rule.
+        $router->get('/appearance/palette/replacements', [\Thallo\Core\Content\Palette\Http\PaletteController::class, 'replacements'])
+        ->middleware('content_permission:content.edit,content.manage,templates.manage,styles.manage');
 
     // The font library (block typeface spec §2, §4.6): any editor reads the picker; usage and every
     // change need content.manage.
@@ -255,6 +258,10 @@ $router->group(['prefix' => '/v1/admin'], function (Router $router): void {
         ->middleware('content_permission:content.edit');
 
         $router->delete('/entries/{uuid}/draft/{locale}', [EntryController::class, 'discardDraft'])
+        ->middleware('content_permission:content.edit');
+
+        // Restore a retained version into the draft on the server (custom palette spec §4.5).
+        $router->post('/entries/{uuid}/draft/{locale}/restore', [EntryController::class, 'restoreDraft'])
         ->middleware('content_permission:content.edit');
 
         $router->delete('/entries/{uuid}', [EntryController::class, 'destroy'])

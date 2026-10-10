@@ -22,6 +22,9 @@ final class StyleClassData implements RequestData
         public readonly ?string $description = null,
         #[Rule('array')]
         public readonly array $style = [],
+        /** The editor's palette ledger boundary (custom palette plan Task 12): records newer than it are sent. */
+        #[Rule('nullable|integer')]
+        public readonly ?int $palette_through = null,
     ) {
     }
 }

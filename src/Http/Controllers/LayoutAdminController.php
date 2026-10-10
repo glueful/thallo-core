@@ -33,6 +33,8 @@ use Thallo\Core\Support\ActorHelper;
  */
 final class LayoutAdminController
 {
+    use \Thallo\Core\Content\Palette\CarriesPaletteFields;
+
     use ResolvesPreviewKey;
 
     public function __construct(
@@ -46,6 +48,8 @@ final class LayoutAdminController
         private readonly ?\Thallo\Contracts\Authorization\PermissionRequirementAuthority $authority = null,
         /** The targets as the site can use them; null reads the surface's own. */
         private readonly ?LayoutTargets $targets = null,
+        /** The palette fields its responses carry (custom palette plan Task 12). */
+        private readonly ?\Thallo\Core\Content\Palette\PaletteResponseFields $paletteFields = null,
     ) {
     }
 
@@ -175,14 +179,14 @@ final class LayoutAdminController
             ? ['epoch' => $pair['epoch'], 'revision' => $pair['revision']]
             : null;
         try {
-            $saved = $this->saver->save(
+            [$saved, $palette] = $this->paletteSave(fn (): array => $this->saver->save(
                 $claims,
                 is_array($input->layout['blocks'] ?? null) ? array_values($input->layout['blocks']) : [],
                 is_array($input->layout['settings'] ?? null) ? $input->layout['settings'] : [],
                 $input->expected_lock_version,
                 $pair,
                 ActorHelper::uuidFromRequest($request),
-            );
+            ), $input->palette_through);
         } catch (\Thallo\Core\Content\Palette\PaletteRefusal $e) {
             return \Thallo\Core\Content\Palette\PaletteRefusalResponse::from($e);
         } catch (LayoutVersionConflict $e) {
@@ -198,7 +202,7 @@ final class LayoutAdminController
         } catch (StyleClassArchived $e) {
             return Response::validation(['blocks' => $e->getMessage()]);
         }
-        return Response::success($saved, 'Layout saved.');
+        return Response::success($saved + $palette, 'Layout saved.');
     }
 
     /** DELETE /v1/admin/layouts/{surface}/{target} */
