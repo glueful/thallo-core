@@ -10,7 +10,7 @@ final class FileLock
     /** @return resource|null */
     public static function exclusive(string $path, bool $block = true)
     {
-        $h = fopen($path, 'c');
+        $h = self::open($path);
         if ($h === false) {
             throw new \RuntimeException("Cannot open lock {$path}");
         }
@@ -24,13 +24,30 @@ final class FileLock
     /** @return resource|null */
     public static function shared(string $path)
     {
-        $h = @fopen($path, 'c');
+        $h = self::open($path);
         if ($h === false) {
             return null;
         }
         if (!flock($h, LOCK_SH | LOCK_NB)) {
             fclose($h);
             return null;
+        }
+        return $h;
+    }
+
+    /**
+     * Opens (creating if needed) a lock file. Two users in one group share these files — PHP-FPM and
+     * the update runner — so a lock file this process creates is made group read-write; under the
+     * usual 022 umask the other user could not open it.
+     *
+     * @return resource|false
+     */
+    private static function open(string $path)
+    {
+        $new = !file_exists($path);
+        $h = @fopen($path, 'c');
+        if ($h !== false && $new) {
+            @chmod($path, 0660);
         }
         return $h;
     }
