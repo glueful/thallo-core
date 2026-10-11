@@ -182,8 +182,11 @@ final class Runner
                     'verify_web' => $this->verifyWeb($op['target']),
                     'reopen' => $this->reopen($op['id']),
                 };
-                $this->end($step);
-                $this->killPoint($step . '.done');
+                // reopen ends its own step before it records the update's outcome.
+                if ($step !== 'reopen') {
+                    $this->end($step);
+                    $this->killPoint($step . '.done');
+                }
             }
         } catch (Killed $k) {
             throw $k->cause;
@@ -433,6 +436,7 @@ final class Runner
         $this->killPoint('reopen.after-open');
         $this->releaseBarrier();
         $this->killPoint('reopen.after-release');
+        $this->end('reopen');
         $this->finish(Status::SUCCEEDED, null);
         $remove = ['rm', '-rf', $this->paths->opDir($id)];
         $this->host->run($remove, $this->paths->base, [], 600, static function (): void {
