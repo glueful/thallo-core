@@ -41,7 +41,8 @@ final class UpdateCheckCommand extends BaseCommand
         } else {
             $this->info('This install is current. When an update is published, upgrade with:');
         }
-        $this->line('  composer update && php glueful thallo:provision');
+        $this->line('  composer update glueful/thallo-core -W && php glueful thallo:provision');
+        $this->line('  php glueful queue:restart');
 
         return self::SUCCESS;
     }

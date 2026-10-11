@@ -27,7 +27,8 @@ final class UpdateStatusController
         summary: 'Update status',
         description: 'The installed glueful/thallo-core version, the newest published version this install '
             . 'may move to (from the daily Packagist check), and the release notes link. Read-only, for any '
-            . 'signed-in admin user. The upgrade is `composer update && php glueful thallo:provision`.',
+            . 'signed-in admin user. The upgrade is '
+            . '`composer update glueful/thallo-core -W && php glueful thallo:provision`, then `queue:restart`.',
         tags: ['Utilities'],
     )]
     #[ApiResponse(200, schema: UpdateStatusResultData::class, description: 'Update status.')]

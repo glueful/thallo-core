@@ -14,7 +14,8 @@ use Thallo\Contracts\Settings\SystemChannel;
  * install may move to in the system flags, and stays silent on failure: the previous result
  * stands and only `update.failed_at` records that a check did not complete. `status()` reads
  * the installed version at request time, so the notice clears the moment `composer update` has
- * run, before the next check. Never an updater: Composer runs as the deploy user, not here.
+ * run, before the next check. The notice only: updating from the admin, when an owner turns it on,
+ * is bin/thallo-updater, run by cron as the code owner — Composer never runs here.
  *
  * Flags: `update.latest` (absent when nothing newer is published), `update.checked_at`,
  * `update.failed_at`.

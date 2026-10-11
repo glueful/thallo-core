@@ -126,7 +126,8 @@ return [
     // The update notice (DISTRIBUTION.md decision 11): a daily job asks Packagist's public
     // metadata for the newest published glueful/thallo-core — a plain GET, no install
     // identifier — and administrators see a notice with the changelog link and the upgrade
-    // command. Never an updater. UPDATE_CHECK_ENABLED=false turns the check and the notice off.
+    // command; updating from the admin is `admin_updates` below. UPDATE_CHECK_ENABLED=false turns
+    // the check and the notice off.
     'update_check' => [
         'enabled' => (bool) env('UPDATE_CHECK_ENABLED', true),
         'package' => 'glueful/thallo-core',
