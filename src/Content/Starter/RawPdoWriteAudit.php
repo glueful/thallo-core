@@ -38,6 +38,8 @@ final class RawPdoWriteAudit implements StaticWriteAudit
         // The upgrade adoption: system tables only (flags, activation rows, its own record), on the
         // database provision is installing against.
         'core/src/Setup/CapabilityAdoption.php',
+        // The update backup's size estimate: pg_database_size(current_database()) — no table read.
+        'core/src/Updates/Console/UpdateBackupCommand.php',
         'packages/thallo-analytics/src/Query/AnalyticsQuery.php',
         'core/src/Content/Repositories/VersionRepository.php',
         'packages/thallo-render/src/Templates/TemplateRepository.php',
