@@ -19,6 +19,10 @@ final class ProvisionOutputs
         'bootstrap/update-guard.php',
         'storage/conversion',
         'storage/framework/composer',
+        // The file cache's entries: cached values and sessions, not code output. Like a Redis cache they
+        // stay across a rollback; what depends on the code (pages, catalog) is invalidated by tag.
+        'storage/cache/*.cache',
+        'storage/cache/*.meta',
     ];
     public const RUNNER_OWNED = [
         'vendor',
@@ -35,12 +39,15 @@ final class ProvisionOutputs
      * @return array{
      *     paths: array<string,bool>,
      *     dirs: array<string,int>,
-     *     files: array<string,array{sha256:string,mode:int}>
+     *     files: array<string,array{sha256:string,mode:int}>,
+     *     groups: array<string,int>
      * }
      */
     public static function snapshot(string $base, string $to): array
     {
-        $manifest = ['paths' => [], 'dirs' => [], 'files' => []];
+        // Groups too: PHP-FPM reads .env and public/admin through the web group, and a copy the
+        // runner makes takes the runner's own group.
+        $manifest = ['paths' => [], 'dirs' => [], 'files' => [], 'groups' => []];
         foreach (self::SNAPSHOT as $path) {
             $src = $base . '/' . $path;
             $manifest['paths'][$path] = file_exists($src);
@@ -51,6 +58,7 @@ final class ProvisionOutputs
                 $mode = fileperms($abs) & 0777;
                 self::mustMkdir($to . '/' . $rel);
                 $manifest['dirs'][$rel] = $mode;
+                $manifest['groups'][$rel] = filegroup($abs);
             }
             foreach (self::files($src, $path) as $rel => $abs) {
                 $hash = @hash_file('sha256', $abs);
@@ -62,6 +70,7 @@ final class ProvisionOutputs
                     throw new \RuntimeException("The snapshot copy of {$rel} does not match.");
                 }
                 $manifest['files'][$rel] = ['sha256' => $hash, 'mode' => fileperms($abs) & 0777];
+                $manifest['groups'][$rel] = filegroup($abs);
             }
         }
         return $manifest;
@@ -130,11 +139,15 @@ final class ProvisionOutputs
                     if (!@chmod($workDir . '/restore/' . $rel, $meta['mode'])) {
                         throw new \RuntimeException("Cannot set the mode of {$rel}.");
                     }
+                    self::restoreGroup($workDir . '/restore/' . $rel, $manifest['groups'][$rel] ?? null, $rel);
                 }
             }
             foreach (array_reverse($manifest['dirs'], true) as $rel => $mode) {
                 if ($under($rel) && !@chmod($workDir . '/restore/' . $rel, $mode)) {
                     throw new \RuntimeException("Cannot set the mode of {$rel}.");
+                }
+                if ($under($rel)) {
+                    self::restoreGroup($workDir . '/restore/' . $rel, $manifest['groups'][$rel] ?? null, $rel);
                 }
             }
             $journal->rename($workDir . '/restore/' . $path, $live, 'restore.in.' . $path);
@@ -192,6 +205,14 @@ final class ProvisionOutputs
             if ($item->isFile()) {
                 yield $rel . '/' . substr($item->getPathname(), strlen($abs) + 1) => $item->getPathname();
             }
+        }
+    }
+
+    private static function restoreGroup(string $path, ?int $gid, string $rel): void
+    {
+        clearstatcache(true, $path);
+        if ($gid !== null && filegroup($path) !== $gid && !@chgrp($path, $gid)) {
+            throw new \RuntimeException("Cannot give {$rel} back its group.");
         }
     }
 
