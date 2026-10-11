@@ -413,3 +413,222 @@ final class OperationStore
         return FileLock::withExclusive($this->paths->stateLock(), $fn);
     }
 }
+
+// ---- Barrier ----
+/**
+ * Closing the site and the barrier (spec §7). Admitted web requests and console processes hold a
+ * shared flock on admission.lock for their whole life; the runner's exclusive lock is granted only
+ * when none remains. closed.flag keeps new work out. Not final: tests reach admitAfterFirstCheck().
+ */
+class Barrier
+{
+    public function __construct(protected readonly Paths $paths)
+    {
+    }
+
+    public function isClosed(): bool
+    {
+        return is_file($this->paths->closedFlag());
+    }
+
+    public function close(): void
+    {
+        AtomicFile::write($this->paths->closedFlag(), gmdate('c') . "\n", 0644);
+    }
+
+    public function open(): void
+    {
+        @unlink($this->paths->closedFlag());
+    }
+
+    /** @return resource|null */
+    public function admit()
+    {
+        if ($this->isClosed()) {
+            return null;
+        }
+        return $this->admitAfterFirstCheck();
+    }
+
+    /** @return resource|null */
+    protected function admitAfterFirstCheck()
+    {
+        $h = FileLock::shared($this->paths->admissionLock());
+        if ($h === null) {
+            return null; // the runner holds the barrier
+        }
+        if ($this->isClosed()) {
+            FileLock::release($h);
+            return null;
+        }
+        return $h;
+    }
+
+    /** @return resource|null */
+    public function acquire(int $timeout, \Closure $now, \Closure $sleep)
+    {
+        $start = $now();
+        while (true) {
+            $h = FileLock::exclusive($this->paths->admissionLock(), false);
+            if ($h !== null) {
+                return $h;
+            }
+            if ($now() - $start >= $timeout) {
+                return null;
+            }
+            $sleep();
+        }
+    }
+}
+
+// ---- GuardResponse ----
+final class GuardResponse
+{
+    /** @param array<string,string> $headers */
+    public function __construct(public int $status, public array $headers, public string $body)
+    {
+    }
+
+    public static function json(int $status, array $data): self
+    {
+        $headers = ['Content-Type' => 'application/json', 'Cache-Control' => 'no-store'];
+        return new self($status, $headers, json_encode($data, JSON_UNESCAPED_SLASHES) ?: '{}');
+    }
+
+    public function send(): void
+    {
+        http_response_code($this->status);
+        foreach ($this->headers as $name => $value) {
+            header($name . ': ' . $value);
+        }
+        echo $this->body;
+    }
+}
+
+// ---- Guard ----
+/**
+ * The guard (spec §7), included by public/index.php and glueful before bootstrap/app.php. Plain
+ * PHP: it must work while vendor/ is being replaced. Guard routes (/_update…) never boot the
+ * application and never take the barrier; everything else is admitted or refused here.
+ */
+final class Guard
+{
+    /** @var resource|null held for the request's or process's life */
+    private static $process = null;
+    /** @var resource|null */
+    private $held = null;
+    private \Closure $sleep;
+
+    public function __construct(
+        private readonly Paths $paths,
+        private readonly OperationStore $ops,
+        private readonly Barrier $barrier,
+        ?\Closure $sleep = null,
+    ) {
+        $this->sleep = $sleep ?? static function (): void {
+            sleep(5);
+        };
+    }
+
+    public static function boot(string $base): void
+    {
+        $paths = new Paths($base);
+        $guard = new self($paths, new OperationStore($paths, static fn (): int => time()), new Barrier($paths));
+        if (PHP_SAPI === 'cli') {
+            $env = getenv();
+            $code = $guard->console($_SERVER['argv'] ?? [], is_array($env) ? $env : []);
+            if ($code !== null) {
+                exit($code);
+            }
+        } else {
+            $headers = [];
+            foreach ($_SERVER as $k => $v) {
+                if (is_string($v) && str_starts_with($k, 'HTTP_')) {
+                    $headers[strtolower(str_replace('_', '-', substr($k, 5)))] = $v;
+                }
+            }
+            $path = parse_url((string) ($_SERVER['REQUEST_URI'] ?? '/'), PHP_URL_PATH);
+            $r = $guard->web(
+                (string) ($_SERVER['REQUEST_METHOD'] ?? 'GET'),
+                is_string($path) ? $path : '/',
+                $headers,
+                (string) file_get_contents('php://input'),
+            );
+            if ($r !== null) {
+                $r->send();
+                exit;
+            }
+        }
+        self::$process = $guard->held();
+    }
+
+    /** @param array<string,string> $headers */
+    public function web(string $method, string $path, array $headers, string $body): ?GuardResponse
+    {
+        if ($path === '/_update' || str_starts_with($path, '/_update/')) {
+            return $this->route($method, $path, $headers, $body);
+        }
+        $this->held = $this->barrier->admit();
+        if ($this->held !== null) {
+            return null;
+        }
+        if ($path === '/health') {
+            return GuardResponse::json(503, ['status' => 'updating']);
+        }
+        $headers = [
+            'Content-Type' => 'text/html; charset=utf-8',
+            'Retry-After' => '120',
+            'Cache-Control' => 'no-store',
+        ];
+        return new GuardResponse(503, $headers, self::closedPage());
+    }
+
+    /** @param list<string> $argv @param array<string,string> $env */
+    public function console(array $argv, array $env): ?int
+    {
+        if (($env['THALLO_UPDATE_CHILD'] ?? '') === '1') {
+            return null;
+        }
+        $command = $argv[1] ?? '';
+        if ($command === 'queue:work') {
+            while (($this->held = $this->barrier->admit()) === null) {
+                ($this->sleep)();
+            }
+            return null;
+        }
+        $this->held = $this->barrier->admit();
+        if ($this->held !== null) {
+            return null;
+        }
+        if ($command === 'queue:scheduler') {
+            return 0;
+        }
+        fwrite(STDERR, "Thallo is being updated; try again when it finishes (see /_update).\n");
+        return 1;
+    }
+
+    /** @return resource|null */
+    public function held()
+    {
+        return $this->held;
+    }
+
+    /** @param array<string,string> $headers */
+    private function route(string $method, string $path, array $headers, string $body): GuardResponse
+    {
+        return GuardResponse::json(404, ['error' => 'not_found']); // Tasks 5 and 6 add the routes
+    }
+
+    private static function closedPage(): string
+    {
+        return '<!doctype html><meta charset="utf-8">'
+            . '<meta name="viewport" content="width=device-width,initial-scale=1">'
+            . '<title>Back in a few minutes</title>'
+            . '<body style="font:16px system-ui;display:grid;place-items:center;min-height:90vh;margin:0 16px">'
+            . '<main style="max-width:32rem;text-align:center"><h1 style="font-size:1.4rem">Back in a few minutes</h1>'
+            . '<p>This site is being updated. Please try again shortly.</p></main>';
+    }
+}
+
+// ---- entry ----
+Guard::boot(dirname(__DIR__));
