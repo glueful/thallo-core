@@ -115,6 +115,9 @@ final class RunnerReport
         ) {
             return true; // a single-host install: the web server must have been restarted
         }
+        if (str_starts_with($program, 'php-cgi')) {
+            return true; // a FastCGI server (MAMP and other CGI setups): a web server, like php-fpm
+        }
         if (!preg_match('/^php(\d|\.|$)/', $program)) {
             return false;
         }
