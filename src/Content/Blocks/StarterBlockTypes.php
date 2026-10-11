@@ -1091,7 +1091,8 @@ final class StarterBlockTypes
 
             // ---- Items (children of collection blocks) ----------------------
             ['slug' => 'feature', 'label' => 'Feature', 'icon' => 'i-lucide-check',
-                'category' => 'Items', 'description' => 'One feature: icon or number, title, description, link.',
+                'category' => 'Items',
+                'description' => 'One feature: icon or number, headline, title, description, link.',
                 'flags' => [],
                 // `radius` and `shadow` are the card's, on the root; the marker — the icon chip or
                 // number badge — has its own corners and shadow (`marker.*`), on its own target.
@@ -1114,6 +1115,11 @@ final class StarterBlockTypes
                     ],
                     'map' => ['typography' => 'title', 'marker' => 'marker'],
                 ]) + ['parts' => [
+                    // The short line above the title ("ONLINE STORE"): its lettering, its colour and
+                    // the space between it and the title.
+                    'headline' => ['label' => 'Headline', 'capabilities' => [
+                        'typography', 'colors.text', 'spacing.margin.bottom',
+                    ]],
                     'description' => ['label' => 'Description', 'capabilities' => [
                         'typography', 'colors.text', 'spacing.margin.top',
                     ]],
@@ -1126,6 +1132,8 @@ final class StarterBlockTypes
                 ]],
                 'schema' => [
                     ['name' => 'icon', 'type' => 'string', 'pattern' => '[a-z0-9]+(-[a-z0-9]+)*', 'format' => 'icon'],
+                    // Optional: a short line above the title.
+                    ['name' => 'headline', 'type' => 'string'],
                     ['name' => 'title', 'type' => 'string', 'required' => true],
                     ['name' => 'description', 'type' => 'text'],
                     ['name' => 'url', 'type' => 'string'],
