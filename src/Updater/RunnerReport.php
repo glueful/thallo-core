@@ -97,7 +97,9 @@ final class RunnerReport
             [$pid, $elapsed, $args] = [(int) $m[1], self::seconds($m[2]), $m[4]];
             $skip = $pid === $self
                 || $elapsed === null
-                || $now - $elapsed >= $installedAt
+                // etime and the install stamp are both whole seconds: a start computed less than 2 s
+                // after the install may still have been before it, so it counts as unguarded.
+                || $now - $elapsed >= $installedAt + 2
                 || str_contains($args, 'thallo-updater');
             if ($skip) {
                 continue;
