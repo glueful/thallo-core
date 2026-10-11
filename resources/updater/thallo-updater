@@ -414,3 +414,359 @@ final class OperationStore
         return FileLock::withExclusive($this->paths->stateLock(), $fn);
     }
 }
+
+// ---- Barrier ----
+/**
+ * Closing the site and the barrier (spec §7). Admitted web requests and console processes hold a
+ * shared flock on admission.lock for their whole life; the runner's exclusive lock is granted only
+ * when none remains. closed.flag keeps new work out. Not final: tests reach admitAfterFirstCheck().
+ */
+class Barrier
+{
+    public function __construct(protected readonly Paths $paths)
+    {
+    }
+
+    public function isClosed(): bool
+    {
+        return is_file($this->paths->closedFlag());
+    }
+
+    public function close(): void
+    {
+        AtomicFile::write($this->paths->closedFlag(), gmdate('c') . "\n", 0644);
+    }
+
+    public function open(): void
+    {
+        @unlink($this->paths->closedFlag());
+    }
+
+    /** @return resource|null */
+    public function admit()
+    {
+        if ($this->isClosed()) {
+            return null;
+        }
+        return $this->admitAfterFirstCheck();
+    }
+
+    /** @return resource|null */
+    protected function admitAfterFirstCheck()
+    {
+        $h = FileLock::shared($this->paths->admissionLock());
+        if ($h === null) {
+            return null; // the runner holds the barrier
+        }
+        if ($this->isClosed()) {
+            FileLock::release($h);
+            return null;
+        }
+        return $h;
+    }
+
+    /** @return resource|null */
+    public function acquire(int $timeout, \Closure $now, \Closure $sleep)
+    {
+        $start = $now();
+        while (true) {
+            $h = FileLock::exclusive($this->paths->admissionLock(), false);
+            if ($h !== null) {
+                return $h;
+            }
+            if ($now() - $start >= $timeout) {
+                return null;
+            }
+            $sleep();
+        }
+    }
+}
+
+// ---- Host ----
+interface Host
+{
+    /** @param list<string> $argv @param array<string,string> $env */
+    public function run(array $argv, string $cwd, array $env, int $timeout, callable $heartbeat): int;
+
+    /**
+     * @param list<string> $argv
+     * @param array<string,string> $env
+     * @return array{0:int,1:string} this command's own exit code and stdout
+     */
+    public function runCapture(array $argv, string $cwd, array $env, int $timeout, callable $heartbeat): array;
+
+    /** @param list<string> $argv @return array{0:int,1:string} */
+    public function capture(array $argv, string $cwd): array;
+
+    /** @param array<string,string> $headers @return array{0:int,1:string} */
+    public function http(string $url, array $headers, string $body): array;
+
+    public function now(): int;
+
+    public function sleep(int $seconds): void;
+}
+
+// ---- RealHost ----
+final class RealHost implements Host
+{
+    /**
+     * @param list<resource> $inherit handles every child receives as descriptors 3, 4, …
+     * $pgid/$self: the runner's process group and pid, for ChildProcess::run's timeout cleanup.
+     */
+    public function __construct(
+        private readonly string $log,
+        private array $inherit,
+        private readonly ?int $pgid = null,
+        private readonly ?int $self = null,
+    ) {
+    }
+
+    /** @param resource $handle */
+    public function inherit($handle): void
+    {
+        $this->inherit[] = $handle;
+    }
+
+    /** @param resource $handle */
+    public function forget($handle): void
+    {
+        $this->inherit = array_values(array_filter($this->inherit, static fn ($h): bool => $h !== $handle));
+    }
+
+    public function run(array $argv, string $cwd, array $env, int $timeout, callable $heartbeat): int
+    {
+        return ChildProcess::run(
+            $argv,
+            $cwd,
+            $env,
+            $this->inherit,
+            $this->log,
+            $heartbeat,
+            $timeout,
+            null,
+            $this->pgid,
+            $this->self,
+        );
+    }
+
+    public function runCapture(array $argv, string $cwd, array $env, int $timeout, callable $heartbeat): array
+    {
+        $out = tempnam(sys_get_temp_dir(), 'thallo-out-');
+        try {
+            $code = ChildProcess::run(
+                $argv,
+                $cwd,
+                $env,
+                $this->inherit,
+                $this->log,
+                $heartbeat,
+                $timeout,
+                $out,
+                $this->pgid,
+                $this->self,
+            );
+            $stdout = (string) file_get_contents($out);
+            file_put_contents($this->log, $stdout, FILE_APPEND);
+            return [$code, $stdout];
+        } finally {
+            @unlink($out);
+        }
+    }
+
+    public function capture(array $argv, string $cwd): array
+    {
+        $spec = [0 => ['file', '/dev/null', 'r'], 1 => ['pipe', 'w'], 2 => ['file', '/dev/null', 'w']];
+        $proc = proc_open($argv, $spec, $pipes, $cwd);
+        if (!is_resource($proc)) {
+            return [127, ''];
+        }
+        $out = (string) stream_get_contents($pipes[1]);
+        fclose($pipes[1]);
+        return [proc_close($proc), $out];
+    }
+
+    public function http(string $url, array $headers, string $body): array
+    {
+        $lines = [];
+        foreach ($headers as $k => $v) {
+            $lines[] = "{$k}: {$v}";
+        }
+        $ctx = stream_context_create(['http' => [
+            'method' => 'POST',
+            'header' => implode("\r\n", $lines),
+            'content' => $body,
+            'ignore_errors' => true,
+            'timeout' => 20,
+        ]]);
+        $out = @file_get_contents($url, false, $ctx);
+        $status = 0;
+        foreach ($http_response_header ?? [] as $h) {
+            if (preg_match('#^HTTP/\S+ (\d{3})#', $h, $m)) {
+                $status = (int) $m[1];
+            }
+        }
+        return [$status, is_string($out) ? $out : ''];
+    }
+
+    public function now(): int
+    {
+        return time();
+    }
+
+    public function sleep(int $seconds): void
+    {
+        sleep($seconds);
+    }
+}
+
+// ---- ChildProcess ----
+/**
+ * Runs one child of the runner (spec §3, §5). Its output goes to the operation log. The runner's
+ * locks are passed as descriptors 3, 4, …, so the run lock and the barrier stay held while any
+ * descendant lives. The runner polls instead of blocking on output, so a silent child still
+ * heartbeats.
+ */
+final class ChildProcess
+{
+    /**
+     * On timeout it never blocks: SIGTERM, up to 10 s, SIGKILL, poll until the child has exited, then
+     * (with $pgid) stop and confirm every other member of the group, and only then proc_close.
+     *
+     * @param list<string> $argv
+     * @param array<string,string> $env
+     * @param list<resource> $inherit
+     */
+    public static function run(
+        array $argv,
+        string $cwd,
+        array $env,
+        array $inherit,
+        string $log,
+        callable $heartbeat,
+        int $timeout,
+        ?string $stdout = null,
+        ?int $pgid = null,
+        ?int $self = null,
+    ): int {
+        $spec = [
+            0 => ['file', '/dev/null', 'r'],
+            1 => ['file', $stdout ?? $log, $stdout === null ? 'a' : 'w'],
+            2 => ['file', $log, 'a'],
+        ];
+        foreach (array_values($inherit) as $i => $handle) {
+            $spec[3 + $i] = $handle;
+        }
+        $base = getenv();
+        $proc = proc_open($argv, $spec, $pipes, $cwd, array_merge(is_array($base) ? $base : [], $env));
+        if (!is_resource($proc)) {
+            return 127;
+        }
+        $started = time();
+        $lastBeat = 0;
+        while (true) {
+            $status = proc_get_status($proc);
+            if (!$status['running']) {
+                proc_close($proc);
+                return $status['exitcode'];
+            }
+            if (time() - $lastBeat >= 5) {
+                $heartbeat();
+                $lastBeat = time();
+            }
+            if (time() - $started >= $timeout) {
+                self::terminate($proc, $status['pid']);
+                if ($pgid !== null) {
+                    self::stopGroupMembers($pgid, $self ?? getmypid());
+                }
+                proc_close($proc); // the child has exited: this cannot block
+                return 124;
+            }
+            usleep(250_000);
+        }
+    }
+
+    /** SIGTERM, up to 10 s, SIGKILL, then wait until the child has exited — never a blocking call before that. */
+    /** @param resource $proc */
+    private static function terminate($proc, int $pid): void
+    {
+        proc_terminate($proc, 15);
+        for ($i = 0; $i < 40 && proc_get_status($proc)['running']; $i++) {
+            usleep(250_000);
+        }
+        if (proc_get_status($proc)['running']) {
+            proc_terminate($proc, 9);
+            while (proc_get_status($proc)['running']) {
+                usleep(50_000);
+            }
+        }
+    }
+
+    public static function stopGroupMembers(int $pgid, int $self): void
+    {
+        $members = static function () use ($pgid, $self): array {
+            $spec = [1 => ['pipe', 'w'], 2 => ['file', '/dev/null', 'w']];
+            $p = proc_open(['pgrep', '-g', (string) $pgid], $spec, $pipes);
+            if (!is_resource($p)) {
+                throw new \RuntimeException('pgrep is unavailable.');
+            }
+            $out = (string) stream_get_contents($pipes[1]);
+            fclose($pipes[1]);
+            $code = proc_close($p);
+            if ($code > 1) { // 1: no match; anything higher: pgrep failed
+                throw new \RuntimeException('Cannot list the runner\'s process group (pgrep exited ' . $code . ').');
+            }
+            $pids = array_map('intval', preg_split('/\s+/', trim($out)) ?: []);
+            return array_values(array_filter($pids, static fn (int $p): bool => $p > 0 && $p !== $self));
+        };
+        foreach ($members() as $pid) {
+            posix_kill($pid, 15);
+        }
+        for ($i = 0; $i < 40 && $members() !== []; $i++) {
+            usleep(250_000);
+        }
+        foreach ($members() as $pid) {
+            posix_kill($pid, 9);
+        }
+        usleep(500_000);
+        if (($left = $members()) !== []) {
+            throw new \RuntimeException('Processes started by the update are still running: ' . implode(', ', $left));
+        }
+    }
+}
+
+// ---- Liveness ----
+/**
+ * When a running operation is dead (spec §5; plan ruling 5): its run lock can be taken and its
+ * process group has no member left. Either alone is not proof: a descendant can close the inherited
+ * lock, and a group can outlive a lock.
+ */
+final class Liveness
+{
+    public static function groupAlive(?int $pgid): bool
+    {
+        if ($pgid === null || $pgid <= 1 || !function_exists('posix_kill')) {
+            return false;
+        }
+        if (posix_kill(-$pgid, 0)) {
+            return true;
+        }
+        return posix_get_last_error() === 1; // EPERM: members exist that we may not signal
+    }
+
+    /** @return resource|null */
+    public static function claimIfDead(array $op, Paths $paths)
+    {
+        if (($op['status'] ?? null) !== Status::RUNNING) {
+            return null;
+        }
+        $lock = FileLock::exclusive($paths->runLock(), false);
+        if ($lock === null) {
+            return null;
+        }
+        if (self::groupAlive(isset($op['pgid']) ? (int) $op['pgid'] : null)) {
+            FileLock::release($lock);
+            return null;
+        }
+        return $lock;
+    }
+}
