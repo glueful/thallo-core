@@ -639,7 +639,10 @@ input{font:inherit;width:100%;padding:8px 10px;border:1px solid var(--line);bord
       var path = (o.backup && o.backup.path) || '(no backup was taken)';
       $('recovery-error').textContent = o.error || '';
       $('backup-path').textContent = path;
-      $('restore-cmd').textContent = 'pg_restore --clean --if-exists --dbname <database> ' + path + '/database.dump';
+      // Into an empty schema: a cleaning restore drops only what the dump holds, so a table the
+      // failed update created would survive it.
+      $('restore-cmd').textContent = 'psql --dbname <database> -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;" && '
+        + 'pg_restore --no-owner --dbname <database> ' + path + '/database.dump';
       show('waiting', !!o.recovery_request);
     }
   }
