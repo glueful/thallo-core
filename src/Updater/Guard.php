@@ -147,7 +147,68 @@ final class Guard
     /** @param array<string,string> $headers */
     private function verify(array $headers, string $body): GuardResponse
     {
-        return GuardResponse::json(404, ['error' => 'not_found']); // Task 6
+        $file = $this->paths->verifySecret();
+        $secret = is_file($file) ? trim((string) file_get_contents($file)) : '';
+        $given = $headers['x-thallo-verify'] ?? '';
+        if ($secret === '' || $given === '' || !hash_equals($secret, $given)) {
+            return GuardResponse::json(403, ['error' => 'secret']);
+        }
+        $in = json_decode($body, true);
+        $mode = is_array($in) ? ($in['mode'] ?? '') : '';
+        if ($mode === 'probe') {
+            return GuardResponse::json(200, [
+                'sapi' => PHP_SAPI,
+                'writable_code' => is_writable($this->paths->base . '/vendor')
+                    || is_writable($this->paths->base . '/composer.lock'),
+                'admission_ok' => (static function (string $lock): bool {
+                    $h = FileLock::shared($lock);
+                    if ($h === null) {
+                        return false;
+                    }
+                    FileLock::release($h);
+                    return true;
+                })($this->paths->admissionLock()),
+                'state_writable' => is_writable($this->paths->dir()),
+                'opcache' => [
+                    'enabled' => (bool) ini_get('opcache.enable'),
+                    'validate_timestamps' => (bool) ini_get('opcache.validate_timestamps'),
+                    'revalidate_freq' => (int) ini_get('opcache.revalidate_freq'),
+                    'preload' => (string) ini_get('opcache.preload'),
+                ],
+            ]);
+        }
+        if ($mode !== 'boot') {
+            return GuardResponse::json(422, ['error' => 'mode']);
+        }
+        register_shutdown_function(static function (): void {
+            $e = error_get_last();
+            $fatal = [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR];
+            if ($e !== null && in_array($e['type'], $fatal, true) && !headers_sent()) {
+                GuardResponse::json(500, ['error' => $e['message']])->send();
+            }
+        });
+        try {
+            $app = require $this->paths->base . '/bootstrap/app.php';
+            $missing = [];
+            $core = $this->paths->base . '/vendor/glueful/thallo-core/composer.json';
+            $require = is_file($core) ? (json_decode((string) file_get_contents($core), true)['require'] ?? []) : [];
+            foreach (array_keys($require) as $name) {
+                if (str_starts_with($name, 'ext-') && !extension_loaded(substr($name, 4))) {
+                    $missing[] = substr($name, 4);
+                }
+            }
+            $version = class_exists('Composer\\InstalledVersions')
+                ? \Composer\InstalledVersions::getPrettyVersion('glueful/thallo-core')
+                : null;
+            return GuardResponse::json(200, [
+                'version' => $version,
+                'php' => PHP_VERSION,
+                'missing_extensions' => $missing,
+                'container' => is_object($app) && method_exists($app, 'getContainer') && $app->getContainer() !== null,
+            ]);
+        } catch (\Throwable $e) {
+            return GuardResponse::json(500, ['error' => $e->getMessage()]);
+        }
     }
 
     private function logTail(string $id, int $lines): string
