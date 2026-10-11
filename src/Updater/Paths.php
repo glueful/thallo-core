@@ -8,7 +8,7 @@ namespace Thallo\Core\Updater;
  * Every file the updater reads or writes, from the site's base path (spec §16.1). Three locations:
  *
  * - private (`.thallo-update/`, code owner, 0700): everything the runner trusts;
- * - control (`.thallo-update-control/`, code owner + the web group, 0750): what the runner publishes
+ * - control (`.thallo-update-control/`, code owner + the web group, 2750): what the runner publishes
  *   and PHP-FPM only reads — status, the closed flag, the admission lock, the verification secret;
  * - inbox (`storage/framework/updates/`, web-writable): requests, which the runner treats as untrusted.
  *

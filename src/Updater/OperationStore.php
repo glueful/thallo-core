@@ -233,7 +233,8 @@ final class OperationStore
             return;
         }
         if (!is_dir($this->paths->controlDir())) {
-            @mkdir($this->paths->controlDir(), 0750, true);
+            @mkdir($this->paths->controlDir(), 02750, true);
+            @chmod($this->paths->controlDir(), 02750);
         }
         $shown = $op;
         foreach (['owner', 'pid', 'pgid', 'journal', 'token_hash', 'provision_manifest'] as $private) {

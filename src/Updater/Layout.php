@@ -7,7 +7,8 @@ namespace Thallo\Core\Updater;
 /**
  * Whether the trust boundary's folders are what the runner may rely on (spec §16.1):
  *
- * - the private folder (0700) and the control folder (0750) are real directories the runner owns;
+ * - the private folder (0700) and the control folder (2750) are real directories the runner owns;
+ *   the control folder is setgid, so what the runner publishes there takes the web group;
  * - the inbox is a real directory, not a link to somewhere else;
  * - no ancestor of the site lets anyone but the runner or root replace them. A world-writable
  *   ancestor is accepted only when it is sticky and the folder below it is the runner's or root's,
@@ -22,7 +23,7 @@ final class Layout
     public static function problems(Paths $paths, int $euid): array
     {
         $problems = [];
-        foreach ([[$paths->privateDir(), 0700], [$paths->controlDir(), 0750]] as [$dir, $mode]) {
+        foreach ([[$paths->privateDir(), 0700], [$paths->controlDir(), 02750]] as [$dir, $mode]) {
             $st = @lstat($dir);
             if ($st === false) {
                 $problems[] = basename($dir) . ' is missing.';
@@ -35,8 +36,8 @@ final class Layout
             if ($st['uid'] !== $euid) {
                 $problems[] = basename($dir) . ' is not owned by the user the runner runs as.';
             }
-            if (($st['mode'] & 0777) !== $mode) {
-                $problems[] = sprintf('%s must be mode %04o, not %04o.', basename($dir), $mode, $st['mode'] & 0777);
+            if (($st['mode'] & 07777) !== $mode) {
+                $problems[] = sprintf('%s must be mode %04o, not %04o.', basename($dir), $mode, $st['mode'] & 07777);
             }
         }
         $inbox = @lstat($paths->inbox());

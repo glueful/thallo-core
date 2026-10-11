@@ -71,7 +71,8 @@ final class UpdaterInstaller
 
     /**
      * The trust boundary's three folders (spec §16.1, §16.4), set up as the code owner before the guard
-     * serves its first request: the private folder (0700); the control folder (0750, the web group)
+     * serves its first request: the private folder (0700); the control folder (2750, the web group; setgid so
+     * what the runner publishes there is readable by PHP-FPM)
      * with an admission lock PHP-FPM can open read-only; the inbox (2770, the web group). The web group
      * is the group of storage/. Revision 3's files leave the inbox: none of them may be trusted there.
      */
@@ -81,7 +82,7 @@ final class UpdaterInstaller
         $private = $base . '/.thallo-update';
         $control = $base . '/.thallo-update-control';
         $inbox = $base . '/storage/framework/updates';
-        foreach ([[$private, 0700, false], [$control, 0750, true], [$inbox, 02770, true]] as [$dir, $mode, $shared]) {
+        foreach ([[$private, 0700, false], [$control, 02750, true], [$inbox, 02770, true]] as [$dir, $mode, $shared]) {
             if (!is_dir($dir)) {
                 mkdir($dir, 0700, true);
             }
