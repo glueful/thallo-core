@@ -37,11 +37,33 @@ final class Stager
         }
     }
 
+    /**
+     * How to start Composer: through PHP when the file is a PHP script or phar, directly when it is a
+     * shell shim (a wrapper that picks its own PHP) — running a shell script through php would print it.
+     *
+     * @return list<string>
+     */
+    public static function composerCommand(string $php, string $composer): array
+    {
+        $head = (string) @file_get_contents($composer, false, null, 0, 256);
+        $isPhp = str_starts_with($head, '<?php') || preg_match('/^#!.*\bphp\b/', $head) === 1
+            || str_ends_with($composer, '.phar') || str_contains($head, '__HALT_COMPILER');
+        return $isPhp ? [$php, $composer] : [$composer];
+    }
+
     public function update(string $stage, string $target, callable $heartbeat): int
     {
         return $this->host->run(
-            [$this->php, $this->composer, 'update', 'glueful/thallo-core:' . $target, '--with-all-dependencies',
-                '--no-interaction', '--no-progress', '--no-ansi', '--no-scripts', '--working-dir=' . $stage],
+            array_merge(self::composerCommand($this->php, $this->composer), [
+                'update',
+                'glueful/thallo-core:' . $target,
+                '--with-all-dependencies',
+                '--no-interaction',
+                '--no-progress',
+                '--no-ansi',
+                '--no-scripts',
+                '--working-dir=' . $stage,
+            ]),
             $stage,
             ['COMPOSER_HOME' => $this->composerHome, 'THALLO_UPDATE_CHILD' => '1'],
             $this->timeout,
