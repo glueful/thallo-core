@@ -133,6 +133,15 @@ return [
         'notes_url' => 'https://github.com/glueful/thallo/blob/main/CHANGELOG.md',
     ],
 
+    // Updating from the admin (docs/upgrading.md). Off unless the owner sets it; a guided installer
+    // may turn it on after `php bin/thallo-updater selftest` passes. The runner's user can rewrite
+    // this site's code — that is the trade the owner accepts by turning it on.
+    'admin_updates' => [
+        'enabled' => (bool) env('THALLO_ADMIN_UPDATES', false),
+        'keep_backups' => (int) env('THALLO_UPDATE_KEEP_BACKUPS', 3),
+        'verify_url' => env('THALLO_UPDATE_VERIFY_URL'),
+    ],
+
     // Version retention / pruning. Raw env pass-through: do not cast here.
     // RetentionPolicy::fromValues() validates positive integers and treats null/'' as off.
     'versions' => [

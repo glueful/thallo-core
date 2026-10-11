@@ -25,6 +25,7 @@ use Thallo\Core\Http\Controllers\FormSubmissionsController;
 use Thallo\Core\Http\Controllers\GeneralSettingsController;
 use Thallo\Core\Http\Controllers\HealthAdminController;
 use Thallo\Core\Http\Controllers\UpdateStatusController;
+use Thallo\Core\Http\Controllers\AdminUpdateController;
 use Thallo\Core\Http\Controllers\IconInventoryController;
 use Thallo\Core\Http\Controllers\ImportExportController;
 use Thallo\Core\Http\Controllers\MediaAdminController;
@@ -623,6 +624,14 @@ $router->group(['prefix' => '/v1/admin'], function (Router $router): void {
 
         // Any signed-in admin user may read it (the version shows in the user menu); never anonymous.
         $router->get('/update-status', [UpdateStatusController::class, 'show']);
+        // Updating from the admin (docs/upgrading.md): owner only. PHP-FPM checks, files and cancels a
+        // request; the update runner, scheduled by the owner as the code owner, does the update.
+        $router->get('/updates/preflight', [AdminUpdateController::class, 'preflight'])
+            ->middleware('content_permission:system.config');
+        $router->post('/updates', [AdminUpdateController::class, 'start'])
+            ->middleware('content_permission:system.config');
+        $router->delete('/updates/current', [AdminUpdateController::class, 'cancel'])
+            ->middleware('content_permission:system.config');
 
         $router->get('/cache', [CacheAdminController::class, 'show'])
         ->middleware('content_permission:system.access');

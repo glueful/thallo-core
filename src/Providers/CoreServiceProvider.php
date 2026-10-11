@@ -7,6 +7,10 @@ namespace Thallo\Core\Providers;
 use Thallo\Core\Capabilities\CapabilityStateStore;
 use Thallo\Contracts\Settings\SystemChannel;
 use Thallo\Core\Updates\Console\UpdateBackupCommand;
+use Thallo\Core\Updates\UpdatePreflight;
+use Thallo\Core\Updater\OperationStore as UpdaterOperationStore;
+use Thallo\Core\Updater\Paths as UpdaterPaths;
+use Thallo\Core\Http\Controllers\AdminUpdateController;
 use Thallo\Core\Updates\Console\UpdateCheckCommand;
 use Thallo\Core\Updates\Console\UpdateClearCachesCommand;
 use Thallo\Core\Updates\Console\UpdateVerifyCommand;
@@ -551,6 +555,26 @@ final class CoreServiceProvider extends ServiceProvider implements \Thallo\Contr
             $container->get(ReleaseFeed::class),
             $container->get(SystemChannel::class),
         );
+    }
+
+    /** Updating from the admin: the preflight PHP-FPM answers (spec §4). */
+    public static function makeUpdatePreflight(ContainerInterface $container): UpdatePreflight
+    {
+        $context = $container->get(ApplicationContext::class);
+        return new UpdatePreflight(
+            (array) config($context, 'thallo.admin_updates', []),
+            $container->get(UpdateChecker::class)->status()->toArray(),
+            $context->getBasePath(),
+            static fn (string $key): string => (string) ini_get($key),
+            static fn (): string => PHP_SAPI,
+            static fn (): int => time(),
+        );
+    }
+
+    public static function makeUpdaterOperationStore(ContainerInterface $container): UpdaterOperationStore
+    {
+        $base = $container->get(ApplicationContext::class)->getBasePath();
+        return new UpdaterOperationStore(new UpdaterPaths($base), static fn (): int => time());
     }
 
     public static function makeSignupChallenge(ContainerInterface $container): SignupChallenge
@@ -2917,6 +2941,19 @@ final class CoreServiceProvider extends ServiceProvider implements \Thallo\Contr
                 'class' => UpdateStatusController::class,
                 'shared' => true,
                 'autowire' => true,
+            ],
+            AdminUpdateController::class => [
+                'class' => AdminUpdateController::class,
+                'shared' => true,
+                'autowire' => true,
+            ],
+            UpdatePreflight::class => [
+                'factory' => [self::class, 'makeUpdatePreflight'],
+                'shared' => false,
+            ],
+            UpdaterOperationStore::class => [
+                'factory' => [self::class, 'makeUpdaterOperationStore'],
+                'shared' => true,
             ],
             CapabilityAdminController::class => [
                 'class' => CapabilityAdminController::class,
