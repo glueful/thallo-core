@@ -1363,14 +1363,14 @@ final class RunnerReport
             if ($skip) {
                 continue;
             }
-            if (self::attributable($pid, $args, $paths->base)) {
+            if (self::attributable($pid, $args, $paths->base, $host)) {
                 $found[] = ['pid' => $pid, 'args' => $args];
             }
         }
         return $found;
     }
 
-    private static function attributable(int $pid, string $args, string $base): bool
+    private static function attributable(int $pid, string $args, string $base, Host $host): bool
     {
         $program = basename(strtok($args, ' ') ?: '');
         if (
@@ -1388,11 +1388,26 @@ final class RunnerReport
         if (str_contains($args, $base)) {
             return true;
         }
-        $cwd = @readlink('/proc/' . $pid . '/cwd');
-        if (is_string($cwd)) {
-            return $cwd === $base;
+        $cwd = self::cwd($pid, $host);
+        if ($cwd !== null) {
+            $site = realpath($base) ?: $base;
+            return $cwd === $site || $cwd === $base || str_starts_with($cwd, $site . '/');
         }
         return str_contains($args, 'glueful') || str_contains($args, 'thallo');
+    }
+
+    /** A process's working directory: /proc on Linux, lsof where there is no /proc (macOS). */
+    private static function cwd(int $pid, Host $host): ?string
+    {
+        $link = @readlink('/proc/' . $pid . '/cwd');
+        if (is_string($link)) {
+            return $link;
+        }
+        [$code, $out] = $host->capture(['lsof', '-a', '-p', (string) $pid, '-d', 'cwd', '-Fn'], '/');
+        if ($code === 0 && preg_match('/^n(.+)$/m', $out, $m)) {
+            return realpath($m[1]) ?: $m[1];
+        }
+        return null;
     }
 
     /** `ps` etime: [[dd-]hh:]mm:ss */
