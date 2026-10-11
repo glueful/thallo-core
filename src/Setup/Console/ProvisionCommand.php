@@ -8,6 +8,10 @@ use Thallo\Core\Content\Blocks\StarterBlockTypeSeeder;
 use Thallo\Core\Content\Blocks\StarterBlockTypeSync;
 use Thallo\Core\Providers\CoreServiceProvider;
 use Thallo\Core\Setup\AdminBundlePublisher;
+use Thallo\Core\Setup\UpdaterInstaller;
+use Thallo\Core\Updater\OperationStore;
+use Thallo\Core\Updater\Paths as UpdaterPaths;
+use Glueful\Queue\RestartSignal;
 use Glueful\Cache\CacheStore;
 use Glueful\Routing\RouteCache;
 use Thallo\Core\Setup\ApiReferencePublisher;
@@ -321,6 +325,31 @@ final class ProvisionCommand extends BaseCommand
                 $published['published'],
                 $published['removed'],
             ));
+        }
+
+        // Updating from the admin (docs/upgrading.md): the runner and the guard are installed into
+        // the site only while THALLO_ADMIN_UPDATES is on, and refreshed when core ships newer copies.
+        try {
+            $store = new OperationStore(new UpdaterPaths($basePath), static fn (): int => time());
+            $operation = $store->current();
+            $result = (new UpdaterInstaller())->sync(
+                $basePath,
+                CoreServiceProvider::corePath('resources/updater'),
+                (bool) config($this->getContext(), 'thallo.admin_updates.enabled', false),
+                $operation,
+            );
+            if ($result === 'installed-first') {
+                // Workers started before the guard hold no admission lock: ask them to restart through it.
+                if (class_exists(RestartSignal::class)) {
+                    $this->getService(RestartSignal::class)->signal(time());
+                }
+                $this->line('Update runner: installed-first. Restart PHP-FPM (or Apache), every queue worker');
+                $this->line('and every long-running job, then run: php bin/thallo-updater confirm-restart --yes');
+            } else {
+                $this->line('Update runner: ' . $result . '.');
+            }
+        } catch (\Throwable $e) {
+            $this->warning('Update runner skipped (' . $e->getMessage() . ').');
         }
 
         // The API reference (/api-docs) is generated from this install's live routes, so it
