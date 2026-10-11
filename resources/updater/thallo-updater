@@ -12,7 +12,7 @@ namespace Thallo\ShippedUpdater\Runner;
  * Every file the updater reads or writes, from the site's base path (spec §16.1). Three locations:
  *
  * - private (`.thallo-update/`, code owner, 0700): everything the runner trusts;
- * - control (`.thallo-update-control/`, code owner + the web group, 0750): what the runner publishes
+ * - control (`.thallo-update-control/`, code owner + the web group, 2750): what the runner publishes
  *   and PHP-FPM only reads — status, the closed flag, the admission lock, the verification secret;
  * - inbox (`storage/framework/updates/`, web-writable): requests, which the runner treats as untrusted.
  *
@@ -552,7 +552,8 @@ final class OperationStore
             return;
         }
         if (!is_dir($this->paths->controlDir())) {
-            @mkdir($this->paths->controlDir(), 0750, true);
+            @mkdir($this->paths->controlDir(), 02750, true);
+            @chmod($this->paths->controlDir(), 02750);
         }
         $shown = $op;
         foreach (['owner', 'pid', 'pgid', 'journal', 'token_hash', 'provision_manifest'] as $private) {
@@ -588,7 +589,8 @@ final class OperationStore
 /**
  * Whether the trust boundary's folders are what the runner may rely on (spec §16.1):
  *
- * - the private folder (0700) and the control folder (0750) are real directories the runner owns;
+ * - the private folder (0700) and the control folder (2750) are real directories the runner owns;
+ *   the control folder is setgid, so what the runner publishes there takes the web group;
  * - the inbox is a real directory, not a link to somewhere else;
  * - no ancestor of the site lets anyone but the runner or root replace them. A world-writable
  *   ancestor is accepted only when it is sticky and the folder below it is the runner's or root's,
@@ -603,7 +605,7 @@ final class Layout
     public static function problems(Paths $paths, int $euid): array
     {
         $problems = [];
-        foreach ([[$paths->privateDir(), 0700], [$paths->controlDir(), 0750]] as [$dir, $mode]) {
+        foreach ([[$paths->privateDir(), 0700], [$paths->controlDir(), 02750]] as [$dir, $mode]) {
             $st = @lstat($dir);
             if ($st === false) {
                 $problems[] = basename($dir) . ' is missing.';
@@ -616,8 +618,8 @@ final class Layout
             if ($st['uid'] !== $euid) {
                 $problems[] = basename($dir) . ' is not owned by the user the runner runs as.';
             }
-            if (($st['mode'] & 0777) !== $mode) {
-                $problems[] = sprintf('%s must be mode %04o, not %04o.', basename($dir), $mode, $st['mode'] & 0777);
+            if (($st['mode'] & 07777) !== $mode) {
+                $problems[] = sprintf('%s must be mode %04o, not %04o.', basename($dir), $mode, $st['mode'] & 07777);
             }
         }
         $inbox = @lstat($paths->inbox());
@@ -1357,6 +1359,10 @@ final class ProvisionOutputs
         'bootstrap/update-guard.php',
         'storage/conversion',
         'storage/framework/composer',
+        // The file cache's entries: cached values and sessions, not code output. Like a Redis cache they
+        // stay across a rollback; what depends on the code (pages, catalog) is invalidated by tag.
+        'storage/cache/*.cache',
+        'storage/cache/*.meta',
     ];
     public const RUNNER_OWNED = [
         'vendor',
@@ -1373,12 +1379,15 @@ final class ProvisionOutputs
      * @return array{
      *     paths: array<string,bool>,
      *     dirs: array<string,int>,
-     *     files: array<string,array{sha256:string,mode:int}>
+     *     files: array<string,array{sha256:string,mode:int}>,
+     *     groups: array<string,int>
      * }
      */
     public static function snapshot(string $base, string $to): array
     {
-        $manifest = ['paths' => [], 'dirs' => [], 'files' => []];
+        // Groups too: PHP-FPM reads .env and public/admin through the web group, and a copy the
+        // runner makes takes the runner's own group.
+        $manifest = ['paths' => [], 'dirs' => [], 'files' => [], 'groups' => []];
         foreach (self::SNAPSHOT as $path) {
             $src = $base . '/' . $path;
             $manifest['paths'][$path] = file_exists($src);
@@ -1389,6 +1398,7 @@ final class ProvisionOutputs
                 $mode = fileperms($abs) & 0777;
                 self::mustMkdir($to . '/' . $rel);
                 $manifest['dirs'][$rel] = $mode;
+                $manifest['groups'][$rel] = filegroup($abs);
             }
             foreach (self::files($src, $path) as $rel => $abs) {
                 $hash = @hash_file('sha256', $abs);
@@ -1400,6 +1410,7 @@ final class ProvisionOutputs
                     throw new \RuntimeException("The snapshot copy of {$rel} does not match.");
                 }
                 $manifest['files'][$rel] = ['sha256' => $hash, 'mode' => fileperms($abs) & 0777];
+                $manifest['groups'][$rel] = filegroup($abs);
             }
         }
         return $manifest;
@@ -1468,11 +1479,15 @@ final class ProvisionOutputs
                     if (!@chmod($workDir . '/restore/' . $rel, $meta['mode'])) {
                         throw new \RuntimeException("Cannot set the mode of {$rel}.");
                     }
+                    self::restoreGroup($workDir . '/restore/' . $rel, $manifest['groups'][$rel] ?? null, $rel);
                 }
             }
             foreach (array_reverse($manifest['dirs'], true) as $rel => $mode) {
                 if ($under($rel) && !@chmod($workDir . '/restore/' . $rel, $mode)) {
                     throw new \RuntimeException("Cannot set the mode of {$rel}.");
+                }
+                if ($under($rel)) {
+                    self::restoreGroup($workDir . '/restore/' . $rel, $manifest['groups'][$rel] ?? null, $rel);
                 }
             }
             $journal->rename($workDir . '/restore/' . $path, $live, 'restore.in.' . $path);
@@ -1530,6 +1545,14 @@ final class ProvisionOutputs
             if ($item->isFile()) {
                 yield $rel . '/' . substr($item->getPathname(), strlen($abs) + 1) => $item->getPathname();
             }
+        }
+    }
+
+    private static function restoreGroup(string $path, ?int $gid, string $rel): void
+    {
+        clearstatcache(true, $path);
+        if ($gid !== null && filegroup($path) !== $gid && !@chgrp($path, $gid)) {
+            throw new \RuntimeException("Cannot give {$rel} back its group.");
         }
     }
 
@@ -1643,7 +1666,9 @@ final class RunnerReport
             [$pid, $elapsed, $args] = [(int) $m[1], self::seconds($m[2]), $m[4]];
             $skip = $pid === $self
                 || $elapsed === null
-                || $now - $elapsed >= $installedAt
+                // etime and the install stamp are both whole seconds: a start computed less than 2 s
+                // after the install may still have been before it, so it counts as unguarded.
+                || $now - $elapsed >= $installedAt + 2
                 || str_contains($args, 'thallo-updater');
             if ($skip) {
                 continue;
