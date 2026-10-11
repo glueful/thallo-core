@@ -340,9 +340,7 @@ final class ProvisionCommand extends BaseCommand
             );
             if ($result === 'installed-first') {
                 // Workers started before the guard hold no admission lock: ask them to restart through it.
-                if (class_exists(RestartSignal::class)) {
-                    $this->getService(RestartSignal::class)->signal(time());
-                }
+                $this->getService(RestartSignal::class)->signal(time());
                 $this->line('Update runner: installed-first. Restart PHP-FPM (or Apache), every queue worker');
                 $this->line('and every long-running job, then run: php bin/thallo-updater confirm-restart --yes');
             } else {
