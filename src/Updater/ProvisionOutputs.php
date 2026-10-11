@@ -27,6 +27,8 @@ final class ProvisionOutputs
         'storage/logs',
         'storage/framework/updates',
         'storage/backups',
+        '.thallo-update',
+        '.thallo-update-control',
     ];
 
     /**
@@ -72,6 +74,28 @@ final class ProvisionOutputs
         string $workDir,
         Journal $journal,
     ): void {
+        // Only the inventory's paths, whatever the manifest says (spec §16.2).
+        foreach (array_keys($manifest['paths'] ?? []) as $path) {
+            if (!in_array($path, self::SNAPSHOT, true)) {
+                throw new \RuntimeException("The snapshot names {$path}, which is not in the inventory.");
+            }
+        }
+        $inInventory = static function (string $rel): bool {
+            if (str_contains('/' . $rel . '/', '/../')) {
+                return false;
+            }
+            foreach (self::SNAPSHOT as $path) {
+                if ($rel === $path || str_starts_with($rel, $path . '/')) {
+                    return true;
+                }
+            }
+            return false;
+        };
+        foreach (array_merge(array_keys($manifest['files'] ?? []), array_keys($manifest['dirs'] ?? [])) as $rel) {
+            if (!$inInventory((string) $rel)) {
+                throw new \RuntimeException("The snapshot names {$rel}, which is outside the inventory.");
+            }
+        }
         foreach ($manifest['files'] as $rel => $meta) {
             $copy = $snapshotDir . '/' . $rel;
             if (!is_readable($copy) || hash_file('sha256', $copy) !== $meta['sha256']) {

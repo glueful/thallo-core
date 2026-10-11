@@ -57,7 +57,7 @@ input{font:inherit;width:100%;padding:8px 10px;border:1px solid var(--line);bord
   <section class="card" id="recovery" hidden>
     <p id="recovery-error" class="bad"></p>
     <p class="muted" style="margin-top:8px">The database is never restored automatically. Backup: <code id="backup-path"></code></p>
-    <p class="muted">To restore it: <code id="restore-cmd"></code></p>
+    <p class="muted">To restore it, as the code owner: <code id="restore-cmd"></code></p>
     <div class="actions">
       <button data-option="rollback">Roll back the code</button>
       <button data-option="retry_provision">Retry provision</button>
@@ -142,6 +142,12 @@ input{font:inherit;width:100%;padding:8px 10px;border:1px solid var(--line);bord
       $('restore-cmd').textContent = 'psql --dbname <database> -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;" && '
         + 'pg_restore --no-owner --dbname <database> ' + path + '/database.dump';
       show('waiting', !!o.recovery_request);
+      // Only what the runner offers now, from its own journal: retry needs the whole swap live,
+      // roll back needs something to undo.
+      var offered = data.recovery_options || [];
+      document.querySelectorAll('[data-option]').forEach(function (b) {
+        b.hidden = offered.indexOf(b.getAttribute('data-option')) === -1;
+      });
     }
   }
   function request(option, confirm) {

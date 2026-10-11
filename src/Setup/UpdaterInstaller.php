@@ -41,14 +41,11 @@ final class UpdaterInstaller
             AtomicFile::write($path, $contents, $mode);
             $changed = true;
         }
+        $this->layout($base);
         if ($first) {
             // Processes started before this moment hold no admission lock: preflight waits until the
             // owner confirms a restart (php bin/thallo-updater confirm-restart --yes) made after it.
-            $dir = $base . '/storage/framework/updates';
-            if (!is_dir($dir)) {
-                mkdir($dir, 0770, true);
-            }
-            AtomicFile::write($dir . '/guard.installed', time() . "\n", 0644);
+            AtomicFile::write($base . '/.thallo-update/guard.installed', time() . "\n", 0600);
             return 'installed-first';
         }
         return $changed ? 'installed' : 'current';
@@ -67,8 +64,44 @@ final class UpdaterInstaller
         foreach ($present as [$target]) {
             @unlink($base . '/' . $target);
         }
-        @unlink($base . '/storage/framework/updates/guard.installed');
-        @unlink($base . '/storage/framework/updates/guard.ready');
+        @unlink($base . '/.thallo-update/guard.installed');
+        @unlink($base . '/.thallo-update/guard.ready');
         return 'removed';
+    }
+
+    /**
+     * The trust boundary's three folders (spec §16.1, §16.4), set up as the code owner before the guard
+     * serves its first request: the private folder (0700); the control folder (0750, the web group)
+     * with an admission lock PHP-FPM can open read-only; the inbox (2770, the web group). The web group
+     * is the group of storage/. Revision 3's files leave the inbox: none of them may be trusted there.
+     */
+    private function layout(string $base): void
+    {
+        $group = @filegroup($base . '/storage');
+        $private = $base . '/.thallo-update';
+        $control = $base . '/.thallo-update-control';
+        $inbox = $base . '/storage/framework/updates';
+        foreach ([[$private, 0700, false], [$control, 0750, true], [$inbox, 02770, true]] as [$dir, $mode, $shared]) {
+            if (!is_dir($dir)) {
+                mkdir($dir, 0700, true);
+            }
+            if ($shared && $group !== false) {
+                @chgrp($dir, $group);
+            }
+            chmod($dir, $mode);
+        }
+        $lock = $control . '/admission.lock';
+        if (!is_file($lock)) {
+            touch($lock);
+        }
+        if ($group !== false) {
+            @chgrp($lock, $group);
+        }
+        chmod($lock, 0640);
+        $stale = ['operation.json', 'state.lock', 'run.lock', 'admission.lock', 'closed.flag', 'runner.json',
+            'verify.secret', 'guard.installed', 'guard.ready', '.proof'];
+        foreach ($stale as $name) {
+            @unlink($inbox . '/' . $name);
+        }
     }
 }

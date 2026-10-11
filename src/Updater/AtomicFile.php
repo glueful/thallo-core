@@ -10,7 +10,13 @@ final class AtomicFile
     public static function write(string $path, string $contents, int $mode = 0640): void
     {
         $tmp = $path . '.tmp-' . getmypid() . '-' . bin2hex(random_bytes(3));
-        $h = fopen($tmp, 'x');
+        // Created under the target mode: a private file is never briefly readable by the web group.
+        $umask = umask(0777 & ~$mode);
+        try {
+            $h = @fopen($tmp, 'x');
+        } finally {
+            umask($umask);
+        }
         if ($h === false) {
             throw new \RuntimeException("Cannot write {$tmp}");
         }

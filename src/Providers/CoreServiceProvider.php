@@ -8,7 +8,6 @@ use Thallo\Core\Capabilities\CapabilityStateStore;
 use Thallo\Contracts\Settings\SystemChannel;
 use Thallo\Core\Updates\Console\UpdateBackupCommand;
 use Thallo\Core\Updates\UpdatePreflight;
-use Thallo\Core\Updater\OperationStore as UpdaterOperationStore;
 use Thallo\Core\Updater\Paths as UpdaterPaths;
 use Thallo\Core\Http\Controllers\AdminUpdateController;
 use Thallo\Core\Updates\Console\UpdateCheckCommand;
@@ -571,10 +570,9 @@ final class CoreServiceProvider extends ServiceProvider implements \Thallo\Contr
         );
     }
 
-    public static function makeUpdaterOperationStore(ContainerInterface $container): UpdaterOperationStore
+    public static function makeUpdaterPaths(ContainerInterface $container): UpdaterPaths
     {
-        $base = $container->get(ApplicationContext::class)->getBasePath();
-        return new UpdaterOperationStore(new UpdaterPaths($base), static fn (): int => time());
+        return new UpdaterPaths($container->get(ApplicationContext::class)->getBasePath());
     }
 
     public static function makeSignupChallenge(ContainerInterface $container): SignupChallenge
@@ -2951,8 +2949,8 @@ final class CoreServiceProvider extends ServiceProvider implements \Thallo\Contr
                 'factory' => [self::class, 'makeUpdatePreflight'],
                 'shared' => false,
             ],
-            UpdaterOperationStore::class => [
-                'factory' => [self::class, 'makeUpdaterOperationStore'],
+            UpdaterPaths::class => [
+                'factory' => [self::class, 'makeUpdaterPaths'],
                 'shared' => true,
             ],
             CapabilityAdminController::class => [

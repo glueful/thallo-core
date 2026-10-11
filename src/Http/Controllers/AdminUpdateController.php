@@ -10,21 +10,23 @@ use Glueful\Routing\Attributes\ApiResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Thallo\Core\Http\DTOs\Responses\UpdatePreflightResultData;
 use Thallo\Core\Http\DTOs\Responses\UpdateStartResultData;
+use Thallo\Core\Http\DTOs\StartUpdateData;
 use Thallo\Core\Support\ActorHelper;
-use Thallo\Core\Updater\OperationStore;
-use Thallo\Core\Updater\UpdateRefused;
+use Thallo\Core\Updater\AtomicFile;
+use Thallo\Core\Updater\Paths;
 use Thallo\Core\Updates\UpdatePreflight;
 
 /**
- * Updating from the admin (docs/upgrading.md): PHP-FPM only checks, files the request and cancels
- * it before a runner claims it. It never changes code — the update runner, a separate process the
- * owner schedules as the code owner, does that. Owner only (system.config).
+ * Updating from the admin (docs/upgrading.md): PHP-FPM only checks, files a request in the inbox and
+ * cancels it before the runner claims it (spec §16.2). It never changes code and never writes what
+ * the runner trusts — the update runner, a separate process the owner schedules as the code owner,
+ * validates the request against its own records. Owner only (system.config).
  */
 final class AdminUpdateController
 {
     public function __construct(
         private readonly UpdatePreflight $preflight,
-        private readonly OperationStore $operations,
+        private readonly Paths $paths,
     ) {
     }
 
@@ -42,13 +44,14 @@ final class AdminUpdateController
 
     #[ApiOperation(
         summary: 'Start an update',
-        description: 'Files a request for the update runner to install the target version. Answers 202 with the '
-            . 'operation id and a one-time token for the /_update page; 409 with the reasons when preflight is '
-            . 'not ready or an update is already open. Requires the system.config permission.',
+        description: 'Files a request for the update runner to install `target`, the version the dialog showed. '
+            . 'Answers 202 with the operation id and a one-time token for the /_update page; 409 with the reasons '
+            . 'when preflight is not ready or an update is already open, and 409 `target_changed` when preflight '
+            . 'now offers another version. Requires the system.config permission.',
         tags: ['Utilities'],
     )]
     #[ApiResponse(202, schema: UpdateStartResultData::class, description: 'Update requested.')]
-    public function start(Request $request): Response
+    public function start(StartUpdateData $input, Request $request): Response
     {
         $check = $this->preflight->check();
         if (!$check['ready'] || $check['target'] === null || $check['current'] === null) {
@@ -56,16 +59,22 @@ final class AdminUpdateController
                 'reasons' => $check['reasons'] !== [] ? $check['reasons'] : ['no_update'],
             ]);
         }
-        try {
-            [$op, $token] = $this->operations->start(
-                $check['target'],
-                $check['current'],
-                ActorHelper::uuidFromRequest($request) ?? 'unknown',
-            );
-        } catch (UpdateRefused $e) {
-            return Response::error('An update is already open.', Response::HTTP_CONFLICT, ['reasons' => [$e->reason]]);
+        if ($input->target !== $check['target']) {
+            // The dialog showed one version; a newer one appeared since. Install only what was confirmed.
+            return Response::error('The version on offer changed.', Response::HTTP_CONFLICT, [
+                'reasons' => ['target_changed'],
+            ]);
         }
-        $response = Response::success(['update' => ['id' => $op['id'], 'token' => $token]], 'Update requested.');
+        $token = bin2hex(random_bytes(32));
+        $by = ActorHelper::uuidFromRequest($request) ?? 'unknown';
+        AtomicFile::writeJson($this->paths->startRequest(), [
+            'target' => $check['target'],
+            'from' => $check['current'],
+            'requested_by' => preg_match('/^[A-Za-z0-9._@-]{1,64}$/', $by) === 1 ? $by : 'unknown',
+            'requested_at' => gmdate('c'),
+            'token_hash' => hash('sha256', $token),
+        ], 0660);
+        $response = Response::success(['update' => ['id' => 'requested', 'token' => $token]], 'Update requested.');
         $response->setStatusCode(202);
         return $response;
     }
@@ -79,8 +88,8 @@ final class AdminUpdateController
     #[ApiResponse(200, description: 'Update cancelled.')]
     public function cancel(): Response
     {
-        $current = $this->operations->current();
-        if ($current === null || !$this->operations->cancel((string) $current['id'])) {
+        $file = $this->paths->startRequest();
+        if (!is_file($file) || !@unlink($file)) {
             return Response::error('There is no requested update to cancel.', Response::HTTP_CONFLICT);
         }
         return Response::success(['cancelled' => true], 'Update cancelled.');

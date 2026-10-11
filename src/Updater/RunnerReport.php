@@ -20,10 +20,9 @@ final class RunnerReport
     public static function write(Paths $paths, Host $host, array $settings): array
     {
         $report = self::collect($paths, $host, $settings);
-        if (!is_dir($paths->dir())) {
-            mkdir($paths->dir(), 0770, true);
+        if (is_dir($paths->controlDir())) {
+            AtomicFile::writeJson($paths->runnerReport(), $report, 0640);
         }
-        AtomicFile::writeJson($paths->runnerReport(), $report, 0644);
         return $report;
     }
 
@@ -43,8 +42,8 @@ final class RunnerReport
             }
         }
         $json = json_decode((string) @file_get_contents($base . '/composer.json'), true);
-        $installedAt = self::stamp($paths->dir() . '/guard.installed');
-        $readyAt = self::stamp($paths->dir() . '/guard.ready');
+        $installedAt = self::stamp($paths->guardInstalled());
+        $readyAt = self::stamp($paths->guardReady());
         $disk = self::disk($paths, $host, $settings, $previous, $now);
 
         return [
@@ -62,6 +61,10 @@ final class RunnerReport
             'needed_bytes' => $disk['needed_bytes'],
             'disk_computed_at' => $disk['computed_at'],
             'guard_installed' => is_file($base . '/bootstrap/update-guard.php'),
+            'guard_included' => is_file($base . '/bootstrap/update-guard.php')
+                && str_contains((string) @file_get_contents($base . '/public/index.php'), 'update-guard.php')
+                && str_contains((string) @file_get_contents($base . '/glueful'), 'update-guard.php'),
+            'layout_problems' => Layout::problems($paths, function_exists('posix_geteuid') ? posix_geteuid() : -1),
             'guard_installed_at' => $installedAt,
             'guard_ready_at' => $readyAt,
             'unguarded_processes' => self::unguardedProcesses($paths, $host, $installedAt),

@@ -8,8 +8,14 @@ namespace Thallo\ShippedUpdater\Guard;
 
 // ---- Paths ----
 /**
- * Every file the updater reads or writes, from the site's base path. Dependency-free: this class is
- * concatenated into bin/thallo-updater and bootstrap/update-guard.php (scripts/build-updater).
+ * Every file the updater reads or writes, from the site's base path (spec §16.1). Three locations:
+ *
+ * - private (`.thallo-update/`, code owner, 0700): everything the runner trusts;
+ * - control (`.thallo-update-control/`, code owner + the web group, 0750): what the runner publishes
+ *   and PHP-FPM only reads — status, the closed flag, the admission lock, the verification secret;
+ * - inbox (`storage/framework/updates/`, web-writable): requests, which the runner treats as untrusted.
+ *
+ * Dependency-free: this class is concatenated into bin/thallo-updater and bootstrap/update-guard.php.
  */
 final class Paths
 {
@@ -17,53 +23,110 @@ final class Paths
     {
     }
 
-    public function dir(): string
+    public function privateDir(): string
+    {
+        return $this->base . '/.thallo-update';
+    }
+
+    public function controlDir(): string
+    {
+        return $this->base . '/.thallo-update-control';
+    }
+
+    public function inbox(): string
     {
         return $this->base . '/storage/framework/updates';
     }
+
+    // ---- private -----------------------------------------------------------------------------
+
     public function operation(): string
     {
-        return $this->dir() . '/operation.json';
+        return $this->privateDir() . '/operation.json';
     }
+
     public function stateLock(): string
     {
-        return $this->dir() . '/state.lock';
+        return $this->privateDir() . '/state.lock';
     }
+
     public function runLock(): string
     {
-        return $this->dir() . '/run.lock';
+        return $this->privateDir() . '/run.lock';
     }
-    public function admissionLock(): string
+
+    public function guardInstalled(): string
     {
-        return $this->dir() . '/admission.lock';
+        return $this->privateDir() . '/guard.installed';
     }
-    public function closedFlag(): string
+
+    public function guardReady(): string
     {
-        return $this->dir() . '/closed.flag';
+        return $this->privateDir() . '/guard.ready';
     }
-    public function runnerReport(): string
+
+    public function composerHome(): string
     {
-        return $this->dir() . '/runner.json';
+        return $this->privateDir() . '/composer-home';
     }
-    public function verifySecret(): string
-    {
-        return $this->dir() . '/verify.secret';
-    }
+
     public function proofMarker(): string
     {
-        return $this->dir() . '/.proof';
+        return $this->privateDir() . '/.proof';
     }
+
     public function opDir(string $id): string
     {
-        return $this->dir() . '/' . $id;
+        return $this->privateDir() . '/ops/' . $id;
     }
+
     public function backupDir(string $id): string
     {
-        return $this->base . '/storage/backups/update-' . $id;
+        return $this->privateDir() . '/backups/' . $id;
     }
+
     public function log(string $id): string
     {
-        return $this->base . '/storage/logs/update-' . $id . '.log';
+        return $this->privateDir() . '/logs/' . $id . '.log';
+    }
+
+    // ---- control (runner writes, PHP-FPM reads) ----------------------------------------------
+
+    public function status(): string
+    {
+        return $this->controlDir() . '/status.json';
+    }
+
+    public function admissionLock(): string
+    {
+        return $this->controlDir() . '/admission.lock';
+    }
+
+    public function closedFlag(): string
+    {
+        return $this->controlDir() . '/closed.flag';
+    }
+
+    public function runnerReport(): string
+    {
+        return $this->controlDir() . '/runner.json';
+    }
+
+    public function verifySecret(): string
+    {
+        return $this->controlDir() . '/verify.secret';
+    }
+
+    // ---- inbox (PHP-FPM writes, the runner validates) ----------------------------------------
+
+    public function startRequest(): string
+    {
+        return $this->inbox() . '/start.json';
+    }
+
+    public function recoverRequest(): string
+    {
+        return $this->inbox() . '/recover.json';
     }
 }
 
@@ -85,12 +148,14 @@ final class FileLock
         return $h;
     }
 
-    /** @return resource|null */
+    /** @return resource|null|false  false: the file cannot be opened; null: held exclusively elsewhere */
     public static function shared(string $path)
     {
-        $h = self::open($path);
+        // Read-only, never created: PHP-FPM may only read the admission lock (spec §16.1), and a
+        // missing or unreadable file is "cannot open" (false), not "held by the runner" (null).
+        $h = @fopen($path, 'r');
         if ($h === false) {
-            return null;
+            return false;
         }
         if (!flock($h, LOCK_SH | LOCK_NB)) {
             fclose($h);
@@ -141,7 +206,13 @@ final class AtomicFile
     public static function write(string $path, string $contents, int $mode = 0640): void
     {
         $tmp = $path . '.tmp-' . getmypid() . '-' . bin2hex(random_bytes(3));
-        $h = fopen($tmp, 'x');
+        // Created under the target mode: a private file is never briefly readable by the web group.
+        $umask = umask(0777 & ~$mode);
+        try {
+            $h = @fopen($tmp, 'x');
+        } finally {
+            umask($umask);
+        }
         if ($h === false) {
             throw new \RuntimeException("Cannot write {$tmp}");
         }
@@ -193,244 +264,6 @@ final class Status
     }
 }
 
-// ---- UpdateRefused ----
-final class UpdateRefused extends \RuntimeException
-{
-    public function __construct(public readonly string $reason)
-    {
-        parent::__construct($reason);
-    }
-}
-
-// ---- Fenced ----
-/** A write by a runner that no longer owns the operation (spec §5): it is refused, never applied. */
-final class Fenced extends \RuntimeException
-{
-}
-
-// ---- OperationStore ----
-/**
- * The one update operation (spec §5). Every transition is a compare-and-set under a short exclusive
- * lock on state.lock, on the operation id, status and owner the caller expects. A runner that lost
- * ownership (it was paused, found dead, or the operation finished) gets Fenced, never a write.
- */
-final class OperationStore
-{
-    public const FORMAT = 1;
-    public const RECOVERY_OPTIONS = ['rollback', 'retry_provision', 'reopen'];
-
-    public function __construct(private readonly Paths $paths, private readonly \Closure $now)
-    {
-    }
-
-    public function current(): ?array
-    {
-        return AtomicFile::readJson($this->paths->operation());
-    }
-
-    /** @return array{0: array, 1: string} */
-    public function start(string $target, string $from, string $requestedBy): array
-    {
-        return $this->locked(function () use ($target, $from, $requestedBy): array {
-            $op = $this->current();
-            if ($op !== null && $op['status'] === Status::RECOVERY_REQUIRED) {
-                throw new UpdateRefused('recovery_required');
-            }
-            if ($op !== null && !Status::isTerminal($op['status'])) {
-                throw new UpdateRefused('in_progress');
-            }
-            $token = bin2hex(random_bytes(32));
-            $op = [
-                'format' => self::FORMAT,
-                'id' => gmdate('YmdHis', ($this->now)()) . '-' . bin2hex(random_bytes(3)),
-                'target' => $target,
-                'from' => $from,
-                'status' => Status::REQUESTED,
-                'step' => null,
-                'steps' => [],
-                'requested_by' => $requestedBy,
-                'requested_at' => ($this->now)(),
-                'token_hash' => hash('sha256', $token),
-                'owner' => null,
-                'pid' => null,
-                'pgid' => null,
-                'heartbeat_at' => null,
-                'provision_started' => false,
-                'reopen_ready_at' => null,
-                'journal' => [],
-                'backup' => null,
-                'provision_manifest' => null,
-                'recovery_request' => null,
-                'recovering' => null,
-                'error' => null,
-            ];
-            $this->write($op);
-            return [$op, $token];
-        });
-    }
-
-    public function claim(string $id, int $pid, ?int $pgid): ?array
-    {
-        return $this->transition($id, static fn (array $op): bool => $op['status'] === Status::REQUESTED, $pid, $pgid);
-    }
-
-    public function claimRecovery(string $id, int $pid, ?int $pgid): ?array
-    {
-        return $this->transition(
-            $id,
-            static fn (array $op): bool => $op['status'] === Status::RECOVERY_REQUIRED
-                && $op['recovery_request'] !== null,
-            $pid,
-            $pgid,
-            true,
-        );
-    }
-
-    public function takeOver(string $id, string $deadOwner, int $pid, ?int $pgid): ?array
-    {
-        return $this->transition(
-            $id,
-            static fn (array $op): bool => $op['status'] === Status::RUNNING
-                && hash_equals((string) $op['owner'], $deadOwner),
-            $pid,
-            $pgid,
-        );
-    }
-
-    public function cancel(string $id): bool
-    {
-        return $this->locked(function () use ($id): bool {
-            $op = $this->current();
-            if ($op === null || $op['id'] !== $id || $op['status'] !== Status::REQUESTED) {
-                return false;
-            }
-            $op['status'] = Status::CANCELLED;
-            $this->write($op);
-            return true;
-        });
-    }
-
-    public function update(string $id, string $owner, callable $mutate): array
-    {
-        return $this->locked(function () use ($id, $owner, $mutate): array {
-            $op = $this->owned($id, $owner);
-            $op = $mutate($op);
-            $op['id'] = $id; // a mutation can never move the write to another operation
-            $op['owner'] = $owner;
-            $this->write($op);
-            return $op;
-        });
-    }
-
-    public function finish(string $id, string $owner, string $status, ?string $error = null): array
-    {
-        return $this->update($id, $owner, static function (array $op) use ($status, $error): array {
-            $op['status'] = $status;
-            $op['error'] = $error;
-            $op['recovery_request'] = null;
-            $op['recovering'] = null;
-            return $op;
-        });
-    }
-
-    public function verifyToken(string $token): bool
-    {
-        $op = $this->current();
-        return $op !== null && $token !== '' && hash_equals((string) $op['token_hash'], hash('sha256', $token));
-    }
-
-    public function rotateToken(string $id): ?string
-    {
-        return $this->locked(function () use ($id): ?string {
-            $op = $this->current();
-            if ($op === null || $op['id'] !== $id) {
-                return null;
-            }
-            $token = bin2hex(random_bytes(32));
-            $op['token_hash'] = hash('sha256', $token);
-            $this->write($op);
-            return $token;
-        });
-    }
-
-    public function requestRecovery(string $token, string $option): bool
-    {
-        return $this->locked(function () use ($token, $option): bool {
-            $op = $this->current();
-            if ($op === null || $token === '' || !hash_equals((string) $op['token_hash'], hash('sha256', $token))) {
-                return false;
-            }
-            return $this->recordRecovery($op, $option);
-        });
-    }
-
-    public function requestRecoveryAsOwner(string $id, string $option): bool
-    {
-        return $this->locked(function () use ($id, $option): bool {
-            $op = $this->current();
-            return $op !== null && $op['id'] === $id && $this->recordRecovery($op, $option);
-        });
-    }
-
-    private function recordRecovery(array $op, string $option): bool
-    {
-        if (!in_array($option, self::RECOVERY_OPTIONS, true) || $op['status'] !== Status::RECOVERY_REQUIRED) {
-            return false;
-        }
-        $op['recovery_request'] = $option;
-        $this->write($op);
-        return true;
-    }
-
-    private function transition(string $id, \Closure $allowed, int $pid, ?int $pgid, bool $recovery = false): ?array
-    {
-        return $this->locked(function () use ($id, $allowed, $pid, $pgid, $recovery): ?array {
-            $op = $this->current();
-            if ($op === null || $op['id'] !== $id || !$allowed($op)) {
-                return null;
-            }
-            if ($recovery) {
-                $op['recovering'] = $op['recovery_request'];
-                $op['recovery_request'] = null;
-            }
-            $op['status'] = Status::RUNNING;
-            $op['owner'] = bin2hex(random_bytes(16));
-            $op['pid'] = $pid;
-            $op['pgid'] = $pgid;
-            $op['heartbeat_at'] = ($this->now)();
-            $this->write($op);
-            return $op;
-        });
-    }
-
-    private function owned(string $id, string $owner): array
-    {
-        $op = $this->current();
-        if (
-            $op === null
-            || $op['id'] !== $id
-            || $op['status'] !== Status::RUNNING
-            || !hash_equals((string) $op['owner'], $owner)
-        ) {
-            throw new Fenced("Operation {$id} is no longer owned by this runner");
-        }
-        return $op;
-    }
-
-    private function write(array $op): void
-    {
-        AtomicFile::writeJson($this->paths->operation(), $op);
-    }
-
-    private function locked(callable $fn): mixed
-    {
-        if (!is_dir($this->paths->dir())) {
-            mkdir($this->paths->dir(), 0770, true);
-        }
-        return FileLock::withExclusive($this->paths->stateLock(), $fn);
-    }
-}
-
 // ---- Barrier ----
 /**
  * Closing the site and the barrier (spec §7). Admitted web requests and console processes hold a
@@ -458,7 +291,7 @@ class Barrier
         @unlink($this->paths->closedFlag());
     }
 
-    /** @return resource|null */
+    /** @return resource|null|false  false: the lock file cannot be opened (a misconfiguration, not an update) */
     public function admit()
     {
         if ($this->isClosed()) {
@@ -467,12 +300,12 @@ class Barrier
         return $this->admitAfterFirstCheck();
     }
 
-    /** @return resource|null */
+    /** @return resource|null|false */
     protected function admitAfterFirstCheck()
     {
         $h = FileLock::shared($this->paths->admissionLock());
-        if ($h === null) {
-            return null; // the runner holds the barrier
+        if ($h === null || $h === false) {
+            return $h; // null: the runner holds the barrier; false: the lock file cannot be opened
         }
         if ($this->isClosed()) {
             FileLock::release($h);
@@ -576,7 +409,7 @@ input{font:inherit;width:100%;padding:8px 10px;border:1px solid var(--line);bord
   <section class="card" id="recovery" hidden>
     <p id="recovery-error" class="bad"></p>
     <p class="muted" style="margin-top:8px">The database is never restored automatically. Backup: <code id="backup-path"></code></p>
-    <p class="muted">To restore it: <code id="restore-cmd"></code></p>
+    <p class="muted">To restore it, as the code owner: <code id="restore-cmd"></code></p>
     <div class="actions">
       <button data-option="rollback">Roll back the code</button>
       <button data-option="retry_provision">Retry provision</button>
@@ -661,6 +494,12 @@ input{font:inherit;width:100%;padding:8px 10px;border:1px solid var(--line);bord
       $('restore-cmd').textContent = 'psql --dbname <database> -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;" && '
         + 'pg_restore --no-owner --dbname <database> ' + path + '/database.dump';
       show('waiting', !!o.recovery_request);
+      // Only what the runner offers now, from its own journal: retry needs the whole swap live,
+      // roll back needs something to undo.
+      var offered = data.recovery_options || [];
+      document.querySelectorAll('[data-option]').forEach(function (b) {
+        b.hidden = offered.indexOf(b.getAttribute('data-option')) === -1;
+      });
     }
   }
   function request(option, confirm) {
@@ -706,9 +545,12 @@ HTML;
 
 // ---- Guard ----
 /**
- * The guard (spec §7), included by public/index.php and glueful before bootstrap/app.php. Plain
- * PHP: it must work while vendor/ is being replaced. Guard routes (/_update…) never boot the
+ * The guard (spec §7, §16.3), included by public/index.php and glueful before bootstrap/app.php.
+ * Plain PHP: it must work while vendor/ is being replaced. Guard routes (/_update…) never boot the
  * application and never take the barrier; everything else is admitted or refused here.
+ *
+ * It reads only what the runner publishes in the control folder (status, the closed flag, the
+ * admission lock, read-only) and writes only recover.json in the inbox, which the runner validates.
  */
 final class Guard
 {
@@ -720,7 +562,6 @@ final class Guard
 
     public function __construct(
         private readonly Paths $paths,
-        private readonly OperationStore $ops,
         private readonly Barrier $barrier,
         ?\Closure $sleep = null,
     ) {
@@ -732,7 +573,7 @@ final class Guard
     public static function boot(string $base): void
     {
         $paths = new Paths($base);
-        $guard = new self($paths, new OperationStore($paths, static fn (): int => time()), new Barrier($paths));
+        $guard = new self($paths, new Barrier($paths));
         if (PHP_SAPI === 'cli') {
             $env = getenv();
             $code = $guard->console($_SERVER['argv'] ?? [], is_array($env) ? $env : []);
@@ -767,8 +608,7 @@ final class Guard
         if ($path === '/_update' || str_starts_with($path, '/_update/')) {
             return $this->route($method, $path, $headers, $body);
         }
-        $this->held = $this->barrier->admit();
-        if ($this->held !== null) {
+        if ($this->admitted()) {
             return null;
         }
         if ($path === '/health') {
@@ -790,19 +630,19 @@ final class Guard
         }
         $command = $argv[1] ?? '';
         if ($command === 'queue:work') {
-            while (($this->held = $this->barrier->admit()) === null) {
+            while (!$this->admitted()) {
                 ($this->sleep)();
             }
             return null;
         }
-        $this->held = $this->barrier->admit();
-        if ($this->held !== null) {
+        if ($this->admitted()) {
             return null;
         }
         if ($command === 'queue:scheduler') {
             return 0;
         }
-        fwrite(STDERR, "Thallo is being updated; try again when it finishes (see /_update).\n");
+        fwrite(STDERR, "Thallo is being updated, or an update needs attention: see /_update, or run\n"
+            . "php bin/thallo-updater recover --rollback | --retry-provision | --reopen as the code owner.\n");
         return 1;
     }
 
@@ -810,6 +650,26 @@ final class Guard
     public function held()
     {
         return $this->held;
+    }
+
+    /**
+     * Admitted with the shared lock; or admitted without it when the lock file cannot be opened and
+     * no update has closed the site — a misconfiguration (folder permissions), logged, never a
+     * reason to show the maintenance page (spec §16.3).
+     */
+    private function admitted(): bool
+    {
+        $h = $this->barrier->admit();
+        if (is_resource($h)) {
+            $this->held = $h;
+            return true;
+        }
+        if ($h === false && !$this->barrier->isClosed()) {
+            error_log('Thallo update guard: cannot open ' . $this->paths->admissionLock()
+                . '; run php glueful thallo:provision as the code owner to set the update folders up.');
+            return true;
+        }
+        return false;
     }
 
     /** @param array<string,string> $headers */
@@ -823,26 +683,50 @@ final class Guard
             return $this->verify($headers, $body);
         }
         $token = $headers['x-thallo-update-token'] ?? '';
-        if (!$this->ops->verifyToken($token)) {
+        $status = AtomicFile::readJson($this->paths->status()) ?? [];
+        $published = $token !== '' && hash_equals((string) ($status['token_hash'] ?? ''), hash('sha256', $token));
+        if ($path === '/_update/status' && $method === 'GET') {
+            if ($published) {
+                return GuardResponse::json(200, [
+                    'operation' => $status['operation'] ?? [],
+                    'recovery_options' => $status['recovery_options'] ?? [],
+                    'log' => (string) ($status['log'] ?? ''),
+                ]);
+            }
+            // Filed but not yet claimed: the runner has not published it, the inbox still holds it.
+            $pending = $this->pendingRequest();
+            $filed = $pending !== null ? (string) ($pending['token_hash'] ?? '') : '';
+            if ($token !== '' && $filed !== '' && hash_equals($filed, hash('sha256', $token))) {
+                $operation = ['status' => Status::REQUESTED, 'target' => (string) ($pending['target'] ?? '')];
+                return GuardResponse::json(200, ['operation' => $operation, 'recovery_options' => [], 'log' => '']);
+            }
             return GuardResponse::json(403, ['error' => 'token']);
         }
-        if ($path === '/_update/status' && $method === 'GET') {
-            $op = $this->ops->current() ?? [];
-            unset($op['token_hash'], $op['owner'], $op['pid'], $op['pgid']);
-            $log = $this->logTail((string) ($op['id'] ?? ''), 200);
-            return GuardResponse::json(200, ['operation' => $op, 'log' => $log]);
-        }
         if ($path === '/_update/recover' && $method === 'POST') {
+            if (!$published) {
+                return GuardResponse::json(403, ['error' => 'token']);
+            }
             $in = json_decode($body, true);
             $option = is_array($in) ? (string) ($in['option'] ?? '') : '';
             if ($option === 'reopen' && (!is_array($in) || ($in['confirm'] ?? '') !== 'REOPEN')) {
                 return GuardResponse::json(422, ['error' => 'confirm']);
             }
-            return $this->ops->requestRecovery($token, $option)
-                ? GuardResponse::json(202, ['requested' => $option])
-                : GuardResponse::json(409, ['error' => 'not_recoverable']);
+            $offered = (array) ($status['recovery_options'] ?? []);
+            $recovering = ($status['operation']['status'] ?? '') === Status::RECOVERY_REQUIRED;
+            if (!$recovering || !in_array($option, $offered, true)) {
+                return GuardResponse::json(409, ['error' => 'not_recoverable']);
+            }
+            // A request only: the runner checks the token and the option against its own records.
+            AtomicFile::writeJson($this->paths->recoverRequest(), ['option' => $option, 'token' => $token], 0660);
+            return GuardResponse::json(202, ['requested' => $option]);
         }
         return GuardResponse::json(404, ['error' => 'not_found']);
+    }
+
+    private function pendingRequest(): ?array
+    {
+        $file = $this->paths->startRequest();
+        return is_file($file) && !is_link($file) && filesize($file) <= 4096 ? AtomicFile::readJson($file) : null;
     }
 
     /** @param array<string,string> $headers */
@@ -863,13 +747,16 @@ final class Guard
                     || is_writable($this->paths->base . '/composer.lock'),
                 'admission_ok' => (static function (string $lock): bool {
                     $h = FileLock::shared($lock);
-                    if ($h === null) {
-                        return false;
+                    if (is_resource($h)) {
+                        FileLock::release($h);
                     }
-                    FileLock::release($h);
-                    return true;
+                    return $h !== false; // opened (null: opened, held by the runner)
                 })($this->paths->admissionLock()),
-                'state_writable' => is_writable($this->paths->dir()),
+                'state_writable' => is_writable($this->paths->inbox()),
+                // The boundary (spec §16.1): PHP-FPM must not be able to write what the runner trusts.
+                'control_writable' => is_writable($this->paths->controlDir())
+                    || is_writable($this->paths->admissionLock()),
+                'private_readable' => @is_readable($this->paths->privateDir()),
                 'opcache' => [
                     'enabled' => (bool) ini_get('opcache.enable'),
                     'validate_timestamps' => (bool) ini_get('opcache.validate_timestamps'),
@@ -910,16 +797,6 @@ final class Guard
         } catch (\Throwable $e) {
             return GuardResponse::json(500, ['error' => $e->getMessage()]);
         }
-    }
-
-    private function logTail(string $id, int $lines): string
-    {
-        $file = $id === '' ? '' : $this->paths->log($id);
-        if ($file === '' || !is_file($file)) {
-            return '';
-        }
-        $all = preg_split('/\r?\n/', rtrim((string) file_get_contents($file), "\n")) ?: [];
-        return implode("\n", array_slice($all, -$lines));
     }
 
     private static function closedPage(): string

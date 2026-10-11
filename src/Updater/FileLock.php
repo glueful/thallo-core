@@ -21,12 +21,14 @@ final class FileLock
         return $h;
     }
 
-    /** @return resource|null */
+    /** @return resource|null|false  false: the file cannot be opened; null: held exclusively elsewhere */
     public static function shared(string $path)
     {
-        $h = self::open($path);
+        // Read-only, never created: PHP-FPM may only read the admission lock (spec §16.1), and a
+        // missing or unreadable file is "cannot open" (false), not "held by the runner" (null).
+        $h = @fopen($path, 'r');
         if ($h === false) {
-            return null;
+            return false;
         }
         if (!flock($h, LOCK_SH | LOCK_NB)) {
             fclose($h);

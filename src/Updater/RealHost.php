@@ -11,7 +11,7 @@ final class RealHost implements Host
      * $pgid/$self: the runner's process group and pid, for ChildProcess::run's timeout cleanup.
      */
     public function __construct(
-        private readonly string $log,
+        private string $log,
         private array $inherit,
         private readonly ?int $pgid = null,
         private readonly ?int $self = null,
@@ -22,6 +22,15 @@ final class RealHost implements Host
     public function inherit($handle): void
     {
         $this->inherit[] = $handle;
+    }
+
+    /** The operation's own log once its id is known (the runner claims before it knows which). */
+    public function logTo(string $log): void
+    {
+        if (!is_dir(dirname($log))) {
+            @mkdir(dirname($log), 0700, true);
+        }
+        $this->log = $log;
     }
 
     /** @param resource $handle */

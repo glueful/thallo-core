@@ -5,9 +5,12 @@ declare(strict_types=1);
 namespace Thallo\Core\Updater;
 
 /**
- * The guard (spec §7), included by public/index.php and glueful before bootstrap/app.php. Plain
- * PHP: it must work while vendor/ is being replaced. Guard routes (/_update…) never boot the
+ * The guard (spec §7, §16.3), included by public/index.php and glueful before bootstrap/app.php.
+ * Plain PHP: it must work while vendor/ is being replaced. Guard routes (/_update…) never boot the
  * application and never take the barrier; everything else is admitted or refused here.
+ *
+ * It reads only what the runner publishes in the control folder (status, the closed flag, the
+ * admission lock, read-only) and writes only recover.json in the inbox, which the runner validates.
  */
 final class Guard
 {
@@ -19,7 +22,6 @@ final class Guard
 
     public function __construct(
         private readonly Paths $paths,
-        private readonly OperationStore $ops,
         private readonly Barrier $barrier,
         ?\Closure $sleep = null,
     ) {
@@ -31,7 +33,7 @@ final class Guard
     public static function boot(string $base): void
     {
         $paths = new Paths($base);
-        $guard = new self($paths, new OperationStore($paths, static fn (): int => time()), new Barrier($paths));
+        $guard = new self($paths, new Barrier($paths));
         if (PHP_SAPI === 'cli') {
             $env = getenv();
             $code = $guard->console($_SERVER['argv'] ?? [], is_array($env) ? $env : []);
@@ -66,8 +68,7 @@ final class Guard
         if ($path === '/_update' || str_starts_with($path, '/_update/')) {
             return $this->route($method, $path, $headers, $body);
         }
-        $this->held = $this->barrier->admit();
-        if ($this->held !== null) {
+        if ($this->admitted()) {
             return null;
         }
         if ($path === '/health') {
@@ -89,19 +90,19 @@ final class Guard
         }
         $command = $argv[1] ?? '';
         if ($command === 'queue:work') {
-            while (($this->held = $this->barrier->admit()) === null) {
+            while (!$this->admitted()) {
                 ($this->sleep)();
             }
             return null;
         }
-        $this->held = $this->barrier->admit();
-        if ($this->held !== null) {
+        if ($this->admitted()) {
             return null;
         }
         if ($command === 'queue:scheduler') {
             return 0;
         }
-        fwrite(STDERR, "Thallo is being updated; try again when it finishes (see /_update).\n");
+        fwrite(STDERR, "Thallo is being updated, or an update needs attention: see /_update, or run\n"
+            . "php bin/thallo-updater recover --rollback | --retry-provision | --reopen as the code owner.\n");
         return 1;
     }
 
@@ -109,6 +110,26 @@ final class Guard
     public function held()
     {
         return $this->held;
+    }
+
+    /**
+     * Admitted with the shared lock; or admitted without it when the lock file cannot be opened and
+     * no update has closed the site — a misconfiguration (folder permissions), logged, never a
+     * reason to show the maintenance page (spec §16.3).
+     */
+    private function admitted(): bool
+    {
+        $h = $this->barrier->admit();
+        if (is_resource($h)) {
+            $this->held = $h;
+            return true;
+        }
+        if ($h === false && !$this->barrier->isClosed()) {
+            error_log('Thallo update guard: cannot open ' . $this->paths->admissionLock()
+                . '; run php glueful thallo:provision as the code owner to set the update folders up.');
+            return true;
+        }
+        return false;
     }
 
     /** @param array<string,string> $headers */
@@ -122,26 +143,50 @@ final class Guard
             return $this->verify($headers, $body);
         }
         $token = $headers['x-thallo-update-token'] ?? '';
-        if (!$this->ops->verifyToken($token)) {
+        $status = AtomicFile::readJson($this->paths->status()) ?? [];
+        $published = $token !== '' && hash_equals((string) ($status['token_hash'] ?? ''), hash('sha256', $token));
+        if ($path === '/_update/status' && $method === 'GET') {
+            if ($published) {
+                return GuardResponse::json(200, [
+                    'operation' => $status['operation'] ?? [],
+                    'recovery_options' => $status['recovery_options'] ?? [],
+                    'log' => (string) ($status['log'] ?? ''),
+                ]);
+            }
+            // Filed but not yet claimed: the runner has not published it, the inbox still holds it.
+            $pending = $this->pendingRequest();
+            $filed = $pending !== null ? (string) ($pending['token_hash'] ?? '') : '';
+            if ($token !== '' && $filed !== '' && hash_equals($filed, hash('sha256', $token))) {
+                $operation = ['status' => Status::REQUESTED, 'target' => (string) ($pending['target'] ?? '')];
+                return GuardResponse::json(200, ['operation' => $operation, 'recovery_options' => [], 'log' => '']);
+            }
             return GuardResponse::json(403, ['error' => 'token']);
         }
-        if ($path === '/_update/status' && $method === 'GET') {
-            $op = $this->ops->current() ?? [];
-            unset($op['token_hash'], $op['owner'], $op['pid'], $op['pgid']);
-            $log = $this->logTail((string) ($op['id'] ?? ''), 200);
-            return GuardResponse::json(200, ['operation' => $op, 'log' => $log]);
-        }
         if ($path === '/_update/recover' && $method === 'POST') {
+            if (!$published) {
+                return GuardResponse::json(403, ['error' => 'token']);
+            }
             $in = json_decode($body, true);
             $option = is_array($in) ? (string) ($in['option'] ?? '') : '';
             if ($option === 'reopen' && (!is_array($in) || ($in['confirm'] ?? '') !== 'REOPEN')) {
                 return GuardResponse::json(422, ['error' => 'confirm']);
             }
-            return $this->ops->requestRecovery($token, $option)
-                ? GuardResponse::json(202, ['requested' => $option])
-                : GuardResponse::json(409, ['error' => 'not_recoverable']);
+            $offered = (array) ($status['recovery_options'] ?? []);
+            $recovering = ($status['operation']['status'] ?? '') === Status::RECOVERY_REQUIRED;
+            if (!$recovering || !in_array($option, $offered, true)) {
+                return GuardResponse::json(409, ['error' => 'not_recoverable']);
+            }
+            // A request only: the runner checks the token and the option against its own records.
+            AtomicFile::writeJson($this->paths->recoverRequest(), ['option' => $option, 'token' => $token], 0660);
+            return GuardResponse::json(202, ['requested' => $option]);
         }
         return GuardResponse::json(404, ['error' => 'not_found']);
+    }
+
+    private function pendingRequest(): ?array
+    {
+        $file = $this->paths->startRequest();
+        return is_file($file) && !is_link($file) && filesize($file) <= 4096 ? AtomicFile::readJson($file) : null;
     }
 
     /** @param array<string,string> $headers */
@@ -162,13 +207,16 @@ final class Guard
                     || is_writable($this->paths->base . '/composer.lock'),
                 'admission_ok' => (static function (string $lock): bool {
                     $h = FileLock::shared($lock);
-                    if ($h === null) {
-                        return false;
+                    if (is_resource($h)) {
+                        FileLock::release($h);
                     }
-                    FileLock::release($h);
-                    return true;
+                    return $h !== false; // opened (null: opened, held by the runner)
                 })($this->paths->admissionLock()),
-                'state_writable' => is_writable($this->paths->dir()),
+                'state_writable' => is_writable($this->paths->inbox()),
+                // The boundary (spec §16.1): PHP-FPM must not be able to write what the runner trusts.
+                'control_writable' => is_writable($this->paths->controlDir())
+                    || is_writable($this->paths->admissionLock()),
+                'private_readable' => @is_readable($this->paths->privateDir()),
                 'opcache' => [
                     'enabled' => (bool) ini_get('opcache.enable'),
                     'validate_timestamps' => (bool) ini_get('opcache.validate_timestamps'),
@@ -209,16 +257,6 @@ final class Guard
         } catch (\Throwable $e) {
             return GuardResponse::json(500, ['error' => $e->getMessage()]);
         }
-    }
-
-    private function logTail(string $id, int $lines): string
-    {
-        $file = $id === '' ? '' : $this->paths->log($id);
-        if ($file === '' || !is_file($file)) {
-            return '';
-        }
-        $all = preg_split('/\r?\n/', rtrim((string) file_get_contents($file), "\n")) ?: [];
-        return implode("\n", array_slice($all, -$lines));
     }
 
     private static function closedPage(): string

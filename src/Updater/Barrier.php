@@ -30,7 +30,7 @@ class Barrier
         @unlink($this->paths->closedFlag());
     }
 
-    /** @return resource|null */
+    /** @return resource|null|false  false: the lock file cannot be opened (a misconfiguration, not an update) */
     public function admit()
     {
         if ($this->isClosed()) {
@@ -39,12 +39,12 @@ class Barrier
         return $this->admitAfterFirstCheck();
     }
 
-    /** @return resource|null */
+    /** @return resource|null|false */
     protected function admitAfterFirstCheck()
     {
         $h = FileLock::shared($this->paths->admissionLock());
-        if ($h === null) {
-            return null; // the runner holds the barrier
+        if ($h === null || $h === false) {
+            return $h; // null: the runner holds the barrier; false: the lock file cannot be opened
         }
         if ($this->isClosed()) {
             FileLock::release($h);

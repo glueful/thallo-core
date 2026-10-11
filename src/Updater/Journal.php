@@ -16,6 +16,9 @@ final class Journal
         private readonly string $id,
         private readonly string $owner,
         private readonly ?\Closure $killPoint = null,
+        // The runner's fixed set (spec §16.2): fn(string $from, string $to): bool. Null allows any
+        // rename (unit tests of the journal's mechanics only).
+        private readonly ?\Closure $allowed = null,
     ) {
     }
 
@@ -78,6 +81,9 @@ final class Journal
 
     private function journaled(string $kind, ?int $reverses, string $label, string $from, string $to): void
     {
+        if ($this->allowed !== null && !($this->allowed)($from, $to)) {
+            throw new \RuntimeException("Refused a rename outside the runner's fixed set: {$from} → {$to}");
+        }
         $seq = 0;
         $entry = [
             'kind' => $kind,
@@ -96,8 +102,9 @@ final class Journal
         if (!is_dir(dirname($to))) {
             mkdir(dirname($to), 0770, true);
         }
-        if (!rename($from, $to)) {
-            throw new \RuntimeException("rename {$from} → {$to} failed");
+        if (!@rename($from, $to)) {
+            $why = error_get_last()['message'] ?? '';
+            throw new \RuntimeException("rename {$from} → {$to} failed" . ($why !== '' ? ": {$why}" : ''));
         }
         $this->kill($label . '.renamed');
         $this->ops->update($this->id, $this->owner, static function (array $op) use ($seq): array {

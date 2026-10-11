@@ -23,10 +23,13 @@ final class OperationStore
         return AtomicFile::readJson($this->paths->operation());
     }
 
-    /** @return array{0: array, 1: string} */
-    public function start(string $target, string $from, string $requestedBy): array
+    /**
+     * A new operation from a validated request (spec §16.2): the runner mints the id; the token hash
+     * comes from the request, so the browser that filed it can follow it on /_update.
+     */
+    public function start(string $target, string $from, string $requestedBy, string $tokenHash): array
     {
-        return $this->locked(function () use ($target, $from, $requestedBy): array {
+        return $this->locked(function () use ($target, $from, $requestedBy, $tokenHash): array {
             $op = $this->current();
             if ($op !== null && $op['status'] === Status::RECOVERY_REQUIRED) {
                 throw new UpdateRefused('recovery_required');
@@ -34,7 +37,6 @@ final class OperationStore
             if ($op !== null && !Status::isTerminal($op['status'])) {
                 throw new UpdateRefused('in_progress');
             }
-            $token = bin2hex(random_bytes(32));
             $op = [
                 'format' => self::FORMAT,
                 'id' => gmdate('YmdHis', ($this->now)()) . '-' . bin2hex(random_bytes(3)),
@@ -45,7 +47,7 @@ final class OperationStore
                 'steps' => [],
                 'requested_by' => $requestedBy,
                 'requested_at' => ($this->now)(),
-                'token_hash' => hash('sha256', $token),
+                'token_hash' => $tokenHash,
                 'owner' => null,
                 'pid' => null,
                 'pgid' => null,
@@ -60,7 +62,7 @@ final class OperationStore
                 'error' => null,
             ];
             $this->write($op);
-            return [$op, $token];
+            return $op;
         });
     }
 
@@ -169,7 +171,8 @@ final class OperationStore
 
     private function recordRecovery(array $op, string $option): bool
     {
-        if (!in_array($option, self::RECOVERY_OPTIONS, true) || $op['status'] !== Status::RECOVERY_REQUIRED) {
+        // Only what the journal says is possible now (spec §16.2), never just what was asked for.
+        if (!in_array($option, RecoveryOptions::for($op), true)) {
             return false;
         }
         $op['recovery_request'] = $option;
@@ -214,13 +217,49 @@ final class OperationStore
 
     private function write(array $op): void
     {
-        AtomicFile::writeJson($this->paths->operation(), $op);
+        AtomicFile::writeJson($this->paths->operation(), $op, 0600);
+        $this->publish($op);
+    }
+
+    /**
+     * What PHP-FPM may know (spec §16.1): status.json in the control folder — the operation without its
+     * owner, process ids, journal or manifest, the recovery choices, the token hash /_update checks,
+     * and the log's tail. Display only: the runner never reads it back.
+     */
+    public function publish(?array $op = null): void
+    {
+        $op ??= $this->current();
+        if ($op === null) {
+            return;
+        }
+        if (!is_dir($this->paths->controlDir())) {
+            @mkdir($this->paths->controlDir(), 0750, true);
+        }
+        $shown = $op;
+        foreach (['owner', 'pid', 'pgid', 'journal', 'token_hash', 'provision_manifest'] as $private) {
+            unset($shown[$private]);
+        }
+        AtomicFile::writeJson($this->paths->status(), [
+            'operation' => $shown,
+            'recovery_options' => RecoveryOptions::for($op),
+            'token_hash' => $op['token_hash'],
+            'log' => self::tail($this->paths->log((string) $op['id']), 200),
+        ], 0640);
+    }
+
+    private static function tail(string $file, int $lines): string
+    {
+        if (!is_file($file)) {
+            return '';
+        }
+        $all = preg_split('/\r?\n/', rtrim((string) file_get_contents($file), "\n")) ?: [];
+        return implode("\n", array_slice($all, -$lines));
     }
 
     private function locked(callable $fn): mixed
     {
-        if (!is_dir($this->paths->dir())) {
-            mkdir($this->paths->dir(), 0770, true);
+        if (!is_dir($this->paths->privateDir())) {
+            mkdir($this->paths->privateDir(), 0700, true);
         }
         return FileLock::withExclusive($this->paths->stateLock(), $fn);
     }

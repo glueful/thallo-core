@@ -6,7 +6,6 @@ namespace Thallo\Core\Updates;
 
 use Composer\Semver\Semver;
 use Thallo\Core\Updater\AtomicFile;
-use Thallo\Core\Updater\OperationStore;
 use Thallo\Core\Updater\Paths;
 use Thallo\Core\Updater\Status;
 
@@ -76,7 +75,7 @@ final class UpdatePreflight
     /** @return list<string> */
     private function runnerReasons(): array
     {
-        $report = AtomicFile::readJson($this->base . '/storage/framework/updates/runner.json');
+        $report = AtomicFile::readJson((new Paths($this->base))->runnerReport());
         if ($report === null || ($this->now)() - (int) ($report['checked_at'] ?? 0) > self::STALE) {
             return ['runner_missing'];
         }
@@ -104,6 +103,9 @@ final class UpdatePreflight
         }
         if (!is_array($web) || (int) ($web['status'] ?? 0) !== 200) {
             $reasons[] = 'web_verify_unreachable';
+        }
+        if (($report['layout_problems'] ?? []) !== []) {
+            $reasons[] = 'insecure_layout';
         }
         if (($report['unguarded_processes'] ?? []) !== []) {
             $reasons[] = 'unguarded_processes';
@@ -155,16 +157,25 @@ final class UpdatePreflight
         return true;
     }
 
-    /** @return list<string> */
+    /**
+     * What the runner has published (status.json in the control folder) and what waits in the inbox.
+     * Both are display-level facts here: the runner decides again from its own records.
+     *
+     * @return list<string>
+     */
     private function operationReasons(): array
     {
-        $op = (new OperationStore(new Paths($this->base), $this->now))->current();
-        if ($op === null) {
+        $paths = new Paths($this->base);
+        if (is_file($paths->startRequest())) {
+            return ['in_progress'];
+        }
+        $status = (string) ((AtomicFile::readJson($paths->status()) ?? [])['operation']['status'] ?? '');
+        if ($status === '') {
             return [];
         }
-        if ($op['status'] === Status::RECOVERY_REQUIRED) {
+        if ($status === Status::RECOVERY_REQUIRED) {
             return ['recovery_required'];
         }
-        return Status::isTerminal((string) $op['status']) ? [] : ['in_progress'];
+        return Status::isTerminal($status) ? [] : ['in_progress'];
     }
 }
