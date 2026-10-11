@@ -114,7 +114,50 @@ final class Guard
     /** @param array<string,string> $headers */
     private function route(string $method, string $path, array $headers, string $body): GuardResponse
     {
-        return GuardResponse::json(404, ['error' => 'not_found']); // Tasks 5 and 6 add the routes
+        if ($path === '/_update' && $method === 'GET') {
+            $headers = ['Content-Type' => 'text/html; charset=utf-8', 'Cache-Control' => 'no-store'];
+            return new GuardResponse(200, $headers, RecoveryPage::html());
+        }
+        if ($path === '/_update/verify' && $method === 'POST') {
+            return $this->verify($headers, $body);
+        }
+        $token = $headers['x-thallo-update-token'] ?? '';
+        if (!$this->ops->verifyToken($token)) {
+            return GuardResponse::json(403, ['error' => 'token']);
+        }
+        if ($path === '/_update/status' && $method === 'GET') {
+            $op = $this->ops->current() ?? [];
+            unset($op['token_hash'], $op['owner'], $op['pid'], $op['pgid']);
+            $log = $this->logTail((string) ($op['id'] ?? ''), 200);
+            return GuardResponse::json(200, ['operation' => $op, 'log' => $log]);
+        }
+        if ($path === '/_update/recover' && $method === 'POST') {
+            $in = json_decode($body, true);
+            $option = is_array($in) ? (string) ($in['option'] ?? '') : '';
+            if ($option === 'reopen' && (!is_array($in) || ($in['confirm'] ?? '') !== 'REOPEN')) {
+                return GuardResponse::json(422, ['error' => 'confirm']);
+            }
+            return $this->ops->requestRecovery($token, $option)
+                ? GuardResponse::json(202, ['requested' => $option])
+                : GuardResponse::json(409, ['error' => 'not_recoverable']);
+        }
+        return GuardResponse::json(404, ['error' => 'not_found']);
+    }
+
+    /** @param array<string,string> $headers */
+    private function verify(array $headers, string $body): GuardResponse
+    {
+        return GuardResponse::json(404, ['error' => 'not_found']); // Task 6
+    }
+
+    private function logTail(string $id, int $lines): string
+    {
+        $file = $id === '' ? '' : $this->paths->log($id);
+        if ($file === '' || !is_file($file)) {
+            return '';
+        }
+        $all = preg_split('/\r?\n/', rtrim((string) file_get_contents($file), "\n")) ?: [];
+        return implode("\n", array_slice($all, -$lines));
     }
 
     private static function closedPage(): string
