@@ -178,7 +178,8 @@ final class StarterBlockTypes
                 ],
                 // Typography on the block reaches every link; the gap spaces the menu's items, the
                 // theme's until set. The parts style the top-level items (with their hover look),
-                // the current page's item — the pill — and the submenu's panel and items.
+                // the current page's item — the pill — the submenu's panel and items, and the menu
+                // button: the hamburger a phone shows, its icon's colour and size (settings version 21).
                 'style_targets' => StyleTargets::root('row', [
                     'spacing', 'alignment.content', 'visibility', 'layout.item', 'typography',
                 ], [
@@ -204,6 +205,9 @@ final class StarterBlockTypes
                         'spacing.padding.top', 'spacing.padding.right',
                         'spacing.padding.bottom', 'spacing.padding.left',
                         'opacity', 'hover',
+                    ]],
+                    'menu_button' => ['label' => 'Menu button', 'capabilities' => [
+                        'colors', 'border', 'radius', 'menu_button',
                     ]],
                 ]],
                 'schema' => [
