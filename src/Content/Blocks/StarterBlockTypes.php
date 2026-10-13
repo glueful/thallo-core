@@ -124,11 +124,11 @@ final class StarterBlockTypes
                     'shadow', 'backdrop', 'layout.min_height', 'layout.overflow', 'layout.item',
                     'layout.display', 'layout.direction', 'layout.wrap', 'alignment.content',
                     'layout.align_items', 'layout.columns', 'layout.gap.column', 'layout.gap.row',
-                    'layout.content_width', 'layout.gutter',
+                    'layout.content_width', 'layout.gutter', 'overlay',
                 ],
                 'style_targets' => StyleTargets::root('box', [
                     'spacing', 'width', 'alignment.self', 'visibility', 'colors', 'radius', 'border',
-                    'shadow', 'backdrop', 'layout.min_height', 'layout.overflow', 'layout.item',
+                    'shadow', 'backdrop', 'layout.min_height', 'layout.overflow', 'layout.item', 'overlay',
                 ], [
                     'targets' => ['inner' => ['kind' => 'stack']],
                     'map' => [
