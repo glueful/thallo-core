@@ -17,6 +17,8 @@ final class UpdateStatusData implements ResponseData
         public readonly bool $enabled,
         public readonly ?string $checkedAt,
         public readonly string $notesUrl,
+        /** When the last check failed to reach Packagist; null once a check completes. */
+        public readonly ?string $failedAt,
     ) {
     }
 }

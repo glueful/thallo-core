@@ -624,6 +624,11 @@ $router->group(['prefix' => '/v1/admin'], function (Router $router): void {
 
         // Any signed-in admin user may read it (the version shows in the user menu); never anonymous.
         $router->get('/update-status', [UpdateStatusController::class, 'show']);
+        // Health's "Check now": asks Packagist without waiting for the daily check.
+        $router->post('/update-status/check', [UpdateStatusController::class, 'check'])
+            ->middleware('content_permission:system.access')
+            ->rateLimit(6, 1, by: 'user')
+            ->middleware('rate_limit');
         // Updating from the admin (docs/upgrading.md): owner only. PHP-FPM checks, files and cancels a
         // request; the update runner, scheduled by the owner as the code owner, does the update.
         $router->get('/updates/preflight', [AdminUpdateController::class, 'preflight'])

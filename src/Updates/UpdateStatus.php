@@ -15,10 +15,11 @@ final readonly class UpdateStatus
         public bool $enabled,
         public ?string $checkedAt,
         public string $notesUrl,
+        public ?string $failedAt = null,
     ) {
     }
 
-    /** @return array{current: ?string, latest: ?string, available: bool, development: bool, enabled: bool, checkedAt: ?string, notesUrl: string} */
+    /** @return array{current: ?string, latest: ?string, available: bool, development: bool, enabled: bool, checkedAt: ?string, notesUrl: string, failedAt: ?string} */
     public function toArray(): array
     {
         return [
@@ -29,6 +30,7 @@ final readonly class UpdateStatus
             'enabled' => $this->enabled,
             'checkedAt' => $this->checkedAt,
             'notesUrl' => $this->notesUrl,
+            'failedAt' => $this->failedAt,
         ];
     }
 }

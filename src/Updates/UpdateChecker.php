@@ -103,6 +103,7 @@ final class UpdateChecker
             enabled: $this->enabled,
             checkedAt: $this->flags->get(self::FLAG_CHECKED_AT),
             notesUrl: $this->notesUrl,
+            failedAt: $this->flags->get(self::FLAG_FAILED_AT),
         );
     }
 

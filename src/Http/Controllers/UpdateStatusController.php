@@ -36,4 +36,18 @@ final class UpdateStatusController
     {
         return Response::success(['update' => $this->checker->status()->toArray()], 'Update status retrieved.');
     }
+
+    #[ApiOperation(
+        summary: 'Check for updates now',
+        description: 'Asks Packagist now, without waiting for the daily check, and answers the update status. '
+            . '`failedAt` is set when Packagist could not be reached; the previous result stands. A development '
+            . 'checkout, or an install with the check turned off, is never checked. Requires the system.access '
+            . 'permission.',
+        tags: ['Utilities'],
+    )]
+    #[ApiResponse(200, schema: UpdateStatusResultData::class, description: 'Update status after the check.')]
+    public function check(): Response
+    {
+        return Response::success(['update' => $this->checker->check(force: true)->toArray()], 'Checked for updates.');
+    }
 }
