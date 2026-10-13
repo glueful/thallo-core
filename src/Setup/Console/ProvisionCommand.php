@@ -198,8 +198,14 @@ final class ProvisionCommand extends BaseCommand
         }
 
         // SETUP_TOKEN gates the unauthenticated first-run POST /admin/setup in production
-        // (X-Setup-Token header). Minted here exactly like the other keys: only when empty.
-        $setupToken = self::ensureSetupToken($env);
+        // (X-Setup-Token header). Minted here exactly like the other keys: only when empty. Once
+        // setup has run it is blanked instead: PHP-FPM may not be able to write .env, this can.
+        try {
+            $installed = $this->getContainer()->get(SetupService::class)->isInstalled();
+        } catch (\Throwable) {
+            $installed = false;
+        }
+        $setupToken = self::ensureSetupToken($env, $installed);
 
         // Install roles: persist the declared permission catalog and grant superuser (all) and
         // administrator (all but system.config) every row — idempotent, so a pack added on
@@ -449,13 +455,15 @@ final class ProvisionCommand extends BaseCommand
             $database->port,
             $database->database,
         ));
-        $this->line('Next: create the first admin');
-        foreach (self::nextSteps($env->get('BASE_URL'), $setupToken) as $step) {
-            $this->line('  ' . $step);
-        }
-        $this->line('  (The link carries this install\'s SETUP_TOKEN; re-run provision to print it again.)');
-        if (($warning = self::baseUrlWarning($env->get('BASE_URL'))) !== null) {
-            $this->warning($warning);
+        if (!$installed) {
+            $this->line('Next: create the first admin');
+            foreach (self::nextSteps($env->get('BASE_URL'), $setupToken) as $step) {
+                $this->line('  ' . $step);
+            }
+            $this->line('  (The link carries this install\'s SETUP_TOKEN; re-run provision to print it again.)');
+            if (($warning = self::baseUrlWarning($env->get('BASE_URL'))) !== null) {
+                $this->warning($warning);
+            }
         }
         // The checks that need the site (is the web server serving public/, do the PHP-served
         // paths reach PHP) run again now that .env holds the BASE_URL: on a fresh install the
@@ -494,11 +502,18 @@ final class ProvisionCommand extends BaseCommand
 
     /**
      * Mint SETUP_TOKEN when .env has none — the same rule the framework Installer applies to
-     * APP_KEY/JWT_KEY/TOKEN_SALT (generated when empty, never overwritten).
+     * APP_KEY/JWT_KEY/TOKEN_SALT (generated when empty, never overwritten). Once setup has run
+     * ($installed) the token has no use: blank it, mint nothing, and answer null.
      */
-    public static function ensureSetupToken(EnvWriter $env): string
+    public static function ensureSetupToken(EnvWriter $env, bool $installed = false): ?string
     {
         $current = (string) ($env->get('SETUP_TOKEN') ?? '');
+        if ($installed) {
+            if ($current !== '') {
+                $env->set('SETUP_TOKEN', '');
+            }
+            return null;
+        }
         if ($current !== '') {
             return $current;
         }

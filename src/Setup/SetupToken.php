@@ -9,7 +9,8 @@ use Glueful\Installer\EnvWriter;
 /**
  * SETUP_TOKEN gates the unauthenticated first-run setup. Once the first admin exists, by the web
  * form or `thallo:create-admin`, setup locks itself and the token has no further use, so it must
- * not linger in `.env`.
+ * not linger in `.env`. Where PHP-FPM cannot write `.env`, provision (run as the site's owner, and
+ * by every update) blanks it instead.
  */
 final class SetupToken
 {
@@ -21,7 +22,9 @@ final class SetupToken
                 (new EnvWriter($envPath))->set('SETUP_TOKEN', '');
             }
         } catch (\Throwable $e) {
-            error_log('Setup: failed to clear SETUP_TOKEN: ' . $e->getMessage());
+            // PHP-FPM may not be allowed to write .env (the code belongs to another user).
+            error_log('Setup: could not clear SETUP_TOKEN from .env (' . $e->getMessage()
+                . '); setup is locked, and the next `php glueful thallo:provision` clears it.');
         }
     }
 }
