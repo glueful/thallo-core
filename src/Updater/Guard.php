@@ -189,6 +189,16 @@ final class Guard
         return is_file($file) && !is_link($file) && filesize($file) <= 4096 ? AtomicFile::readJson($file) : null;
     }
 
+    /** This process's parent: posix where loaded, else Linux's /proc. */
+    private static function parentPid(): ?int
+    {
+        if (function_exists('posix_getppid')) {
+            return posix_getppid();
+        }
+        $stat = @file_get_contents('/proc/self/stat');
+        return is_string($stat) && preg_match('/\)\s+\S+\s+(\d+)/', $stat, $m) ? (int) $m[1] : null;
+    }
+
     /** @param array<string,string> $headers */
     private function verify(array $headers, string $body): GuardResponse
     {
@@ -203,6 +213,8 @@ final class Guard
         if ($mode === 'probe') {
             return GuardResponse::json(200, [
                 'sapi' => PHP_SAPI,
+                // The master of the PHP-FPM pool answering: the runner counts only it among PHP-FPMs.
+                'fpm_master' => PHP_SAPI === 'fpm-fcgi' ? self::parentPid() : null,
                 'writable_code' => is_writable($this->paths->base . '/vendor')
                     || is_writable($this->paths->base . '/composer.lock'),
                 'admission_ok' => (static function (string $lock): bool {

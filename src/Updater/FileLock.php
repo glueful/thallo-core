@@ -26,7 +26,9 @@ final class FileLock
     {
         // Read-only, never created: PHP-FPM may only read the admission lock (spec §16.1), and a
         // missing or unreadable file is "cannot open" (false), not "held by the runner" (null).
-        $h = @fopen($path, 'r');
+        // Close-on-exec: a process started in the background (the runner, in simple mode) must not
+        // keep the request's share once the request ends; a child the request waits for is covered.
+        $h = @fopen($path, 're');
         if ($h === false) {
             return false;
         }

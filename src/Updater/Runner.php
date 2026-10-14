@@ -54,10 +54,16 @@ final class Runner
         $ops = new OperationStore($paths, static fn (): int => time());
         $env = self::dotenv($base . '/.env');
         $report = AtomicFile::readJson($paths->runnerReport()) ?? [];
+        // Simple mode: PHP-FPM, the code owner on this server, started this runner (RunnerLauncher).
+        // Cron never sets it; a runner another user starts with it cannot touch the code owner's folders.
+        $simple = getenv('THALLO_UPDATE_SIMPLE') === '1';
+        $site = rtrim((string) ($env['BASE_URL'] ?? ''), '/');
+        $verify = $simple && $site !== '' ? $site . '/_update/verify' : 'http://127.0.0.1/_update/verify';
         $settings = [
+            'simple' => $simple,
             'php' => PHP_BINARY,
             'composer' => getenv('COMPOSER_BINARY') ?: self::which('composer'),
-            'verify_url' => $env['THALLO_UPDATE_VERIFY_URL'] ?? 'http://127.0.0.1/_update/verify',
+            'verify_url' => $env['THALLO_UPDATE_VERIFY_URL'] ?? $verify,
             'verify_host' => (string) (parse_url($env['BASE_URL'] ?? '', PHP_URL_HOST) ?: ''),
             'keep_backups' => (int) ($env['THALLO_UPDATE_KEEP_BACKUPS'] ?? 3),
             'barrier_timeout' => (int) ($env['THALLO_UPDATE_BARRIER_TIMEOUT'] ?? 600),
@@ -90,7 +96,7 @@ final class Runner
     {
         // The trust boundary first (spec §16.1): with an insecure layout the runner acts on nothing.
         $euid = function_exists('posix_geteuid') ? posix_geteuid() : -1;
-        if (Layout::problems($this->paths, $euid) !== []) {
+        if (!$this->simple() && Layout::problems($this->paths, $euid) !== []) {
             RunnerReport::write($this->paths, $this->host, $this->settings);
             return 0;
         }
@@ -421,13 +427,22 @@ final class Runner
         }
     }
 
-    /** Spec §8 step 9: three consecutive answers from PHP-FPM itself report $expected. */
+    /**
+     * Spec §8 step 9: three consecutive answers from PHP-FPM itself report $expected. In simple mode a
+     * PHP-FPM this server cannot reach over HTTP leaves the command-line check, as a terminal upgrade does.
+     */
     private function verifyWeb(string $expected): void
     {
         $secret = trim((string) @file_get_contents($this->paths->verifySecret()));
         $headers = ['x-thallo-verify' => $secret, 'Content-Type' => 'application/json'];
         if ($this->settings['verify_host'] !== '') {
             $headers['Host'] = $this->settings['verify_host'];
+        }
+        if ($this->simple()) {
+            [$status] = $this->host->http((string) $this->settings['verify_url'], $headers, '{"mode":"probe"}');
+            if ($status !== 200) {
+                return;
+            }
         }
         $deadline = $this->host->now() + (int) $this->settings['web_settle'];
         $good = 0;
@@ -552,6 +567,11 @@ final class Runner
         });
     }
 
+    private function simple(): bool
+    {
+        return ($this->settings['simple'] ?? false) === true;
+    }
+
     private function requireNoProblems(array $report): void
     {
         $problems = array_merge(
@@ -559,6 +579,23 @@ final class Runner
             $report['writable'] ? [] : ['The runner cannot write the code.'],
             $report['composer_ok'] ? [] : ['Composer is missing or too old.'],
             ($report['pg_dump'] && $report['pg_restore']) ? [] : ['pg_dump or pg_restore is missing.'],
+            (int) ($report['free_bytes'] ?? 0) >= (int) ($report['needed_bytes'] ?? PHP_INT_MAX)
+                ? [] : ['There is not enough free disk for the update, its backup and the rollback copy.'],
+            ($report['guard_included'] ?? false) === true ? [] : ['The update guard is not installed or not included.'],
+            $this->sameFilesystem() ? [] : ['vendor/ and the private update folder are on different filesystems.'],
+            // The two-user checks (spec §16) guard a boundary simple mode does not have: PHP-FPM is the
+            // code owner there, and a PHP-FPM out of reach leaves the command-line check (verifyWeb).
+            $this->simple() ? [] : $this->separationProblems($report),
+        );
+        if ($problems !== []) {
+            throw new \RuntimeException(implode(' ', $problems));
+        }
+    }
+
+    /** @return list<string> */
+    private function separationProblems(array $report): array
+    {
+        return array_merge(
             $report['unguarded_processes'] === [] ? [] : [
                 'Processes started before the guard was installed are still running: '
                     . implode(', ', array_column($report['unguarded_processes'], 'pid')) . '.',
@@ -568,18 +605,11 @@ final class Runner
             (array) ($report['layout_problems'] ?? []),
             is_array($report['web'] ?? null) && (int) ($report['web']['status'] ?? 0) === 200
                 ? [] : ['PHP-FPM cannot be reached to verify a release.'],
-            (int) ($report['free_bytes'] ?? 0) >= (int) ($report['needed_bytes'] ?? PHP_INT_MAX)
-                ? [] : ['There is not enough free disk for the update, its backup and the rollback copy.'],
-            ($report['guard_included'] ?? false) === true ? [] : ['The update guard is not installed or not included.'],
-            $this->sameFilesystem() ? [] : ['vendor/ and the private update folder are on different filesystems.'],
             self::restartConfirmed($report) ? [] : [
                 'The restart after enabling updates has not been confirmed '
                     . '(php bin/thallo-updater confirm-restart --yes).',
-            ]
+            ],
         );
-        if ($problems !== []) {
-            throw new \RuntimeException(implode(' ', $problems));
-        }
     }
 
     private function journal(): Journal
@@ -852,7 +882,8 @@ final class Runner
                 . "php glueful thallo:provision.\n");
             return 1;
         }
-        $left = RunnerReport::unguardedProcesses($this->paths, $this->host, $installed);
+        $web = RunnerReport::probe($this->paths, $this->host, $this->settings);
+        $left = RunnerReport::unguardedProcesses($this->paths, $this->host, $installed, RunnerReport::fpmMaster($web));
         foreach ($left as $p) {
             echo "Started before the guard: {$p['pid']} {$p['args']}\n";
         }

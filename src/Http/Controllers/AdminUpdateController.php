@@ -20,7 +20,8 @@ use Thallo\Core\Updates\UpdatePreflight;
  * Updating from the admin (docs/upgrading.md): PHP-FPM only checks, files a request in the inbox and
  * cancels it before the runner claims it (spec §16.2). It never changes code and never writes what
  * the runner trusts — the update runner, a separate process the owner schedules as the code owner,
- * validates the request against its own records. Owner only (system.config).
+ * validates the request against its own records. In simple mode PHP-FPM is the code owner and starts
+ * that runner itself. Owner only (system.config).
  */
 final class AdminUpdateController
 {
@@ -74,6 +75,13 @@ final class AdminUpdateController
             'requested_at' => gmdate('c'),
             'token_hash' => hash('sha256', $token),
         ], 0660);
+        // Simple mode: no cron runner on this server; PHP-FPM, the code owner here, starts it now.
+        if ($this->preflight->simple() && !$this->preflight->launch()) {
+            @unlink($this->paths->startRequest());
+            return Response::error('The update runner could not be started.', Response::HTTP_CONFLICT, [
+                'reasons' => ['launch_unavailable'],
+            ]);
+        }
         $response = Response::success(['update' => ['id' => 'requested', 'token' => $token]], 'Update requested.');
         $response->setStatusCode(202);
         return $response;

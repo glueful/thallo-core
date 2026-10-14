@@ -51,6 +51,40 @@ final class UpdaterInstaller
         return $changed ? 'installed' : 'current';
     }
 
+    /**
+     * Entry points from before the guard existed (installs made before 1.0.0-beta.102) gain the
+     * skeleton's include, right after their declare line so it runs before anything loads vendor/.
+     * The include checks the guard file exists, so it is harmless once updating is turned off.
+     *
+     * @return list<string> the entry points changed
+     */
+    public function includeGuard(string $base): array
+    {
+        $changed = [];
+        foreach (['public/index.php' => '/../bootstrap', 'glueful' => '/bootstrap'] as $entry => $dir) {
+            $path = $base . '/' . $entry;
+            $source = is_file($path) ? (string) file_get_contents($path) : '';
+            if ($source === '' || str_contains($source, 'update-guard.php')) {
+                continue;
+            }
+            $block = "\n// The update guard (docs/upgrading.md, Updating from the admin): closes the site while an"
+                . " update\n// runs. Plain PHP, loaded before vendor/; absent until provision installs it.\n"
+                . "if (is_file(__DIR__ . '{$dir}/update-guard.php')) {\n"
+                . "    require __DIR__ . '{$dir}/update-guard.php';\n"
+                . "}\n";
+            $anchor = preg_match('/^declare\(strict_types=1\);[ \t]*\R/m', $source, $m, PREG_OFFSET_CAPTURE) === 1
+                ? $m[0]
+                : (preg_match('/^<\?php[ \t]*\R/m', $source, $m, PREG_OFFSET_CAPTURE) === 1 ? $m[0] : null);
+            if ($anchor === null) {
+                continue;
+            }
+            $at = $anchor[1] + strlen($anchor[0]);
+            AtomicFile::write($path, substr($source, 0, $at) . $block . substr($source, $at), fileperms($path) & 0777);
+            $changed[] = $entry;
+        }
+        return $changed;
+    }
+
     private function remove(string $base, ?array $operation): string
     {
         $present = array_filter(self::FILES, static fn (array $f): bool => is_file($base . '/' . $f[0]));

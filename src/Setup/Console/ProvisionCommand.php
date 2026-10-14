@@ -338,19 +338,23 @@ final class ProvisionCommand extends BaseCommand
         try {
             $store = new OperationStore(new UpdaterPaths($basePath), static fn (): int => time());
             $operation = $store->current();
-            $result = (new UpdaterInstaller())->sync(
-                $basePath,
-                CoreServiceProvider::corePath('resources/updater'),
-                (bool) config($this->getContext(), 'thallo.admin_updates.enabled', false),
-                $operation,
-            );
+            $installer = new UpdaterInstaller();
+            $enabled = (bool) config($this->getContext(), 'thallo.admin_updates.enabled', false);
+            $resources = CoreServiceProvider::corePath('resources/updater');
+            $result = $installer->sync($basePath, $resources, $enabled, $operation);
             if ($result === 'installed-first') {
                 // Workers started before the guard hold no admission lock: ask them to restart through it.
                 $this->getService(RestartSignal::class)->signal(time());
-                $this->line('Update runner: installed-first. Restart PHP-FPM (or Apache), every queue worker');
-                $this->line('and every long-running job, then run: php bin/thallo-updater confirm-restart --yes');
+                $this->line('Update runner: installed-first. Where PHP-FPM runs as this same user (simple mode),');
+                $this->line('nothing else is needed. Where it runs as another user, restart PHP-FPM (or Apache),');
+                $this->line('every queue worker and every long-running job, then run:');
+                $this->line('php bin/thallo-updater confirm-restart --yes');
             } else {
                 $this->line('Update runner: ' . $result . '.');
+            }
+            $included = $enabled ? $installer->includeGuard($basePath) : [];
+            if ($included !== []) {
+                $this->line('Update guard: now included by ' . implode(' and ', $included) . '.');
             }
         } catch (\Throwable $e) {
             $this->warning('Update runner skipped (' . $e->getMessage() . ').');

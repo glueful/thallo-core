@@ -7,6 +7,7 @@ namespace Thallo\Core\Providers;
 use Thallo\Core\Capabilities\CapabilityStateStore;
 use Thallo\Contracts\Settings\SystemChannel;
 use Thallo\Core\Updates\Console\UpdateBackupCommand;
+use Thallo\Core\Updates\RunnerLauncher;
 use Thallo\Core\Updates\UpdatePreflight;
 use Thallo\Core\Updater\Paths as UpdaterPaths;
 use Thallo\Core\Http\Controllers\AdminUpdateController;
@@ -301,6 +302,8 @@ use Thallo\Collections\Events\CollectionUpdated;
 use Glueful\Extensions\ServiceProvider;
 use Glueful\Permissions\Catalog\Permission;
 use Glueful\Support\FieldSelection\Projector;
+use Glueful\Support\Process\ComposerBinaryResolver;
+use Glueful\Support\Process\PhpBinaryResolver;
 use Psr\Container\ContainerInterface;
 use Psr\Log\LoggerInterface;
 
@@ -567,6 +570,11 @@ final class CoreServiceProvider extends ServiceProvider implements \Thallo\Contr
             static fn (string $key): string => (string) ini_get($key),
             static fn (): string => PHP_SAPI,
             static fn (): int => time(),
+            new RunnerLauncher(
+                $context->getBasePath(),
+                (new PhpBinaryResolver($context))->resolve(),
+                (new ComposerBinaryResolver())->resolve(),
+            ),
         );
     }
 

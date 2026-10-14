@@ -112,6 +112,12 @@ final class Paths
         return $this->controlDir() . '/runner.json';
     }
 
+    /** Simple mode: the server report PHP-FPM, the same user as the runner, keeps for itself. */
+    public function simpleReport(): string
+    {
+        return $this->privateDir() . '/runner-simple.json';
+    }
+
     public function verifySecret(): string
     {
         return $this->controlDir() . '/verify.secret';
@@ -153,7 +159,9 @@ final class FileLock
     {
         // Read-only, never created: PHP-FPM may only read the admission lock (spec §16.1), and a
         // missing or unreadable file is "cannot open" (false), not "held by the runner" (null).
-        $h = @fopen($path, 'r');
+        // Close-on-exec: a process started in the background (the runner, in simple mode) must not
+        // keep the request's share once the request ends; a child the request waits for is covered.
+        $h = @fopen($path, 're');
         if ($h === false) {
             return false;
         }
@@ -729,6 +737,16 @@ final class Guard
         return is_file($file) && !is_link($file) && filesize($file) <= 4096 ? AtomicFile::readJson($file) : null;
     }
 
+    /** This process's parent: posix where loaded, else Linux's /proc. */
+    private static function parentPid(): ?int
+    {
+        if (function_exists('posix_getppid')) {
+            return posix_getppid();
+        }
+        $stat = @file_get_contents('/proc/self/stat');
+        return is_string($stat) && preg_match('/\)\s+\S+\s+(\d+)/', $stat, $m) ? (int) $m[1] : null;
+    }
+
     /** @param array<string,string> $headers */
     private function verify(array $headers, string $body): GuardResponse
     {
@@ -743,6 +761,8 @@ final class Guard
         if ($mode === 'probe') {
             return GuardResponse::json(200, [
                 'sapi' => PHP_SAPI,
+                // The master of the PHP-FPM pool answering: the runner counts only it among PHP-FPMs.
+                'fpm_master' => PHP_SAPI === 'fpm-fcgi' ? self::parentPid() : null,
                 'writable_code' => is_writable($this->paths->base . '/vendor')
                     || is_writable($this->paths->base . '/composer.lock'),
                 'admission_ok' => (static function (string $lock): bool {

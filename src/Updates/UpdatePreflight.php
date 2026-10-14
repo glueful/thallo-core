@@ -30,7 +30,26 @@ final class UpdatePreflight
         private readonly \Closure $ini,
         private readonly \Closure $sapi,
         private readonly \Closure $now,
+        private readonly ?RunnerLauncher $launcher = null,
     ) {
+    }
+
+    /**
+     * Simple mode (docs/upgrading.md): PHP-FPM runs as the user that owns the code — it can write the
+     * code and the private update folder. Nothing separates the two there, so PHP-FPM checks the server
+     * and starts the runner itself. Code it can write without the private folder is the separated setup
+     * gone wrong, and stays refused.
+     */
+    public function simple(): bool
+    {
+        $private = (new Paths($this->base))->privateDir();
+        return is_writable($this->base . '/vendor') && is_dir($private) && is_writable($private);
+    }
+
+    /** Simple mode's Update: start the runner now, for the request just filed. */
+    public function launch(): bool
+    {
+        return $this->launcher !== null && $this->launcher->launch();
     }
 
     /** @return array{ready: bool, current: ?string, target: ?string, reasons: list<string>} */
@@ -47,7 +66,13 @@ final class UpdatePreflight
         if ($available && $latest !== null && !$this->allowedByRoot($latest)) {
             $reasons[] = 'outside_constraint';
         }
-        $reasons = array_merge($reasons, $this->runnerReasons(), $this->webReasons(), $this->operationReasons());
+        $simple = $this->simple();
+        $reasons = array_merge(
+            $reasons,
+            $simple ? $this->simpleReasons() : $this->runnerReasons(),
+            $this->webReasons($simple),
+            $this->operationReasons(),
+        );
         $reasons = array_values(array_unique($reasons));
 
         return [
@@ -79,27 +104,12 @@ final class UpdatePreflight
         if ($report === null || ($this->now)() - (int) ($report['checked_at'] ?? 0) > self::STALE) {
             return ['runner_missing'];
         }
-        $reasons = [];
+        $reasons = $this->serverReasons($report);
         $web = $report['web'] ?? null;
-        if (($report['writable'] ?? false) !== true) {
-            $reasons[] = 'not_writable';
-        }
         $webBlocked = is_array($web)
             && (($web['admission_ok'] ?? true) === false || ($web['state_writable'] ?? true) === false);
         if ($webBlocked) {
             $reasons[] = 'not_writable';
-        }
-        if (($report['composer_ok'] ?? false) !== true) {
-            $reasons[] = 'composer_missing';
-        }
-        if (($report['shape_problems'] ?? []) !== []) {
-            $reasons[] = 'composer_config_unsupported';
-        }
-        if (($report['pg_dump'] ?? false) !== true || ($report['pg_restore'] ?? false) !== true) {
-            $reasons[] = 'backup_unavailable';
-        }
-        if ((int) ($report['free_bytes'] ?? 0) < (int) ($report['needed_bytes'] ?? PHP_INT_MAX)) {
-            $reasons[] = 'low_disk';
         }
         if (!is_array($web) || (int) ($web['status'] ?? 0) !== 200) {
             $reasons[] = 'web_verify_unreachable';
@@ -118,11 +128,56 @@ final class UpdatePreflight
         return $reasons;
     }
 
-    /** @return list<string> PHP-FPM's own view: this process is the web runtime the update must reload */
-    private function webReasons(): array
+    /**
+     * Simple mode: the server checked from PHP-FPM itself, kept for five minutes in the private folder.
+     * Only what protects the site counts — the code writable, Composer, the backup, the disk.
+     *
+     * @return list<string>
+     */
+    private function simpleReasons(): array
+    {
+        if ($this->launcher === null || !$this->launcher->available()) {
+            return ['launch_unavailable'];
+        }
+        $file = (new Paths($this->base))->simpleReport();
+        $report = AtomicFile::readJson($file);
+        if ($report === null || ($this->now)() - (int) ($report['checked_at'] ?? 0) > self::STALE) {
+            $report = $this->launcher->report();
+            AtomicFile::writeJson($file, $report, 0600);
+        }
+        return $this->serverReasons($report);
+    }
+
+    /**
+     * @param array<string,mixed> $report
+     * @return list<string>
+     */
+    private function serverReasons(array $report): array
     {
         $reasons = [];
-        if (is_writable($this->base . '/vendor')) {
+        if (($report['writable'] ?? false) !== true) {
+            $reasons[] = 'not_writable';
+        }
+        if (($report['composer_ok'] ?? false) !== true) {
+            $reasons[] = 'composer_missing';
+        }
+        if (($report['shape_problems'] ?? []) !== []) {
+            $reasons[] = 'composer_config_unsupported';
+        }
+        if (($report['pg_dump'] ?? false) !== true || ($report['pg_restore'] ?? false) !== true) {
+            $reasons[] = 'backup_unavailable';
+        }
+        if ((int) ($report['free_bytes'] ?? 0) < (int) ($report['needed_bytes'] ?? PHP_INT_MAX)) {
+            $reasons[] = 'low_disk';
+        }
+        return $reasons;
+    }
+
+    /** @return list<string> PHP-FPM's own view: this process is the web runtime the update must reload */
+    private function webReasons(bool $simple): array
+    {
+        $reasons = [];
+        if (!$simple && is_writable($this->base . '/vendor')) {
             $reasons[] = 'web_can_write_code';
         }
         if (!$this->guardIncluded()) {

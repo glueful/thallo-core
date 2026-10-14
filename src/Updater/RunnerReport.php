@@ -45,6 +45,7 @@ final class RunnerReport
         $installedAt = self::stamp($paths->guardInstalled());
         $readyAt = self::stamp($paths->guardReady());
         $disk = self::disk($paths, $host, $settings, $previous, $now);
+        $web = self::probe($paths, $host, $settings);
 
         return [
             'checked_at' => $now,
@@ -67,34 +68,49 @@ final class RunnerReport
             'layout_problems' => Layout::problems($paths, function_exists('posix_geteuid') ? posix_geteuid() : -1),
             'guard_installed_at' => $installedAt,
             'guard_ready_at' => $readyAt,
-            'unguarded_processes' => self::unguardedProcesses($paths, $host, $installedAt),
-            'web' => self::probe($paths, $host, $settings),
+            'unguarded_processes' => self::unguardedProcesses($paths, $host, $installedAt, self::fpmMaster($web)),
+            'web' => $web,
         ];
     }
 
     /**
      * Every process attributable to the site that started before the guard was installed (Task 13):
      * web servers outright, PHP command-line processes by their working directory or arguments.
+     * `$fpmMaster` is the PHP-FPM master that answered the probe: when `ps` shows it, only it and its
+     * pool count among PHP-FPM processes, so another PHP-FPM on the server (CloudPanel's own panel)
+     * does not hold the site back. Unknown, or not shown (another pid namespace): every PHP-FPM counts.
      *
      * @return list<array{pid:int,args:string}>
      */
-    public static function unguardedProcesses(Paths $paths, Host $host, ?int $installedAt): array
-    {
+    public static function unguardedProcesses(
+        Paths $paths,
+        Host $host,
+        ?int $installedAt,
+        ?int $fpmMaster = null,
+    ): array {
         if ($installedAt === null) {
             return [];
         }
-        [$code, $out] = $host->capture(['ps', '-eo', 'pid=,etime=,user=,args='], '/');
+        [$code, $out] = $host->capture(['ps', '-eo', 'pid=,ppid=,etime=,user=,args='], '/');
         if ($code !== 0) {
             return [];
         }
+        $rows = [];
+        foreach (preg_split('/\R/', trim($out)) ?: [] as $line) {
+            if (preg_match('/^\s*(\d+)\s+(\d+)\s+(\S+)\s+(\S+)\s+(.+)$/', $line, $m)) {
+                $rows[] = ['pid' => (int) $m[1], 'ppid' => (int) $m[2], 'etime' => $m[3], 'args' => $m[5]];
+            }
+        }
+        $seen = false;
+        foreach ($rows as $row) {
+            $seen = $seen || ($row['pid'] === $fpmMaster && self::isFpm($row['args']));
+        }
+        $master = $seen ? $fpmMaster : null;
         $now = $host->now();
         $self = getmypid();
         $found = [];
-        foreach (preg_split('/\R/', trim($out)) ?: [] as $line) {
-            if (!preg_match('/^\s*(\d+)\s+(\S+)\s+(\S+)\s+(.+)$/', $line, $m)) {
-                continue;
-            }
-            [$pid, $elapsed, $args] = [(int) $m[1], self::seconds($m[2]), $m[4]];
+        foreach ($rows as $row) {
+            [$pid, $elapsed, $args] = [$row['pid'], self::seconds($row['etime']), $row['args']];
             $skip = $pid === $self
                 || $elapsed === null
                 // etime and the install stamp are both whole seconds: a start computed less than 2 s
@@ -104,6 +120,9 @@ final class RunnerReport
             if ($skip) {
                 continue;
             }
+            if ($master !== null && self::isFpm($args) && $pid !== $master && $row['ppid'] !== $master) {
+                continue; // a PHP-FPM that does not serve this site
+            }
             if (self::attributable($pid, $args, $paths->base, $host)) {
                 $found[] = ['pid' => $pid, 'args' => $args];
             }
@@ -111,13 +130,15 @@ final class RunnerReport
         return $found;
     }
 
+    private static function isFpm(string $args): bool
+    {
+        return str_starts_with($args, 'php-fpm') || str_starts_with(basename(strtok($args, ' ') ?: ''), 'php-fpm');
+    }
+
     private static function attributable(int $pid, string $args, string $base, Host $host): bool
     {
         $program = basename(strtok($args, ' ') ?: '');
-        if (
-            str_starts_with($args, 'php-fpm') || str_starts_with($program, 'php-fpm')
-            || in_array($program, ['httpd', 'apache2', 'frankenphp'], true)
-        ) {
+        if (self::isFpm($args) || in_array($program, ['httpd', 'apache2', 'frankenphp'], true)) {
             return true; // a single-host install: the web server must have been restarted
         }
         if (str_starts_with($program, 'php-cgi')) {
@@ -214,8 +235,15 @@ final class RunnerReport
         return ['needed_bytes' => $needed + self::MARGIN, 'computed_at' => $now];
     }
 
+    /** The PHP-FPM master that answered the probe, from PHP-FPM's own view; null: unknown. */
+    public static function fpmMaster(?array $web): ?int
+    {
+        $pid = $web['fpm_master'] ?? null;
+        return is_int($pid) && $pid > 1 ? $pid : null;
+    }
+
     /** @return array<string,mixed>|null PHP-FPM's view through the guard (spec §8 step 9); null: unreachable */
-    private static function probe(Paths $paths, Host $host, array $settings): ?array
+    public static function probe(Paths $paths, Host $host, array $settings): ?array
     {
         $secret = is_file($paths->verifySecret()) ? trim((string) file_get_contents($paths->verifySecret())) : '';
         if ($secret === '' || ($settings['verify_url'] ?? '') === '') {

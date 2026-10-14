@@ -109,6 +109,12 @@ final class Paths
         return $this->controlDir() . '/runner.json';
     }
 
+    /** Simple mode: the server report PHP-FPM, the same user as the runner, keeps for itself. */
+    public function simpleReport(): string
+    {
+        return $this->privateDir() . '/runner-simple.json';
+    }
+
     public function verifySecret(): string
     {
         return $this->controlDir() . '/verify.secret';

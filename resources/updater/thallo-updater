@@ -113,6 +113,12 @@ final class Paths
         return $this->controlDir() . '/runner.json';
     }
 
+    /** Simple mode: the server report PHP-FPM, the same user as the runner, keeps for itself. */
+    public function simpleReport(): string
+    {
+        return $this->privateDir() . '/runner-simple.json';
+    }
+
     public function verifySecret(): string
     {
         return $this->controlDir() . '/verify.secret';
@@ -154,7 +160,9 @@ final class FileLock
     {
         // Read-only, never created: PHP-FPM may only read the admission lock (spec §16.1), and a
         // missing or unreadable file is "cannot open" (false), not "held by the runner" (null).
-        $h = @fopen($path, 'r');
+        // Close-on-exec: a process started in the background (the runner, in simple mode) must not
+        // keep the request's share once the request ends; a child the request waits for is covered.
+        $h = @fopen($path, 're');
         if ($h === false) {
             return false;
         }
@@ -1614,6 +1622,7 @@ final class RunnerReport
         $installedAt = self::stamp($paths->guardInstalled());
         $readyAt = self::stamp($paths->guardReady());
         $disk = self::disk($paths, $host, $settings, $previous, $now);
+        $web = self::probe($paths, $host, $settings);
 
         return [
             'checked_at' => $now,
@@ -1636,34 +1645,49 @@ final class RunnerReport
             'layout_problems' => Layout::problems($paths, function_exists('posix_geteuid') ? posix_geteuid() : -1),
             'guard_installed_at' => $installedAt,
             'guard_ready_at' => $readyAt,
-            'unguarded_processes' => self::unguardedProcesses($paths, $host, $installedAt),
-            'web' => self::probe($paths, $host, $settings),
+            'unguarded_processes' => self::unguardedProcesses($paths, $host, $installedAt, self::fpmMaster($web)),
+            'web' => $web,
         ];
     }
 
     /**
      * Every process attributable to the site that started before the guard was installed (Task 13):
      * web servers outright, PHP command-line processes by their working directory or arguments.
+     * `$fpmMaster` is the PHP-FPM master that answered the probe: when `ps` shows it, only it and its
+     * pool count among PHP-FPM processes, so another PHP-FPM on the server (CloudPanel's own panel)
+     * does not hold the site back. Unknown, or not shown (another pid namespace): every PHP-FPM counts.
      *
      * @return list<array{pid:int,args:string}>
      */
-    public static function unguardedProcesses(Paths $paths, Host $host, ?int $installedAt): array
-    {
+    public static function unguardedProcesses(
+        Paths $paths,
+        Host $host,
+        ?int $installedAt,
+        ?int $fpmMaster = null,
+    ): array {
         if ($installedAt === null) {
             return [];
         }
-        [$code, $out] = $host->capture(['ps', '-eo', 'pid=,etime=,user=,args='], '/');
+        [$code, $out] = $host->capture(['ps', '-eo', 'pid=,ppid=,etime=,user=,args='], '/');
         if ($code !== 0) {
             return [];
         }
+        $rows = [];
+        foreach (preg_split('/\R/', trim($out)) ?: [] as $line) {
+            if (preg_match('/^\s*(\d+)\s+(\d+)\s+(\S+)\s+(\S+)\s+(.+)$/', $line, $m)) {
+                $rows[] = ['pid' => (int) $m[1], 'ppid' => (int) $m[2], 'etime' => $m[3], 'args' => $m[5]];
+            }
+        }
+        $seen = false;
+        foreach ($rows as $row) {
+            $seen = $seen || ($row['pid'] === $fpmMaster && self::isFpm($row['args']));
+        }
+        $master = $seen ? $fpmMaster : null;
         $now = $host->now();
         $self = getmypid();
         $found = [];
-        foreach (preg_split('/\R/', trim($out)) ?: [] as $line) {
-            if (!preg_match('/^\s*(\d+)\s+(\S+)\s+(\S+)\s+(.+)$/', $line, $m)) {
-                continue;
-            }
-            [$pid, $elapsed, $args] = [(int) $m[1], self::seconds($m[2]), $m[4]];
+        foreach ($rows as $row) {
+            [$pid, $elapsed, $args] = [$row['pid'], self::seconds($row['etime']), $row['args']];
             $skip = $pid === $self
                 || $elapsed === null
                 // etime and the install stamp are both whole seconds: a start computed less than 2 s
@@ -1673,6 +1697,9 @@ final class RunnerReport
             if ($skip) {
                 continue;
             }
+            if ($master !== null && self::isFpm($args) && $pid !== $master && $row['ppid'] !== $master) {
+                continue; // a PHP-FPM that does not serve this site
+            }
             if (self::attributable($pid, $args, $paths->base, $host)) {
                 $found[] = ['pid' => $pid, 'args' => $args];
             }
@@ -1680,13 +1707,15 @@ final class RunnerReport
         return $found;
     }
 
+    private static function isFpm(string $args): bool
+    {
+        return str_starts_with($args, 'php-fpm') || str_starts_with(basename(strtok($args, ' ') ?: ''), 'php-fpm');
+    }
+
     private static function attributable(int $pid, string $args, string $base, Host $host): bool
     {
         $program = basename(strtok($args, ' ') ?: '');
-        if (
-            str_starts_with($args, 'php-fpm') || str_starts_with($program, 'php-fpm')
-            || in_array($program, ['httpd', 'apache2', 'frankenphp'], true)
-        ) {
+        if (self::isFpm($args) || in_array($program, ['httpd', 'apache2', 'frankenphp'], true)) {
             return true; // a single-host install: the web server must have been restarted
         }
         if (str_starts_with($program, 'php-cgi')) {
@@ -1783,8 +1812,15 @@ final class RunnerReport
         return ['needed_bytes' => $needed + self::MARGIN, 'computed_at' => $now];
     }
 
+    /** The PHP-FPM master that answered the probe, from PHP-FPM's own view; null: unknown. */
+    public static function fpmMaster(?array $web): ?int
+    {
+        $pid = $web['fpm_master'] ?? null;
+        return is_int($pid) && $pid > 1 ? $pid : null;
+    }
+
     /** @return array<string,mixed>|null PHP-FPM's view through the guard (spec §8 step 9); null: unreachable */
-    private static function probe(Paths $paths, Host $host, array $settings): ?array
+    public static function probe(Paths $paths, Host $host, array $settings): ?array
     {
         $secret = is_file($paths->verifySecret()) ? trim((string) file_get_contents($paths->verifySecret())) : '';
         if ($secret === '' || ($settings['verify_url'] ?? '') === '') {
@@ -1864,10 +1900,16 @@ final class Runner
         $ops = new OperationStore($paths, static fn (): int => time());
         $env = self::dotenv($base . '/.env');
         $report = AtomicFile::readJson($paths->runnerReport()) ?? [];
+        // Simple mode: PHP-FPM, the code owner on this server, started this runner (RunnerLauncher).
+        // Cron never sets it; a runner another user starts with it cannot touch the code owner's folders.
+        $simple = getenv('THALLO_UPDATE_SIMPLE') === '1';
+        $site = rtrim((string) ($env['BASE_URL'] ?? ''), '/');
+        $verify = $simple && $site !== '' ? $site . '/_update/verify' : 'http://127.0.0.1/_update/verify';
         $settings = [
+            'simple' => $simple,
             'php' => PHP_BINARY,
             'composer' => getenv('COMPOSER_BINARY') ?: self::which('composer'),
-            'verify_url' => $env['THALLO_UPDATE_VERIFY_URL'] ?? 'http://127.0.0.1/_update/verify',
+            'verify_url' => $env['THALLO_UPDATE_VERIFY_URL'] ?? $verify,
             'verify_host' => (string) (parse_url($env['BASE_URL'] ?? '', PHP_URL_HOST) ?: ''),
             'keep_backups' => (int) ($env['THALLO_UPDATE_KEEP_BACKUPS'] ?? 3),
             'barrier_timeout' => (int) ($env['THALLO_UPDATE_BARRIER_TIMEOUT'] ?? 600),
@@ -1900,7 +1942,7 @@ final class Runner
     {
         // The trust boundary first (spec §16.1): with an insecure layout the runner acts on nothing.
         $euid = function_exists('posix_geteuid') ? posix_geteuid() : -1;
-        if (Layout::problems($this->paths, $euid) !== []) {
+        if (!$this->simple() && Layout::problems($this->paths, $euid) !== []) {
             RunnerReport::write($this->paths, $this->host, $this->settings);
             return 0;
         }
@@ -2231,13 +2273,22 @@ final class Runner
         }
     }
 
-    /** Spec §8 step 9: three consecutive answers from PHP-FPM itself report $expected. */
+    /**
+     * Spec §8 step 9: three consecutive answers from PHP-FPM itself report $expected. In simple mode a
+     * PHP-FPM this server cannot reach over HTTP leaves the command-line check, as a terminal upgrade does.
+     */
     private function verifyWeb(string $expected): void
     {
         $secret = trim((string) @file_get_contents($this->paths->verifySecret()));
         $headers = ['x-thallo-verify' => $secret, 'Content-Type' => 'application/json'];
         if ($this->settings['verify_host'] !== '') {
             $headers['Host'] = $this->settings['verify_host'];
+        }
+        if ($this->simple()) {
+            [$status] = $this->host->http((string) $this->settings['verify_url'], $headers, '{"mode":"probe"}');
+            if ($status !== 200) {
+                return;
+            }
         }
         $deadline = $this->host->now() + (int) $this->settings['web_settle'];
         $good = 0;
@@ -2362,6 +2413,11 @@ final class Runner
         });
     }
 
+    private function simple(): bool
+    {
+        return ($this->settings['simple'] ?? false) === true;
+    }
+
     private function requireNoProblems(array $report): void
     {
         $problems = array_merge(
@@ -2369,6 +2425,23 @@ final class Runner
             $report['writable'] ? [] : ['The runner cannot write the code.'],
             $report['composer_ok'] ? [] : ['Composer is missing or too old.'],
             ($report['pg_dump'] && $report['pg_restore']) ? [] : ['pg_dump or pg_restore is missing.'],
+            (int) ($report['free_bytes'] ?? 0) >= (int) ($report['needed_bytes'] ?? PHP_INT_MAX)
+                ? [] : ['There is not enough free disk for the update, its backup and the rollback copy.'],
+            ($report['guard_included'] ?? false) === true ? [] : ['The update guard is not installed or not included.'],
+            $this->sameFilesystem() ? [] : ['vendor/ and the private update folder are on different filesystems.'],
+            // The two-user checks (spec §16) guard a boundary simple mode does not have: PHP-FPM is the
+            // code owner there, and a PHP-FPM out of reach leaves the command-line check (verifyWeb).
+            $this->simple() ? [] : $this->separationProblems($report),
+        );
+        if ($problems !== []) {
+            throw new \RuntimeException(implode(' ', $problems));
+        }
+    }
+
+    /** @return list<string> */
+    private function separationProblems(array $report): array
+    {
+        return array_merge(
             $report['unguarded_processes'] === [] ? [] : [
                 'Processes started before the guard was installed are still running: '
                     . implode(', ', array_column($report['unguarded_processes'], 'pid')) . '.',
@@ -2378,18 +2451,11 @@ final class Runner
             (array) ($report['layout_problems'] ?? []),
             is_array($report['web'] ?? null) && (int) ($report['web']['status'] ?? 0) === 200
                 ? [] : ['PHP-FPM cannot be reached to verify a release.'],
-            (int) ($report['free_bytes'] ?? 0) >= (int) ($report['needed_bytes'] ?? PHP_INT_MAX)
-                ? [] : ['There is not enough free disk for the update, its backup and the rollback copy.'],
-            ($report['guard_included'] ?? false) === true ? [] : ['The update guard is not installed or not included.'],
-            $this->sameFilesystem() ? [] : ['vendor/ and the private update folder are on different filesystems.'],
             self::restartConfirmed($report) ? [] : [
                 'The restart after enabling updates has not been confirmed '
                     . '(php bin/thallo-updater confirm-restart --yes).',
-            ]
+            ],
         );
-        if ($problems !== []) {
-            throw new \RuntimeException(implode(' ', $problems));
-        }
     }
 
     private function journal(): Journal
@@ -2662,7 +2728,8 @@ final class Runner
                 . "php glueful thallo:provision.\n");
             return 1;
         }
-        $left = RunnerReport::unguardedProcesses($this->paths, $this->host, $installed);
+        $web = RunnerReport::probe($this->paths, $this->host, $this->settings);
+        $left = RunnerReport::unguardedProcesses($this->paths, $this->host, $installed, RunnerReport::fpmMaster($web));
         foreach ($left as $p) {
             echo "Started before the guard: {$p['pid']} {$p['args']}\n";
         }
