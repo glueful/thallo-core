@@ -265,6 +265,7 @@ use Thallo\Contracts\Delivery\EntryTargetResolver;
 use Thallo\Contracts\Delivery\HomepageEntryProvider;
 use Thallo\Contracts\Delivery\MediaUrlBatchResolver;
 use Thallo\Contracts\Delivery\MediaUrlResolver;
+use Thallo\Contracts\Delivery\MediaVariantUrlBatchResolver;
 use Thallo\Contracts\Delivery\MediaVariantUrlResolver;
 use Thallo\Contracts\Delivery\SeoHeadResolver;
 use Thallo\Seo\Meta\SeoMetaResolver;
@@ -1493,6 +1494,11 @@ final class CoreServiceProvider extends ServiceProvider implements \Thallo\Contr
                 'shared' => true,
                 'factory' => [self::class, 'makeMediaVariantUrlResolver'],
             ],
+            // The same object again: a product grid's images in one query, by the same rules.
+            MediaVariantUrlBatchResolver::class => [
+                'shared' => true,
+                'factory' => [self::class, 'makeMediaVariantUrlBatchResolver'],
+            ],
             // Factory (not autowire): the theme validator is a SOFT render-pack
             // binding — passed only when present, so core stays removability-clean.
             PreviewController::class => [
@@ -1867,6 +1873,11 @@ final class CoreServiceProvider extends ServiceProvider implements \Thallo\Contr
         $capable = $container->has(MediaProcessorInterface::class)
             && (bool) config($context, 'uploads.image_processing.enabled', true);
 
+        // WebP copies: the serve endpoint must accept the format and the image driver encode it.
+        $webp = $capable
+            && in_array('webp', (array) config($context, 'uploads.image_processing.allowed_formats', []), true)
+            && self::canEncodeWebp((string) config($context, 'image.driver', 'gd'));
+
         return new EngineMediaVariantUrlResolver(
             $container->get(Connection::class),
             api_prefix($context) . '/blobs',
@@ -1874,7 +1885,27 @@ final class CoreServiceProvider extends ServiceProvider implements \Thallo\Contr
             config($context, 'uploads.access', 'private'),
             (int) config($context, 'uploads.image_processing.max_width', 2048),
             $capable,
+            $webp,
         );
+    }
+
+    /** The batch interface resolves to the SHARED MediaVariantUrlResolver instance. */
+    public static function makeMediaVariantUrlBatchResolver(
+        ContainerInterface $container,
+    ): EngineMediaVariantUrlResolver {
+        return $container->get(MediaVariantUrlResolver::class);
+    }
+
+    /**
+     * Whether the image driver glueful/media builds can write WebP: Imagick when it is chosen
+     * and installed (glueful/media falls back to GD otherwise), else GD's imagewebp().
+     */
+    public static function canEncodeWebp(string $driver): bool
+    {
+        if ($driver === 'imagick' && class_exists(\Imagick::class)) {
+            return \Imagick::queryFormats('WEBP') !== [];
+        }
+        return function_exists('imagewebp');
     }
 
     /**
