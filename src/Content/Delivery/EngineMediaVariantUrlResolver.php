@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Thallo\Core\Content\Delivery;
 
 use Glueful\Database\Connection;
+use Glueful\Uploader\BlobVersion;
 use Thallo\Contracts\Delivery\MediaVariantUrlBatchResolver;
 use Thallo\Contracts\Delivery\MediaVariantUrlResolver;
 
@@ -23,6 +24,11 @@ use Thallo\Contracts\Delivery\MediaVariantUrlResolver;
  * WebP for JPEG and PNG sources: a fraction of the bytes, the original format kept as the
  * <img>'s fallback. A WebP source is WebP already; a GIF may be animated, which conversion
  * would freeze.
+ *
+ * Every URL names the blob's version (`?v=`, glueful/framework's BlobVersion): the blob route
+ * answers it with a year-long immutable cache, and a replaced image gets new URLs. Only the URLs
+ * built here carry it; EngineMediaUrlResolver's plain URL (media_url(), the Delivery API) stays
+ * bare, since a template or client may add its own `?width=` to it.
  */
 final class EngineMediaVariantUrlResolver implements MediaVariantUrlResolver, MediaVariantUrlBatchResolver
 {
@@ -75,7 +81,7 @@ final class EngineMediaVariantUrlResolver implements MediaVariantUrlResolver, Me
             return $results;
         }
         $rows = $this->db->table('blobs')
-            ->select(['uuid', 'mime_type'])
+            ->select(['uuid', 'mime_type', 'updated_at', 'size'])
             ->whereIn('uuid', $selected)
             ->where('visibility', '=', 'public')
             ->where('status', '=', 'active')
@@ -83,17 +89,19 @@ final class EngineMediaVariantUrlResolver implements MediaVariantUrlResolver, Me
             ->get();
         foreach ($rows as $row) {
             $uuid = (string) $row['uuid'];
-            $results[$uuid] = $this->result($uuid, (string) ($row['mime_type'] ?? ''), $widths);
+            $results[$uuid] = $this->result($uuid, $row, $widths);
         }
         return $results;
     }
 
     /**
+     * @param array<string, mixed> $row
      * @param array<int|string> $widths
      * @return array{src: string, srcset: ?string, webp: ?string}|null
      */
-    private function result(string $uuid, string $mimeType, array $widths): ?array
+    private function result(string $uuid, array $row, array $widths): ?array
     {
+        $mimeType = (string) ($row['mime_type'] ?? '');
         // Same normalization as UploadController::formatFromMime (lowercase, strip
         // parameters) so this gate matches what the serve pipeline would see.
         $mime = strtolower(trim(explode(';', $mimeType, 2)[0]));
@@ -101,7 +109,7 @@ final class EngineMediaVariantUrlResolver implements MediaVariantUrlResolver, Me
             return null;
         }
 
-        $src = rtrim($this->blobUrlBase, '/') . '/' . $uuid;
+        $src = rtrim($this->blobUrlBase, '/') . '/' . $uuid . '?v=' . BlobVersion::of($row);
         if (!$this->resizingCapable || !in_array($mime, self::RESIZABLE_MIMES, true)) {
             return ['src' => $src, 'srcset' => null, 'webp' => null];
         }
@@ -116,9 +124,9 @@ final class EngineMediaVariantUrlResolver implements MediaVariantUrlResolver, Me
         if ($kept === []) {
             return ['src' => $src, 'srcset' => null, 'webp' => null];
         }
-        $srcset = implode(', ', array_map(static fn (int $w): string => "{$src}?width={$w} {$w}w", $kept));
+        $srcset = implode(', ', array_map(static fn (int $w): string => "{$src}&width={$w} {$w}w", $kept));
         $webp = $this->webpCapable && in_array($mime, self::WEBP_SOURCES, true)
-            ? implode(', ', array_map(static fn (int $w): string => "{$src}?width={$w}&format=webp {$w}w", $kept))
+            ? implode(', ', array_map(static fn (int $w): string => "{$src}&width={$w}&format=webp {$w}w", $kept))
             : null;
         return ['src' => $src, 'srcset' => $srcset, 'webp' => $webp];
     }
