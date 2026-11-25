@@ -127,9 +127,11 @@ final class MediaAdminController
 
         $title = $this->stringField($input, 'title');
         if ($title !== null && $title !== '') {
+            // The name only: a blob's updated_at is its version with its size (BlobVersion), which
+            // names its stored resized copies and its page URLs (?v=). A rename is not new bytes.
             db($this->context)->table('blobs')
                 ->where('uuid', '=', $uuid)
-                ->update(['name' => $title, 'updated_at' => $now]);
+                ->update(['name' => $title]);
         }
 
         // media_meta is upserted only when a sidecar field is actually present in the payload.
