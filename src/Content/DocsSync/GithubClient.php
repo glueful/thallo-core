@@ -22,6 +22,8 @@ final class GithubClient
     private const API = 'https://api.github.com';
     private const CODELOAD = 'https://codeload.github.com';
     private const MAX_TAG_STEPS = 5;
+    /** major.minor[.patch[.build]], an optional `v`, an optional pre-release suffix. */
+    private const TAG_SHAPE = '/\A[vV]?\d{1,5}(\.\d+){1,3}(-[0-9A-Za-z]+(\.[0-9A-Za-z]+)*)?\z/';
 
     private readonly HttpClientInterface $http;
 
@@ -72,12 +74,18 @@ final class GithubClient
         $parser = new VersionParser();
         $versions = [];
         foreach (array_keys($refs) as $tag) {
+            // A release tag looks like one: 1.2, v1.2.3, v1.0.0-beta.109. Composer would also take
+            // `master` (dev-master) or `20240101` (a date as a version) and rank them highest.
+            if (preg_match(self::TAG_SHAPE, (string) $tag) !== 1) {
+                continue;
+            }
             try {
                 $normalized = $parser->normalize((string) $tag);
             } catch (\UnexpectedValueException) {
                 continue;
             }
-            if (!$prereleases && VersionParser::parseStability($normalized) !== 'stable') {
+            $stability = VersionParser::parseStability($normalized);
+            if ($stability === 'dev' || (!$prereleases && $stability !== 'stable')) {
                 continue;
             }
             $versions[$normalized] = (string) $tag;
@@ -162,7 +170,9 @@ final class GithubClient
         }
         $zip = new \ZipArchive();
         if ($zip->open($toPath, \ZipArchive::RDONLY) !== true) {
-            throw new GithubRefused('The archive GitHub sent is not a complete zip file.', $declared === null);
+            // The stream completed (a cut-short one fails above, or as a transport error): what
+            // arrived is not a zip, and will not be one next time either.
+            throw new GithubRefused('The archive GitHub sent is not a zip file.');
         }
         $zip->close();
     }

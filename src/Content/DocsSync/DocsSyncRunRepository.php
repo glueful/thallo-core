@@ -111,6 +111,26 @@ final class DocsSyncRunRepository
             ]) === 1;
     }
 
+    /**
+     * Finish a run whose attempt budget is spent (§6.4): cancelled if that was asked; `failed` with
+     * the reason an attempt recorded (GitHub unreachable, a download cut short); else interrupted.
+     * The caller holds a fence.
+     *
+     * @param array<string,mixed> $row
+     */
+    public function finishSpent(string $run, array $row): void
+    {
+        if ((bool) ($row['cancel_requested'] ?? false)) {
+            $this->finish($run, 'cancelled');
+            return;
+        }
+        $reason = is_string($row['message'] ?? null) && $row['message'] !== '' ? $row['message'] : null;
+        $reason !== null
+            ? $this->finish($run, 'failed', $reason)
+            : $this->finish($run, 'interrupted', 'Stopped after ' . DocsSyncService::ATTEMPT_BUDGET
+                . ' attempts without finishing.');
+    }
+
     /** @return list<string> ids of runs finished before `$before` (UTC 'Y-m-d H:i:s') */
     public function finishedBefore(string $before): array
     {

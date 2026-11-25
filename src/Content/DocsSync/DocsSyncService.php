@@ -114,13 +114,7 @@ final class DocsSyncService
                 return; // a live attempt, the last one included, is never cut off
             }
             if ((int) $row['attempts'] >= self::ATTEMPT_BUDGET) {
-                $this->runs->finish(
-                    $run,
-                    (bool) $row['cancel_requested'] ? 'cancelled' : 'interrupted',
-                    (bool) $row['cancel_requested']
-                        ? null
-                        : 'Stopped after ' . self::ATTEMPT_BUDGET . ' attempts without finishing.',
-                );
+                $this->runs->finishSpent($run, $row);
                 $this->store->release($run);
                 return;
             }

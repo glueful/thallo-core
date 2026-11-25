@@ -69,6 +69,10 @@ final class DocsSyncRunner
                         ? [(string) $source->branch, $this->github->branchTip($source->repo, (string) $source->branch)]
                         : array_values($this->github->latestRelease($source->repo, $source->prereleases));
                 } catch (GithubRefused $e) {
+                    if ($e->transient) {
+                        $this->recordReason($runId, $token, $e->getMessage());
+                        throw $e; // unreachable: this attempt ends; recovery tries again
+                    }
                     $this->finishWith($runId, $token, 'refused', $e->getMessage());
                     return;
                 }
@@ -98,7 +102,9 @@ final class DocsSyncRunner
                     'locale' => $source->locale,
                     'exclude' => $source->exclude,
                 ]);
-            } catch (\InvalidArgumentException $e) {
+            } catch (\InvalidArgumentException | \Glueful\Http\Exceptions\Client\ForbiddenException $e) {
+                // A wrong folder or type, or the importers capability switched off: the run is
+                // refused as a whole, with the reason, before anything is written.
                 $this->finishWith(
                     $runId,
                     $token,
@@ -158,14 +164,7 @@ final class DocsSyncRunner
             }
             $row = (array) $this->runs->find($runId);
             if ((int) ($row['attempts'] ?? 0) >= DocsSyncService::ATTEMPT_BUDGET) {
-                $cancelled = (bool) ($row['cancel_requested'] ?? false);
-                $this->runs->finish(
-                    $runId,
-                    $cancelled ? 'cancelled' : 'interrupted',
-                    $cancelled
-                        ? null
-                        : 'Stopped after ' . DocsSyncService::ATTEMPT_BUDGET . ' attempts without finishing.',
-                );
+                $this->runs->finishSpent($runId, $row);
                 $this->store->release($runId);
                 return false;
             }
@@ -232,6 +231,7 @@ final class DocsSyncRunner
                 );
             } catch (GithubRefused $e) {
                 if ($e->transient) {
+                    $this->recordReason($runId, $token, $e->getMessage());
                     throw $e; // cut short or unreachable: this attempt ends, the next downloads again
                 }
                 // A Cancel seen by the heartbeat already finished the run; otherwise the download failed.
@@ -311,15 +311,15 @@ final class DocsSyncRunner
     /** §6.3 step 5, under the owner's fence; a Cancel committed first wins (§6.5). */
     private function finish(string $runId, string $token, MarkdownFolderRead $read, string $mode, int $revision): void
     {
-        $this->db->transaction(function () use ($runId, $token, $read, $mode, $revision): void {
+        $won = $this->db->transaction(function () use ($runId, $token, $read, $mode, $revision): bool {
             if (!$this->store->ownerFence($runId, $token)) {
-                return;
+                return false; // fenced out: the run, and its archive, are a successor's
             }
             $this->pause('finish');
             if ($this->cancelRequested($runId)) {
                 $this->runs->finish($runId, 'cancelled');
                 $this->store->release($runId);
-                return;
+                return true;
             }
             $recorded = array_flip($this->runs->recordedPaths($runId));
             foreach ($read->missing as $gone) {
@@ -345,7 +345,11 @@ final class DocsSyncRunner
                 }
             }
             $this->store->release($runId);
+            return true;
         });
+        if (!$won) {
+            return;
+        }
         $archive = (string) ($this->runs->find($runId)['archive_path'] ?? '');
         if ($archive !== '') {
             $this->storage->disk('uploads')->delete($archive);
@@ -365,6 +369,19 @@ final class DocsSyncRunner
                 $this->runs->finish($runId, $outcome, $message);
             }
             $this->store->release($runId);
+        });
+    }
+
+    /**
+     * Keep a transient error's reason on the run, under the owner's fence, so a run whose attempts
+     * are spent says why (§7: a download error is `failed`, with its message).
+     */
+    private function recordReason(string $runId, string $token, string $message): void
+    {
+        $this->db->transaction(function () use ($runId, $token, $message): void {
+            if ($this->store->ownerFence($runId, $token)) {
+                $this->runs->update($runId, ['message' => $message]);
+            }
         });
     }
 

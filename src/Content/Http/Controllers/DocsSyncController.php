@@ -177,7 +177,12 @@ final class DocsSyncController
         if ($source === null) {
             return ['state' => 'none', 'followed' => null, 'message' => null];
         }
-        $key = 'docs_sync.note.' . sha1($revision . '|' . ($synced['id'] ?? '') . '|' . $source->repo);
+        // Keyed by everything the note depends on (the whole source, the last sync's commit), so a
+        // note made for one source, in this workspace or another at the same revision, is never
+        // shown for another.
+        $key = 'docs_sync.note.' . sha1((string) json_encode([
+            $source->toArray(), $revision, $synced['id'] ?? null, $synced['sha'] ?? null,
+        ]));
         $cached = $this->cache?->get($key);
         if (is_array($cached)) {
             return $cached;
