@@ -175,7 +175,7 @@ final class DocsSyncService
             if ($this->queue === null) {
                 return; // no queue: recovery has nothing to push either; the run waits
             }
-            $this->queue->push(DocsSyncJob::class, ['run' => $run, 'workspace' => $workspace], $this->queueName());
+            $this->queue->push(DocsSyncJob::class, DocsSyncJob::payload($run, $workspace), $this->queueName());
             $this->runs->markDispatched($run);
         };
         if ($this->atomicQueue()) {

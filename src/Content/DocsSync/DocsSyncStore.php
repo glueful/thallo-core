@@ -96,15 +96,23 @@ final class DocsSyncStore
 
     /**
      * Claim the lease of `$run` for a new attempt (§6.2): true when the run holds the slot and its
-     * lease is free or older than `$expiry` seconds.
+     * lease is free or older than `$expiry` seconds. Run inside a transaction: the slot fence locks
+     * the row first, so the lease is read and taken under that lock.
      */
     public function claim(string $run, string $token, int $expiry): bool
     {
-        $stale = gmdate('Y-m-d H:i:s', time() - $expiry);
+        if (!$this->slotFence($run)) {
+            return false;
+        }
+        $state = $this->state();
+        $live = $state['lease_token'] !== null
+            && DocsSyncService::secondsSince($state['lease_at']) < $expiry;
+        if ($live) {
+            return false;
+        }
         return $this->db->table('docs_sync_state')
             ->where('site', '=', 'site')
             ->where('active_run', '=', $run)
-            ->whereRaw('(lease_token IS NULL OR lease_at IS NULL OR lease_at < ?)', [$stale])
             ->update(['lease_token' => $token, 'lease_at' => self::now(), 'touch' => self::touch()]) === 1;
     }
 

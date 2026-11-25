@@ -153,16 +153,16 @@ final class GithubClient
             }
             $declared = $response->getHeaders(false)['content-length'][0] ?? null;
             if ($declared !== null && (int) $declared !== $bytes) {
-                throw new GithubRefused('The archive download was cut short.');
+                throw new GithubRefused('The archive download was cut short.', true);
             }
         } catch (ExceptionInterface $e) {
-            throw new GithubRefused('GitHub could not be reached: ' . $e->getMessage(), 0, $e);
+            throw new GithubRefused('GitHub could not be reached: ' . $e->getMessage(), true, $e);
         } finally {
             fclose($out);
         }
         $zip = new \ZipArchive();
         if ($zip->open($toPath, \ZipArchive::RDONLY) !== true) {
-            throw new GithubRefused('The archive GitHub sent is not a complete zip file.');
+            throw new GithubRefused('The archive GitHub sent is not a complete zip file.', $declared === null);
         }
         $zip->close();
     }
@@ -209,7 +209,7 @@ final class GithubClient
         try {
             return $this->http->request($method, $url, $options + ['timeout' => 8, 'max_redirects' => 0]);
         } catch (ExceptionInterface $e) {
-            throw new GithubRefused('GitHub could not be reached: ' . $e->getMessage(), 0, $e);
+            throw new GithubRefused('GitHub could not be reached: ' . $e->getMessage(), true, $e);
         }
     }
 
@@ -219,7 +219,7 @@ final class GithubClient
             $status = $response->getStatusCode();
             $headers = $response->getHeaders(false);
         } catch (ExceptionInterface $e) {
-            throw new GithubRefused('GitHub could not be reached: ' . $e->getMessage(), 0, $e);
+            throw new GithubRefused('GitHub could not be reached: ' . $e->getMessage(), true, $e);
         }
         if (in_array($status, [403, 429], true) && ($headers['x-ratelimit-remaining'][0] ?? null) === '0') {
             $reset = (int) ($headers['x-ratelimit-reset'][0] ?? time());

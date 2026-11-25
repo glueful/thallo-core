@@ -1676,6 +1676,24 @@ final class CoreServiceProvider extends ServiceProvider implements \Thallo\Contr
         );
     }
 
+    public static function makeDocsSyncRunner(
+        ContainerInterface $container,
+    ): \Thallo\Core\Content\DocsSync\DocsSyncRunner {
+        $queue = $container->has(\Glueful\Queue\QueueManager::class)
+            ? $container->get(\Glueful\Queue\QueueManager::class)
+            : null;
+        return new \Thallo\Core\Content\DocsSync\DocsSyncRunner(
+            $container->get(\Glueful\Database\Connection::class),
+            $container->get(\Thallo\Core\Content\DocsSync\DocsSyncStore::class),
+            $container->get(\Thallo\Core\Content\DocsSync\DocsSyncRunRepository::class),
+            new \Thallo\Core\Content\DocsSync\GithubClient(),
+            $container->get(\Thallo\Importers\Markdown\MarkdownFolderImport::class),
+            $container->get(\Glueful\Storage\StorageManager::class),
+            $queue instanceof \Glueful\Queue\QueueManager ? $queue : null,
+            $container->get(\Glueful\Bootstrap\ApplicationContext::class),
+        );
+    }
+
     public static function makeDocsSyncWorkspaces(
         ContainerInterface $container,
     ): \Thallo\Core\Content\DocsSync\DocsSyncWorkspaces {
@@ -2119,6 +2137,10 @@ final class CoreServiceProvider extends ServiceProvider implements \Thallo\Contr
             \Thallo\Core\Content\DocsSync\DocsSyncService::class => [
                 'factory' => [self::class, 'makeDocsSyncService'],
                 'shared' => true,
+            ],
+            \Thallo\Core\Content\DocsSync\DocsSyncRunner::class => [
+                'factory' => [self::class, 'makeDocsSyncRunner'],
+                'shared' => false,
             ],
             \Thallo\Core\Content\DocsSync\DocsSyncWorkspaces::class => [
                 'factory' => [self::class, 'makeDocsSyncWorkspaces'],
