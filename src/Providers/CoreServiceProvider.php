@@ -2065,6 +2065,11 @@ final class CoreServiceProvider extends ServiceProvider implements \Thallo\Contr
                 'shared' => true,
                 'autowire' => true,
             ],
+            \Thallo\Core\Content\DocsSync\DocsSyncStore::class => [
+                'class' => \Thallo\Core\Content\DocsSync\DocsSyncStore::class,
+                'shared' => true,
+                'autowire' => true,
+            ],
             \Thallo\Contracts\Style\PaletteStatusReader::class => [
                 'class' => \Thallo\Core\Content\Palette\EnginePaletteStatusReader::class,
                 'shared' => true,
