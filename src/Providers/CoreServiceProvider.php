@@ -3272,6 +3272,10 @@ final class CoreServiceProvider extends ServiceProvider implements \Thallo\Contr
             $this->mergeConfig($name, $defaults);
         }
 
+        // Resized copies of an uploaded image are made at upload, on every install: see
+        // ImagePregeneration for why it is an override rather than a default.
+        \Thallo\Core\Content\Media\ImagePregeneration::apply($context);
+
         // Export results are recorded on the `local` disk (import_export.result_disk) and read
         // back through it, but no storage config defined one, so every Download failed. A site's
         // own `local` disk, or another result_disk, still wins: defaults merge under its config.
