@@ -307,6 +307,9 @@ final class MediaAdminController
             db($this->context)->table('blobs')
                 ->where('uuid', '=', $uuid)
                 ->update(['size' => $newSize, 'updated_at' => date('Y-m-d H:i:s')]);
+            // New bytes are a new version: its stored resized copies no longer match, so the
+            // ones the pages ask for are made again on the queue, not by the next visitor.
+            \Glueful\Uploader\Jobs\GenerateBlobVariantsJob::dispatchFor($this->context, $uuid);
 
             return $this->optimizeResult($request, $uuid, $originalSize, $newSize, true);
         } catch (\Throwable $e) {
