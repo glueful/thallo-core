@@ -663,6 +663,24 @@ $router->group(['prefix' => '/v1/admin'], function (Router $router): void {
 
         $router->post('/import-export/upload', [ImportExportController::class, 'upload'])
             ->middleware('content_permission:content.manage');
+
+        // Documentation from GitHub (docs sync design §6, §9): what a manual zip import needs,
+        // both permissions, to change anything; import_export.view to read the card.
+        $docsSync = \Thallo\Core\Content\Http\Controllers\DocsSyncController::class;
+        $write = static function ($route): void {
+            $route->middleware('content_permission:content.manage')
+                ->middleware('import_export_permission:import_export.run_import');
+        };
+        $router->get('/docs-sync', [$docsSync, 'show'])
+            ->middleware('import_export_permission:import_export.view');
+        $router->get('/docs-sync/runs/{run}', [$docsSync, 'runPages'])
+            ->where('run', '[A-Za-z0-9_-]+')
+            ->middleware('import_export_permission:import_export.view');
+        $write($router->put('/docs-sync/source', [$docsSync, 'saveSource']));
+        $write($router->delete('/docs-sync/source', [$docsSync, 'deleteSource']));
+        $write($router->post('/docs-sync/run', [$docsSync, 'start']));
+        $write($router->post('/docs-sync/runs/{run}/cancel', [$docsSync, 'cancel'])->where('run', '[A-Za-z0-9_-]+'));
+        $write($router->post('/docs-sync/runs/{run}/release', [$docsSync, 'release'])->where('run', '[A-Za-z0-9_-]+'));
     });
 
     $router->get('/tenancy/access', [TenancyAccessController::class, 'access'])
