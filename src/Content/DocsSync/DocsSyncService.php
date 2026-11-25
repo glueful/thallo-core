@@ -105,15 +105,12 @@ final class DocsSyncService
             if (!$this->store->slotFence($run)) {
                 return; // it finished meanwhile
             }
-            $state = $this->store->state();
             $row = $this->runs->find($run);
             if ($row === null || $row['status'] === 'finished') {
                 $this->store->release($run); // a slot left behind by a run that no longer needs it
                 return;
             }
-            $leaseLive = $state['lease_token'] !== null
-                && self::secondsSince($state['lease_at']) < self::LEASE_SECONDS;
-            if ($leaseLive) {
+            if ($this->leaseLive()) {
                 return; // a live attempt, the last one included, is never cut off
             }
             if ((int) $row['attempts'] >= self::ATTEMPT_BUDGET) {
@@ -134,6 +131,57 @@ final class DocsSyncService
                 $this->dispatch($run, is_string($row['workspace'] ?? null) ? $row['workspace'] : null);
             }
         });
+    }
+
+    /**
+     * Cancel a run (§6.5). The slot fence takes the state row first, so Cancel and the run's own
+     * finish are ordered by its lock: a run that already finished answers so, with its outcome. A
+     * run with a live attempt is flagged, and that attempt stops after the page in flight; one with
+     * no live attempt is finished as cancelled here.
+     *
+     * @return array{finished: bool, outcome: ?string}
+     */
+    public function cancel(string $run): array
+    {
+        return $this->db->transaction(function () use ($run): array {
+            if (!$this->store->slotFence($run)) {
+                $row = $this->runs->find($run);
+                return ['finished' => true, 'outcome' => is_array($row) ? ($row['outcome'] ?? null) : null];
+            }
+            $this->runs->update($run, ['cancel_requested' => true]);
+            if ($this->leaseLive()) {
+                return ['finished' => false, 'outcome' => null];
+            }
+            $this->runs->finish($run, 'cancelled');
+            $this->store->release($run);
+            return ['finished' => true, 'outcome' => 'cancelled'];
+        });
+    }
+
+    /**
+     * Release a run whose attempt stopped reporting in, or that was never claimed (§6.5): it is
+     * finished as interrupted, keeping what it wrote. Refused while its lease is live. It waits for a
+     * page in flight (the slot fence), and the old attempt is fenced out at its next write.
+     *
+     * @return array{released: bool}
+     */
+    public function release(string $run): array
+    {
+        return $this->db->transaction(function () use ($run): array {
+            if (!$this->store->slotFence($run) || $this->leaseLive()) {
+                return ['released' => false];
+            }
+            $this->runs->finish($run, 'interrupted', 'Released: the sync had stopped reporting in.');
+            $this->store->release($run);
+            return ['released' => true];
+        });
+    }
+
+    /** Whether the workspace's lease is live; read under a fence. */
+    private function leaseLive(): bool
+    {
+        $state = $this->store->state();
+        return $state['lease_token'] !== null && self::secondsSince($state['lease_at']) < self::LEASE_SECONDS;
     }
 
     /**
