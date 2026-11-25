@@ -110,6 +110,11 @@ final class DocsSyncRunner
                 return;
             }
 
+            $total = count($read->pages);
+            if (!$this->boundary($runId, $token, fn () => $this->runs->update($runId, ['total' => $total]))) {
+                return;
+            }
+
             // 4. Each page not yet recorded for this run, one transaction each.
             $done = array_flip($this->runs->recordedPaths($runId));
             $options = [

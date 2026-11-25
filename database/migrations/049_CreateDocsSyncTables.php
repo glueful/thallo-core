@@ -45,6 +45,7 @@ final class CreateDocsSyncTables implements MigrationInterface
                 foreach (['created', 'updated', 'unchanged', 'skipped', 'failed', 'gone'] as $counter) {
                     $table->integer($counter)->default(0);
                 }
+                $table->integer('total')->nullable();          // pages in the folder, once read
                 $table->integer('attempts')->default(0);
                 $table->boolean('cancel_requested')->default(false);
                 $table->text('message')->nullable();
