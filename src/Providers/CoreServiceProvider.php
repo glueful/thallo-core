@@ -1657,6 +1657,47 @@ final class CoreServiceProvider extends ServiceProvider implements \Thallo\Contr
         );
     }
 
+    public static function makeDocsSyncService(
+        ContainerInterface $container,
+    ): \Thallo\Core\Content\DocsSync\DocsSyncService {
+        $opt = static fn (string $id): mixed => $container->has($id) ? $container->get($id) : null;
+        $queue = $opt(\Glueful\Queue\QueueManager::class);
+        $context = $opt(\Glueful\Bootstrap\ApplicationContext::class);
+        $tenants = $opt(\Glueful\Extensions\Contracts\Tenancy\CurrentTenantResolver::class);
+        $storage = $opt(\Glueful\Storage\StorageManager::class);
+        return new \Thallo\Core\Content\DocsSync\DocsSyncService(
+            $container->get(\Glueful\Database\Connection::class),
+            $container->get(\Thallo\Core\Content\DocsSync\DocsSyncStore::class),
+            $container->get(\Thallo\Core\Content\DocsSync\DocsSyncRunRepository::class),
+            $queue instanceof \Glueful\Queue\QueueManager ? $queue : null,
+            $context instanceof \Glueful\Bootstrap\ApplicationContext ? $context : null,
+            $tenants instanceof \Glueful\Extensions\Contracts\Tenancy\CurrentTenantResolver ? $tenants : null,
+            $storage instanceof \Glueful\Storage\StorageManager ? $storage : null,
+        );
+    }
+
+    public static function makeDocsSyncWorkspaces(
+        ContainerInterface $container,
+    ): \Thallo\Core\Content\DocsSync\DocsSyncWorkspaces {
+        $runner = \Glueful\Extensions\Contracts\Tenancy\TenantContextRunner::class;
+        $logger = $container->has(\Psr\Log\LoggerInterface::class)
+            ? $container->get(\Psr\Log\LoggerInterface::class)
+            : null;
+        return new \Thallo\Core\Content\DocsSync\DocsSyncWorkspaces(
+            $container->has($runner) ? $container->get($runner) : null,
+            $container->get(\Thallo\Tenancy\System\SystemFlags::class)->tenancyEnabled(),
+            $logger instanceof \Psr\Log\LoggerInterface ? $logger : null,
+        );
+    }
+
+    public static function makeDocsSyncScheduleStep(
+        ContainerInterface $container,
+    ): \Thallo\Core\Content\DocsSync\DocsSyncScheduleStep {
+        return new \Thallo\Core\Content\DocsSync\DocsSyncScheduleStep(
+            $container->get(\Glueful\Bootstrap\ApplicationContext::class),
+        );
+    }
+
     public static function makeFontLibraryReader(
         ContainerInterface $container,
     ): \Thallo\Contracts\Fonts\FontLibraryReader {
@@ -2069,6 +2110,23 @@ final class CoreServiceProvider extends ServiceProvider implements \Thallo\Contr
                 'class' => \Thallo\Core\Content\DocsSync\DocsSyncStore::class,
                 'shared' => true,
                 'autowire' => true,
+            ],
+            \Thallo\Core\Content\DocsSync\DocsSyncRunRepository::class => [
+                'class' => \Thallo\Core\Content\DocsSync\DocsSyncRunRepository::class,
+                'shared' => true,
+                'autowire' => true,
+            ],
+            \Thallo\Core\Content\DocsSync\DocsSyncService::class => [
+                'factory' => [self::class, 'makeDocsSyncService'],
+                'shared' => true,
+            ],
+            \Thallo\Core\Content\DocsSync\DocsSyncWorkspaces::class => [
+                'factory' => [self::class, 'makeDocsSyncWorkspaces'],
+                'shared' => false,
+            ],
+            \Thallo\Core\Content\DocsSync\DocsSyncScheduleStep::class => [
+                'factory' => [self::class, 'makeDocsSyncScheduleStep'],
+                'shared' => true,
             ],
             \Thallo\Contracts\Style\PaletteStatusReader::class => [
                 'class' => \Thallo\Core\Content\Palette\EnginePaletteStatusReader::class,

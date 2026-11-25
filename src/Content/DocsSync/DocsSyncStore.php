@@ -59,6 +59,55 @@ final class DocsSyncStore
         return $this->writeSource(null);
     }
 
+    /**
+     * Take the free slot for `$run`, only at `$revision` (§6.1): false when another run holds it or
+     * the source moved to another revision since it was read.
+     */
+    public function reserve(string $run, int $revision): bool
+    {
+        $this->ensureRow();
+        return $this->db->table('docs_sync_state')
+            ->where('site', '=', 'site')
+            ->whereNull('active_run')
+            ->where('revision', '=', $revision)
+            ->update([
+                'active_run' => $run, 'lease_token' => null, 'lease_at' => null,
+                'touch' => self::touch(), 'updated_at' => self::now(),
+            ]) === 1;
+    }
+
+    /** Free the slot `$run` holds, with its lease. The caller holds a fence. */
+    public function release(string $run): void
+    {
+        $this->db->table('docs_sync_state')
+            ->where('site', '=', 'site')
+            ->where('active_run', '=', $run)
+            ->update([
+                'active_run' => null, 'lease_token' => null, 'lease_at' => null,
+                'touch' => self::touch(), 'updated_at' => self::now(),
+            ]);
+    }
+
+    /** Record `$run` as the last sync that landed. The caller holds the owner's fence. */
+    public function markSynced(string $run): void
+    {
+        $this->db->table('docs_sync_state')->where('site', '=', 'site')->update(['synced_run' => $run]);
+    }
+
+    /**
+     * Claim the lease of `$run` for a new attempt (§6.2): true when the run holds the slot and its
+     * lease is free or older than `$expiry` seconds.
+     */
+    public function claim(string $run, string $token, int $expiry): bool
+    {
+        $stale = gmdate('Y-m-d H:i:s', time() - $expiry);
+        return $this->db->table('docs_sync_state')
+            ->where('site', '=', 'site')
+            ->where('active_run', '=', $run)
+            ->whereRaw('(lease_token IS NULL OR lease_at IS NULL OR lease_at < ?)', [$stale])
+            ->update(['lease_token' => $token, 'lease_at' => self::now(), 'touch' => self::touch()]) === 1;
+    }
+
     /** The owner's fence: true when `$run` holds the slot and `$token` the lease. Renews the lease. */
     public function ownerFence(string $run, string $token): bool
     {

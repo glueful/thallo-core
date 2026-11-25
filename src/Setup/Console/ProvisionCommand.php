@@ -295,6 +295,23 @@ final class ProvisionCommand extends BaseCommand
                 . ') — run php glueful thallo:provision again.');
         }
 
+        // The docs sync's recurring recovery and pruning, in the scheduler's table: it reaches every
+        // install on its next provision, where a config/schedule.php entry would reach new ones only.
+        // Never fatal: the next provision tries again.
+        try {
+            $schedule = $this->getContainer()->get(\Thallo\Core\Content\DocsSync\DocsSyncScheduleStep::class)->run();
+            if ($schedule['skipped'] !== null) {
+                $this->warning($schedule['skipped']);
+            } else {
+                $this->line(
+                    'Docs sync: recovery and pruning scheduled (' . implode(', ', $schedule['registered']) . ').',
+                );
+            }
+        } catch (\Throwable $e) {
+            $this->warning('Docs sync recovery and pruning not scheduled (' . $e->getMessage()
+                . ') — run php glueful thallo:provision again.');
+        }
+
         // Production boot refuses live extension discovery, so the compiled extension cache
         // must exist before the next `php glueful` call — rebuild it from the provisioned state.
         try {
