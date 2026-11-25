@@ -170,13 +170,36 @@ final class DocsSyncService
     public function release(string $run): array
     {
         return $this->db->transaction(function () use ($run): array {
-            if (!$this->store->slotFence($run) || $this->leaseLive()) {
+            if (!$this->store->slotFence($run) || !$this->releasable($run)) {
                 return ['released' => false];
             }
             $this->runs->finish($run, 'interrupted', 'Released: the sync had stopped reporting in.');
             $this->store->release($run);
             return ['released' => true];
         });
+    }
+
+    /**
+     * Whether the run holding the slot may be released (§6.5, §9): its worker stopped reporting in
+     * (a lease over 120 s old), or no worker has claimed it in the two minutes since it was started.
+     * A sync that was just queued is waiting, not stuck.
+     */
+    public function releasable(string $run): bool
+    {
+        $state = $this->store->state();
+        if ($state['active_run'] !== $run) {
+            return false;
+        }
+        if ($state['lease_token'] !== null) {
+            return self::secondsSince($state['lease_at']) >= self::LEASE_SECONDS;
+        }
+        $row = $this->runs->find($run);
+        if ($row === null) {
+            return true;
+        }
+        // Never claimed: counted from when it was started, not from its last re-dispatch, which
+        // recovery renews on every read of the card while no worker takes the queue.
+        return self::secondsSince((string) $row['created_at']) >= self::REDISPATCH_SECONDS;
     }
 
     /** Whether the workspace's lease is live; read under a fence. */

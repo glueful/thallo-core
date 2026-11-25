@@ -53,9 +53,7 @@ final class DocsSyncController
             'source' => $state['source']?->toArray(),
             'revision' => $state['revision'],
             'active_run' => $state['active_run'],
-            'releasable' => $state['active_run'] !== null
-                && ($state['lease_token'] === null
-                    || DocsSyncService::secondsSince($state['lease_at']) >= DocsSyncService::LEASE_SECONDS),
+            'releasable' => $state['active_run'] !== null && $this->sync->releasable($state['active_run']),
             'synced' => $synced,
             'recent' => $this->runs->recent(10),
             'note' => $this->note($state['source'], $state['revision'], $synced),
