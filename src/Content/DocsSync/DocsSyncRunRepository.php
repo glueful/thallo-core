@@ -91,7 +91,8 @@ final class DocsSyncRunRepository
     /** A dispatch happened now; `dispatched` only from `reserved` (§6.0). */
     public function markDispatched(string $run): void
     {
-        $this->db->table('docs_sync_runs')->where('id', '=', $run)
+        // Never on a run that already finished: the after-commit path can run after a fast worker.
+        $this->db->table('docs_sync_runs')->where('id', '=', $run)->where('status', '!=', 'finished')
             ->update(['last_dispatch_at' => gmdate('Y-m-d H:i:s')]);
         $this->db->table('docs_sync_runs')->where('id', '=', $run)->where('status', '=', 'reserved')
             ->update(['status' => 'dispatched']);

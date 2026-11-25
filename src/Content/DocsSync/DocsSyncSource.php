@@ -34,7 +34,11 @@ final class DocsSyncSource
     public static function fromArray(array $data): self
     {
         $repo = trim((string) ($data['repo'] ?? ''));
-        if (preg_match(self::REPO_PATTERN, $repo) !== 1 || str_contains($repo, '..')) {
+        if (
+            preg_match(self::REPO_PATTERN, $repo) !== 1
+            || str_contains($repo, '..')
+            || explode('/', $repo)[1] === '.'
+        ) {
             throw new \InvalidArgumentException('repo: give a GitHub repository as owner/name, e.g. glueful/thallo.');
         }
         $folder = (string) ($data['folder'] ?? '');
@@ -94,6 +98,9 @@ final class DocsSyncSource
             return null;
         }
         $base = 'https://github.com/' . $this->repo . '/edit/' . rawurlencode($this->editBranch);
-        return $this->folder === '' ? $base : $base . '/' . $this->folder;
+        if ($this->folder === '') {
+            return $base;
+        }
+        return $base . '/' . implode('/', array_map('rawurlencode', explode('/', $this->folder)));
     }
 }

@@ -25,6 +25,7 @@ use Thallo\Core\Content\DocsSync\GithubRefused;
 final class DocsSyncController
 {
     private const NOTE_SECONDS = 300;
+    private const FAILED_NOTE_SECONDS = 60;
 
     public function __construct(
         private readonly DocsSyncService $sync,
@@ -197,7 +198,11 @@ final class DocsSyncController
             }
         } catch (GithubRefused $e) {
             $state = str_contains($e->getMessage(), 'hourly limit') ? 'rate_limited' : 'unreachable';
-            return ['state' => $state, 'followed' => null, 'message' => $e->getMessage()];
+            $note = ['state' => $state, 'followed' => null, 'message' => $e->getMessage()];
+            // Briefly: the card polls every 2 s while a sync runs, and must not ask a GitHub that
+            // is down (or has run out of requests) each time.
+            $this->cache?->set($key, $note, self::FAILED_NOTE_SECONDS);
+            return $note;
         }
         $state = match (true) {
             $synced === null => 'not_synced',

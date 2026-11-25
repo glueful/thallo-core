@@ -27,6 +27,9 @@ final class DocsSyncRunner
     /** @var (\Closure(string, ?string): void)|null */
     private ?\Closure $pause = null;
 
+    /** Set when this attempt finished the run: then, and only then, it removes the run's archive. */
+    private bool $ended = false;
+
     public function __construct(
         private readonly Connection $db,
         private readonly DocsSyncStore $store,
@@ -110,7 +113,9 @@ final class DocsSyncRunner
                     $token,
                     'refused',
                     str_contains($e->getMessage(), 'holds no Markdown files')
-                        ? "The folder `{$source->folder}` holds no pages."
+                        ? ($source->folder === ''
+                            ? 'The repository holds no Markdown pages at its root.'
+                            : "The folder `{$source->folder}` holds no pages.")
                         : $e->getMessage(),
                 );
                 return;
@@ -148,6 +153,11 @@ final class DocsSyncRunner
             if ($dir !== null) {
                 MarkdownZip::remove($dir);
             }
+            if ($this->ended) {
+                // The run is over and this attempt ended it: no attempt reads its archive again.
+                // A fenced-out attempt never gets here with `ended`, so it never touches the files.
+                $this->storage->disk('uploads')->deleteDirectory("docs-sync/{$runId}");
+            }
         }
     }
 
@@ -163,6 +173,11 @@ final class DocsSyncRunner
                 return null;
             }
             $row = (array) $this->runs->find($runId);
+            if ((bool) ($row['cancel_requested'] ?? false)) {
+                $this->runs->finish($runId, 'cancelled'); // asked while no attempt was alive
+                $this->store->release($runId);
+                return false;
+            }
             if ((int) ($row['attempts'] ?? 0) >= DocsSyncService::ATTEMPT_BUDGET) {
                 $this->runs->finishSpent($runId, $row);
                 $this->store->release($runId);
@@ -203,6 +218,7 @@ final class DocsSyncRunner
             if ($this->cancelRequested($runId)) {
                 $this->runs->finish($runId, 'cancelled');
                 $this->store->release($runId);
+                $this->ended = true;
                 return false;
             }
             if ($then !== null) {
@@ -280,6 +296,7 @@ final class DocsSyncRunner
             if ($this->cancelRequested($runId)) {
                 $this->runs->finish($runId, 'cancelled');
                 $this->store->release($runId);
+                $this->ended = true;
                 return false;
             }
             $this->pause('page', $page->sourcePath);
@@ -303,6 +320,7 @@ final class DocsSyncRunner
                 'status' => (string) $result['status'],
                 'message' => isset($result['message']) ? (string) $result['message'] : null,
                 'broken_links' => $page->brokenLinks,
+                'entry_uuid' => is_string($result['entry'] ?? null) ? $result['entry'] : null,
             ]);
             return true;
         });
@@ -311,7 +329,7 @@ final class DocsSyncRunner
     /** §6.3 step 5, under the owner's fence; a Cancel committed first wins (§6.5). */
     private function finish(string $runId, string $token, MarkdownFolderRead $read, string $mode, int $revision): void
     {
-        $won = $this->db->transaction(function () use ($runId, $token, $read, $mode, $revision): bool {
+        $this->db->transaction(function () use ($runId, $token, $read, $mode, $revision): bool {
             if (!$this->store->ownerFence($runId, $token)) {
                 return false; // fenced out: the run, and its archive, are a successor's
             }
@@ -319,12 +337,17 @@ final class DocsSyncRunner
             if ($this->cancelRequested($runId)) {
                 $this->runs->finish($runId, 'cancelled');
                 $this->store->release($runId);
+                $this->ended = true;
                 return true;
             }
             $recorded = array_flip($this->runs->recordedPaths($runId));
             foreach ($read->missing as $gone) {
                 if (!isset($recorded[$gone['source_path']])) {
-                    $this->runs->recordPage($runId, ['path' => $gone['source_path'], 'status' => 'gone']);
+                    $this->runs->recordPage($runId, [
+                        'path' => $gone['source_path'],
+                        'status' => 'gone',
+                        'entry_uuid' => $gone['entry'],
+                    ]);
                 }
             }
             $row = (array) $this->runs->find($runId);
@@ -345,15 +368,9 @@ final class DocsSyncRunner
                 }
             }
             $this->store->release($runId);
+            $this->ended = true;
             return true;
         });
-        if (!$won) {
-            return;
-        }
-        $archive = (string) ($this->runs->find($runId)['archive_path'] ?? '');
-        if ($archive !== '') {
-            $this->storage->disk('uploads')->delete($archive);
-        }
     }
 
     /** Finish the run as `$outcome` under the owner's fence (refused, failed). */
@@ -369,6 +386,7 @@ final class DocsSyncRunner
                 $this->runs->finish($runId, $outcome, $message);
             }
             $this->store->release($runId);
+            $this->ended = true;
         });
     }
 

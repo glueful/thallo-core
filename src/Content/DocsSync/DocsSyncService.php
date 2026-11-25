@@ -54,6 +54,7 @@ final class DocsSyncService
             throw DocsSyncConflict::noSource();
         }
         if ($state['active_run'] !== null) {
+            $this->recover(); // §6.4: a start refused because of a stuck run recovers it
             throw DocsSyncConflict::running();
         }
         $id = Utils::generateNanoID(12);
@@ -112,6 +113,13 @@ final class DocsSyncService
             }
             if ($this->leaseLive()) {
                 return; // a live attempt, the last one included, is never cut off
+            }
+            if ((bool) $row['cancel_requested']) {
+                // Cancel was asked and no attempt is alive to honour it: cancelled now, not
+                // re-dispatched only to stop at its first boundary.
+                $this->runs->finish($run, 'cancelled');
+                $this->store->release($run);
+                return;
             }
             if ((int) $row['attempts'] >= self::ATTEMPT_BUDGET) {
                 $this->runs->finishSpent($run, $row);
